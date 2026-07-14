@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Imprimir YAPE</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <style>
+        :root {
+            --yape-purple: #742284;
+        }
+        body { 
+            font-family: 'Segoe UI', sans-serif; 
+            margin: 0; padding: 40px 20px; 
+            background-color: #f4f7f6; color: #333;
+            display: flex; justify-content: center;
+        }
+        .container { 
+            width: 100%; max-width: 500px; 
+            background: white; padding: 30px; 
+            border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.08);
+            text-align: center;
+        }
+        h2 { 
+            color: var(--yape-purple); 
+            margin-bottom: 5px; font-weight: 800;
+        }
+        .author {
+            font-size: 0.85rem; color: #888; margin-bottom: 25px;
+        }
+        .controls { 
+            display: flex; flex-direction: column; gap: 15px; margin-bottom: 25px; 
+        }
+        input[type="file"] {
+            border: 2px dashed #ddd; padding: 20px; border-radius: 8px;
+            cursor: pointer; width: 100%; box-sizing: border-box;
+        }
+        button { 
+            background: var(--yape-purple); color: white; border: none; 
+            padding: 15px; font-size: 16px; cursor: pointer; 
+            border-radius: 8px; font-weight: bold; transition: 0.2s;
+        }
+        button:hover { opacity: 0.9; }
+        button:disabled { background: #ccc; }
+        
+        #status { font-size: 0.9rem; color: #666; margin-bottom: 15px; height: 20px; }
+
+        #preview { 
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 5px; 
+            background: #fafafa; padding: 10px; border-radius: 8px;
+        }
+        .img-card { 
+            aspect-ratio: 1/1; background: #eee; border-radius: 4px;
+            overflow: hidden; display: flex; align-items: center; justify-content: center;
+        }
+        .img-card img { width: 100%; height: 100%; object-fit: cover; }
+    </style>
+</head>
+<body>
+
+<div class="container">
+    <h2>Imprimir YAPE</h2>
+    <div class="author">by: Henry</div>
+    
+    <div class="controls">
+        <input type="file" id="imageInput" multiple accept="image/*">
+        <button id="generateBtn" onclick="generatePDF()">Generar PDF</button>
+    </div>
+
+    <div id="status"></div>
+    <div id="preview"></div>
+</div>
+
+<script>
+    const { jsPDF } = window.jspdf;
+    let selectedImagesData = [];
+
+    function getImageDetails(file) {
+        return new Promise((resolve) => {
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                const img = new Image();
+                img.onload = () => resolve({
+                    src: e.target.result,
+                    width: img.naturalWidth,
+                    height: img.naturalHeight,
+                    type: file.type.includes('png') ? 'PNG' : 'JPEG'
+                });
+                img.src = e.target.result;
+            };
+            reader.readAsDataURL(file);
+        });
+    }
+
+    document.getElementById('imageInput').addEventListener('change', async (e) => {
+        const files = e.target.files;
+        const preview = document.getElementById('preview');
+        preview.innerHTML = '';
+        selectedImagesData = [];
+
+        if(files.length > 0) {
+            document.getElementById('status').innerText = "Procesando imágenes...";
+            const promises = Array.from(files).map(file => getImageDetails(file));
+            selectedImagesData = await Promise.all(promises);
+            
+            selectedImagesData.slice(0, 9).forEach((img) => {
+                const div = document.createElement('div');
+                div.className = 'img-card';
+                div.innerHTML = `<img src="${img.src}">`;
+                preview.appendChild(div);
+            });
+            document.getElementById('status').innerText = `${files.length} cargadas.`;
+        }
+    });
+
+    async function generatePDF() {
+        if (selectedImagesData.length === 0) return alert("Selecciona imágenes.");
+        
+        const btn = document.getElementById('generateBtn');
+        btn.disabled = true;
+
+        const doc = new jsPDF();
+        const pageWidth = 210; 
+        const pageHeight = 297; 
+        const margin = 10;     
+        const gap = 2;         
+        
+        const cols = 3;
+        const rows = 3;
+        const itemsPerPage = cols * rows;
+
+        const cellWidth = (pageWidth - (margin * 2) - (gap * (cols - 1))) / cols;
+        const cellHeight = (pageHeight - (margin * 2) - (gap * (rows - 1))) / rows;
+
+        for (let i = 0; i < selectedImagesData.length; i++) {
+            if (i > 0 && i % itemsPerPage === 0) doc.addPage();
+
+            const img = selectedImagesData[i];
+            const pos = i % itemsPerPage;
+            const colIndex = pos % cols;
+            const rowIndex = Math.floor(pos / cols);
+
+            const x = margin + (colIndex * (cellWidth + gap));
+            const y = margin + (rowIndex * (cellHeight + gap));
+
+            const scale = Math.min(cellWidth / img.width, cellHeight / img.height);
+            const w = img.width * scale;
+            const h = img.height * scale;
+
+            const finalX = x + (cellWidth - w) / 2;
+            const finalY = y + (cellHeight - h) / 2;
+
+            doc.addImage(img.src, img.type, finalX, finalY, w, h, null, 'FAST');
+        }
+
+        doc.save("YAPE_IMPRESION.pdf");
+        btn.disabled = false;
+        document.getElementById('status').innerText = "✅ PDF descargado";
+    }
+</script>
+
+</body>
+</html>

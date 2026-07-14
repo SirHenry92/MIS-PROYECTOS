@@ -1,0 +1,665 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Consolidador de Kardex, Redacción y Foliación PRO</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.min.js"></script>
+    <script src="https://unpkg.com/pdf-lib/dist/pdf-lib.min.js"></script>
+    
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+            padding: 20px;
+            background-color: #f9f9fc;
+            color: #333;
+        }
+        .contenedor-principal {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        input[type="file"], select {
+            margin-bottom: 20px;
+            padding: 10px;
+            border: 1px dashed #ccc;
+            width: 100%;
+            box-sizing: border-box;
+            font-size: 16px;
+        }
+        select {
+            border: 1px solid #0066cc;
+            background-color: #f0f8ff;
+            cursor: pointer;
+            font-weight: bold;
+        }
+        .botones-accion {
+            margin-top: 20px;
+            margin-bottom: 20px;
+            display: none;
+        }
+        button {
+            background-color: #0066cc;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            width: 100%;
+        }
+        button:hover {
+            background-color: #005bb5;
+        }
+        table {
+            border-collapse: collapse;
+            width: 100%;
+            margin-top: 20px;
+            font-size: 14px;
+        }
+        th, td {
+            border: 1px solid #ddd;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #f2f2f2;
+            font-weight: bold;
+        }
+        tfoot th {
+            background-color: #e6f2ff;
+            font-weight: bold;
+        }
+        .texto-izquierda {
+            text-align: left;
+        }
+        .estado-carga {
+            color: #0066cc;
+            font-weight: bold;
+            margin-top: 10px;
+            margin-bottom: 20px;
+        }
+        #panelRedaccionVisual {
+            display: none;
+            margin-top: 20px;
+            border: 2px dashed #0066cc;
+            padding: 15px;
+            background-color: #fafafa;
+            border-radius: 8px;
+        }
+        #contenedorScrollLienzo {
+            max-height: 600px;
+            overflow: hidden; 
+            border: 1px solid #ccc;
+            background-color: #e9ecef;
+            cursor: crosshair;
+            position: relative;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+        canvas {
+            display: block;
+            box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+            transition: transform 0.1s ease-out; 
+            position: relative;
+            top: 0px;
+            left: 0px;
+        }
+        .instruccion-dibujo {
+            font-weight: bold;
+            color: #d93025;
+            margin-bottom: 10px;
+            font-size: 15px;
+        }
+        .etiqueta-memoria {
+            float: right;
+            background: #28a745;
+            color: white;
+            padding: 4px 10px;
+            border-radius: 4px;
+            font-size: 13px;
+            display: none;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .panel-foliacion {
+            background-color: #e6f2ff;
+            border: 1px solid #0066cc;
+            padding: 15px;
+            border-radius: 8px;
+            margin-bottom: 20px;
+        }
+        .panel-foliacion input[type="number"] {
+            padding: 8px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            width: 100px;
+            margin-right: 15px;
+            font-size: 14px;
+        }
+        .seccion-input-foliacion {
+            margin-bottom: 12px;
+        }
+    </style>
+</head>
+<body>
+
+<div class="contenedor-principal">
+    <h2>Consolidador de Kardex, Redacción y Foliación Automática</h2>
+    <p>Sube los PDFs. El sistema identificará los Kardex normados y los archivos con nombres libres. Podrás configurar parches de forma visual para cada uno, definir el número de folio inicial y aplicar rangos de páginas físicas de forma unificada.</p>
+    
+    <input type="file" id="inputArchivosPdf" multiple accept="application/pdf">
+    
+    <div id="panelRedaccionVisual">
+        <label for="selectorKardexPrevia" style="font-weight: bold;">Selecciona el archivo / Kardex a configurar:</label>
+        <select id="selectorKardexPrevia"></select>
+        
+        <div class="instruccion-dibujo">
+            1. Rueda del Mouse: <strong>Zoom</strong> | Tecla Control (Ctrl) + Arrastrar: <strong>Mover vista</strong>.<br>
+            2. Clic normal y arrastrar: <strong>Dibuja el cuadro rojo</strong> para tapar el dato original.
+            <span id="indicadorGuardado" class="etiqueta-memoria">¡Parche configurado para este archivo! ✅</span>
+        </div>
+
+        <div id="contenedorScrollLienzo">
+            <canvas id="lienzoPdfPreview"></canvas>
+        </div>
+    </div>
+
+    <div id="mensajeEstado" class="estado-carga"></div>
+    
+    <div id="tablaResultadosHtml"></div>
+
+    <div class="botones-accion" id="contenedorBotones">
+        <div class="panel-foliacion">
+            <h3 style="margin-top: 0; color: #0066cc; font-size: 16px;">Configuración de Foliación</h3>
+            
+            <div class="seccion-input-foliacion">
+                <label for="folioNumeroInicio" style="font-weight: bold; display: inline-block; width: 240px;">Iniciar foliación en el N° (Correlativo):</label>
+                <input type="number" id="folioNumeroInicio" min="1" value="1" style="width: 120px; font-weight: bold; text-align: center;">
+                <span style="font-size: 12px; color: #555;">(Ej: Si pones 45, la primera hoja llevará el número 000045)</span>
+            </div>
+            
+            <div>
+                <label for="folioPaginaDesde" style="display: inline-block; width: 240px;">Aplicar desde página física N°:</label>
+                <input type="number" id="folioPaginaDesde" min="1" placeholder="Ej: 1">
+                
+                <label for="folioPaginaHasta">Hasta página física N°:</label>
+                <input type="number" id="folioPaginaHasta" min="1" placeholder="Ej: Fin">
+            </div>
+            
+            <p style="font-size: 12px; color: #555; margin: 12px 0 0 0;">
+                <em>* El número correlativo se autoincrementará de forma continua a 6 dígitos en Times New Roman Bold. Los archivos libres sin concordancia exacta se acoplarán al final del orden normativo y respetarán toda la configuración de foliación y parches.</em>
+            </p>
+        </div>
+
+        <button id="botonUnirPdfs">Unir PDFs con Parches y Foliación Continua</button>
+    </div>
+</div>
+
+<script>
+    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.16.105/pdf.worker.min.js';
+
+    // Orden inamovible de los Kardex requeridos según legislación peruana
+    const ordenKardexRequerido = [
+        "Kardex Físico Valorado Mercaderías",
+        "Kardex Físico Valorado Producto Terminado",
+        "Kardex Físico Valorado Paneles",
+        "Kardex Físico Valorado Desechos",
+        "Kardex Físico Valorado Materia Prima",
+        "Kardex Físico Valorado Telas",
+        "Kardex Físico Valorado Avios",
+        "Kardex Físico Valorado Repuestos y Accesorios",
+        "Kardex Físico Valorado Suministros Diversos",
+        "Kardex Físico Valorado Envases y Embalajes"
+    ];
+
+    let matrizPaginasPorArchivo = {}; 
+    let archivosFisicosPorPeriodo = {};
+    let listaPeriodosUnicos = new Set();
+    
+    let archivosRepresentativosPorKardex = {}; 
+    let redaccionesPorKardex = {}; 
+    let kardexActualViendo = "";
+
+    const ESCALA_RENDER = 1.5; 
+    let escalaCSS = 1.0;       
+    let lienzo = document.getElementById('lienzoPdfPreview');
+    let contextoLienzo = lienzo.getContext('2d');
+    
+    // Variables para dibujar
+    let usuarioEstaDibujando = false;
+    let posInicialX = 0, posInicialY = 0;
+    let copiaLimpiaDeHojaPdf = null;
+
+    // Variables para el desplazamiento (Panning)
+    let modoDesplazamiento = false;
+    let panX = 0, panY = 0;
+    let startPanX = 0, startPanY = 0;
+
+    // ==========================================
+    // CARGA DE ARCHIVOS
+    // ==========================================
+    document.getElementById('inputArchivosPdf').addEventListener('change', async function(evento) {
+        const archivosSeleccionados = evento.target.files;
+        if (archivosSeleccionados.length === 0) return;
+
+        matrizPaginasPorArchivo = {};
+        archivosFisicosPorPeriodo = {};
+        archivosRepresentativosPorKardex = {};
+        redaccionesPorKardex = {};
+        listaPeriodosUnicos = new Set();
+        document.getElementById('contenedorBotones').style.display = 'none';
+        document.getElementById('panelRedaccionVisual').style.display = 'none';
+        
+        const elementoEstado = document.getElementById('mensajeEstado');
+        elementoEstado.innerText = `Procesando ${archivosSeleccionados.length} archivo(s)...`;
+        document.getElementById('tablaResultadosHtml').innerHTML = '';
+
+        for (let i = 0; i < archivosSeleccionados.length; i++) {
+            const archivoActual = archivosSeleccionados[i];
+            const expresionRegular = /(.*?)[_\-\s]*(\d{4}-\d{2})\.pdf$/i;
+            const coincidencia = archivoActual.name.match(expresionRegular);
+
+            let nombreBase = coincidencia ? coincidencia[1].trim() : archivoActual.name.replace(/\.pdf$/i, '').trim();
+            let periodoDocumento = coincidencia ? coincidencia[2] : "Sin Periodo";
+
+            listaPeriodosUnicos.add(periodoDocumento);
+
+            if (!archivosFisicosPorPeriodo[periodoDocumento]) archivosFisicosPorPeriodo[periodoDocumento] = {};
+            archivosFisicosPorPeriodo[periodoDocumento][nombreBase] = archivoActual;
+
+            if (!archivosRepresentativosPorKardex[nombreBase]) {
+                archivosRepresentativosPorKardex[nombreBase] = archivoActual;
+            }
+
+            try {
+                const bufferArchivo = await archivoActual.arrayBuffer();
+                const documentoPdf = await pdfjsLib.getDocument({data: bufferArchivo}).promise;
+                if (!matrizPaginasPorArchivo[nombreBase]) matrizPaginasPorArchivo[nombreBase] = {};
+                matrizPaginasPorArchivo[nombreBase][periodoDocumento] = documentoPdf.numPages;
+            } catch (error) {
+                console.error(`Error al contar páginas de ${archivoActual.name}:`, error);
+            }
+        }
+
+        renderizarTablaEstructurada(matrizPaginasPorArchivo, Array.from(listaPeriodosUnicos).sort());
+        
+        const selector = document.getElementById('selectorKardexPrevia');
+        selector.innerHTML = '';
+        const nombresRepresentativos = Object.keys(archivosRepresentativosPorKardex).sort();
+        
+        nombresRepresentativos.forEach(nombre => {
+            let opcion = document.createElement('option');
+            opcion.value = nombre;
+            opcion.innerText = nombre;
+            selector.appendChild(opcion);
+        });
+
+        if (nombresRepresentativos.length > 0) {
+            document.getElementById('panelRedaccionVisual').style.display = 'block';
+            kardexActualViendo = nombresRepresentativos[0];
+            await cargarVistaPreviaKardex(kardexActualViendo);
+        }
+
+        elementoEstado.innerText = 'Matriz construida. Revisa cada Kardex/archivo libre en el selector superior y dibuja lo que deseas ocultar.';
+        document.getElementById('contenedorBotones').style.display = 'block';
+    });
+
+    // ==========================================
+    // CAMBIO DE KARDEX EN EL SELECTOR
+    // ==========================================
+    document.getElementById('selectorKardexPrevia').addEventListener('change', async (e) => {
+        kardexActualViendo = e.target.value;
+        
+        escalaCSS = 1.0; 
+        panX = 0;
+        panY = 0;
+        lienzo.style.transform = `scale(${escalaCSS})`;
+        lienzo.style.transformOrigin = `50% 50%`;
+        lienzo.style.left = `0px`;
+        lienzo.style.top = `0px`;
+
+        await cargarVistaPreviaKardex(kardexActualViendo);
+    });
+
+    async function cargarVistaPreviaKardex(nombreKardex) {
+        const archivoMuestra = archivosRepresentativosPorKardex[nombreKardex];
+        if (!archivoMuestra) return;
+
+        try {
+            const buffer = await archivoMuestra.arrayBuffer();
+            const pdfDoc = await pdfjsLib.getDocument({data: buffer}).promise;
+            const paginaExtraida = await pdfDoc.getPage(1);
+            
+            const viewportResolucion = paginaExtraida.getViewport({ scale: ESCALA_RENDER });
+            lienzo.width = viewportResolucion.width;
+            lienzo.height = viewportResolucion.height;
+            
+            await paginaExtraida.render({ canvasContext: contextoLienzo, viewport: viewportResolucion }).promise;
+            copiaLimpiaDeHojaPdf = contextoLienzo.getImageData(0, 0, lienzo.width, lienzo.height);
+            
+            refrescarLienzoConMemoria();
+
+        } catch (error) {
+            console.error("Error al cargar vista previa del archivo:", error);
+        }
+    }
+
+    function refrescarLienzoConMemoria() {
+        contextoLienzo.putImageData(copiaLimpiaDeHojaPdf, 0, 0);
+        const indicador = document.getElementById('indicadorGuardado');
+        
+        if (redaccionesPorKardex[kardexActualViendo]) {
+            const mem = redaccionesPorKardex[kardexActualViendo].cajaLienzo;
+            contextoLienzo.fillStyle = "rgba(255, 0, 0, 0.4)";
+            contextoLienzo.fillRect(mem.x, mem.y, mem.w, mem.h);
+            contextoLienzo.strokeStyle = "red";
+            contextoLienzo.strokeRect(mem.x, mem.y, mem.w, mem.h);
+            if (indicador) indicador.style.display = 'inline-block';
+        } else {
+            if (indicador) indicador.style.display = 'none';
+        }
+    }
+
+    // ==========================================
+    // GESTIÓN DEL CURSOR CON LA TECLA CONTROL
+    // ==========================================
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Control') {
+            document.getElementById('contenedorScrollLienzo').style.cursor = 'grab';
+        }
+    });
+    
+    document.addEventListener('keyup', (e) => {
+        if (e.key === 'Control') {
+            document.getElementById('contenedorScrollLienzo').style.cursor = 'crosshair';
+            modoDesplazamiento = false;
+        }
+    });
+
+    // ==========================================
+    // ZOOM CON RUEDA DEL MOUSE
+    // ==========================================
+    const contenedorScroll = document.getElementById('contenedorScrollLienzo');
+    
+    contenedorScroll.addEventListener('wheel', function(evento) {
+        evento.preventDefault(); 
+        
+        const rectanguloLienzo = lienzo.getBoundingClientRect();
+        let porcentajeX = ((evento.clientX - rectanguloLienzo.left) / rectanguloLienzo.width) * 100;
+        let porcentajeY = ((evento.clientY - rectanguloLienzo.top) / rectanguloLienzo.height) * 100;
+
+        porcentajeX = Math.max(0, Math.min(100, porcentajeX));
+        porcentajeY = Math.max(0, Math.min(100, porcentajeY));
+
+        lienzo.style.transformOrigin = `${porcentajeX}% ${porcentajeY}%`;
+        
+        if (evento.deltaY < 0) {
+            escalaCSS += 0.15; 
+        } else {
+            escalaCSS -= 0.15; 
+        }
+        
+        escalaCSS = Math.max(0.4, Math.min(escalaCSS, 4.0)); 
+        lienzo.style.transform = `scale(${escalaCSS})`;
+    }, { passive: false });
+
+    // ==========================================
+    // LÓGICA MULTI-USO: DIBUJO Y DESPLAZAMIENTO
+    // ==========================================
+    lienzo.addEventListener('mousedown', function(e) {
+        if (e.ctrlKey) {
+            modoDesplazamiento = true;
+            startPanX = e.clientX - panX;
+            startPanY = e.clientY - panY;
+            document.getElementById('contenedorScrollLienzo').style.cursor = 'grabbing';
+            return;
+        }
+
+        const rect = lienzo.getBoundingClientRect();
+        const escalaInternaX = lienzo.width / rect.width;
+        const escalaInternaY = lienzo.height / rect.height;
+
+        posInicialX = (e.clientX - rect.left) * escalaInternaX;
+        posInicialY = (e.clientY - rect.top) * escalaInternaY;
+        usuarioEstaDibujando = true;
+    });
+
+    window.addEventListener('mousemove', function(e) {
+        if (modoDesplazamiento) {
+            panX = e.clientX - startPanX;
+            panY = e.clientY - startPanY;
+            lienzo.style.left = `${panX}px`;
+            lienzo.style.top = `${panY}px`;
+            return;
+        }
+
+        if (!usuarioEstaDibujando) return;
+        
+        const rect = lienzo.getBoundingClientRect();
+        const escalaInternaX = lienzo.width / rect.width;
+        const escalaInternaY = lienzo.height / rect.height;
+
+        let posActualX = (e.clientX - rect.left) * escalaInternaX;
+        let posActualY = (e.clientY - rect.top) * escalaInternaY;
+        
+        contextoLienzo.putImageData(copiaLimpiaDeHojaPdf, 0, 0);
+        contextoLienzo.fillStyle = "rgba(255, 0, 0, 0.4)";
+        contextoLienzo.fillRect(posInicialX, posInicialY, posActualX - posInicialX, posActualY - posInicialY);
+        contextoLienzo.strokeStyle = "red";
+        contextoLienzo.strokeRect(posInicialX, posInicialY, posActualX - posInicialX, posActualY - posInicialY);
+    });
+
+    window.addEventListener('mouseup', function(e) {
+        if (modoDesplazamiento) {
+            modoDesplazamiento = false;
+            document.getElementById('contenedorScrollLienzo').style.cursor = e.ctrlKey ? 'grab' : 'crosshair';
+            return;
+        }
+
+        if (!usuarioEstaDibujando) return;
+        usuarioEstaDibujando = false;
+        
+        const rect = lienzo.getBoundingClientRect();
+        const escalaInternaX = lienzo.width / rect.width;
+        const escalaInternaY = lienzo.height / rect.height;
+        let posActualX = (e.clientX - rect.left) * escalaInternaX;
+        let posActualY = (e.clientY - rect.top) * escalaInternaY;
+
+        const w = Math.abs(posActualX - posInicialX);
+        const h = Math.abs(posActualY - posInicialY);
+        const x = Math.min(posInicialX, posActualX);
+        const y = Math.min(posInicialY, posActualY);
+
+        if (w < 5 || h < 5) return; 
+
+        const cajaLienzo = { x: x, y: y, w: w, h: h };
+        const pdfX = x / ESCALA_RENDER;
+        const pdfY = (lienzo.height - (y + h)) / ESCALA_RENDER;
+        const pdfW = w / ESCALA_RENDER;
+        const pdfH = h / ESCALA_RENDER;
+        
+        redaccionesPorKardex[kardexActualViendo] = {
+            cajaLienzo: cajaLienzo,
+            cajaPdf: { x: pdfX, y: pdfY, ancho: pdfW, alto: pdfH }
+        };
+
+        refrescarLienzoConMemoria();
+        renderizarTablaEstructurada(matrizPaginasPorArchivo, Array.from(listaPeriodosUnicos).sort());
+    });
+
+    // ==========================================
+    // RENDERIZADO DE TABLA Y UNIÓN FINAL
+    // ==========================================
+    function renderizarTablaEstructurada(matrizDatos, periodos) {
+        const contenedorTabla = document.getElementById('tablaResultadosHtml');
+        let codigoHtml = '<table><thead><tr><th class="texto-izquierda">Nombre del Archivo / Kardex</th>';
+        
+        periodos.forEach(p => codigoHtml += `<th>${p}</th>`);
+        codigoHtml += '<th>Total por Fila</th></tr></thead><tbody>';
+
+        const todosLosNombresEncontrados = Object.keys(matrizDatos);
+        const nombresExtra = todosLosNombresEncontrados.filter(nombre => !ordenKardexRequerido.includes(nombre)).sort();
+        const ordenFinalFilas = [...ordenKardexRequerido, ...nombresExtra];
+
+        let totalesPorPeriodo = {};
+        periodos.forEach(p => totalesPorPeriodo[p] = 0);
+        let granTotalPaginas = 0;
+
+        ordenFinalFilas.forEach(nombreKardex => {
+            if(matrizDatos[nombreKardex]) {
+                let indicadorConfigurado = redaccionesPorKardex[nombreKardex] ? ' <span title="Parche configurado" style="color: #28a745; font-size: 16px;">✅</span>' : '';
+                codigoHtml += `<tr><td class="texto-izquierda">${nombreKardex}${indicadorConfigurado}</td>`;
+                
+                let totalSumaFila = 0;
+                periodos.forEach(periodo => {
+                    const paginas = matrizDatos[nombreKardex][periodo] || 0;
+                    codigoHtml += `<td>${paginas > 0 ? paginas : '-'}</td>`;
+                    totalSumaFila += paginas;
+                    totalesPorPeriodo[periodo] += paginas;
+                });
+                codigoHtml += `<td><strong>${totalSumaFila}</strong></td></tr>`;
+                granTotalPaginas += totalSumaFila;
+            }
+        });
+
+        codigoHtml += '</tbody><tfoot><tr><th class="texto-izquierda">Total por Periodo</th>';
+        periodos.forEach(p => codigoHtml += `<th>${totalesPorPeriodo[p]}</th>`);
+        codigoHtml += `<th>${granTotalPaginas}</th></tr></tfoot></table>`;
+        contenedorTabla.innerHTML = codigoHtml;
+    }
+
+    document.getElementById('botonUnirPdfs').addEventListener('click', async function() {
+        // Captura dinámica del correlativo inicial y del rango de páginas físicas
+        const inputNumeroInicio = document.getElementById('folioNumeroInicio').value;
+        const inputPaginaDesde = document.getElementById('folioPaginaDesde').value;
+        const inputPaginaHasta = document.getElementById('folioPaginaHasta').value;
+        
+        let numeroCorrelativoActual = inputNumeroInicio ? parseInt(inputNumeroInicio) : 1;
+        const limiteDesde = inputPaginaDesde ? parseInt(inputPaginaDesde) : 1;
+        const limiteHasta = inputPaginaHasta ? parseInt(inputPaginaHasta) : Infinity;
+
+        const elementoEstado = document.getElementById('mensajeEstado');
+        const { PDFDocument, rgb, StandardFonts } = PDFLib; 
+        const periodos = Array.from(listaPeriodosUnicos).sort();
+
+        // Construcción dinámica del orden de mezcla incluyendo los archivos libres/extras al final
+        const todosLosNombresEncontrados = Object.keys(matrizPaginasPorArchivo);
+        const nombresExtra = todosLosNombresEncontrados.filter(nombre => !ordenKardexRequerido.includes(nombre)).sort();
+        const ordenFinalFilas = [...ordenKardexRequerido, ...nombresExtra];
+
+        const kardexConArchivos = Object.keys(archivosRepresentativosPorKardex);
+        const kardexConParche = Object.keys(redaccionesPorKardex);
+        
+        if (kardexConParche.length < kardexConArchivos.length) {
+            const aviso = confirm(`Atención: Has configurado el parche en ${kardexConParche.length} de ${kardexConArchivos.length} archivos.\n\nLos que no tienen el check ✅ se unirán sin tapar nada. ¿Deseas continuar?`);
+            if (!aviso) return;
+        }
+
+        let indicePaginaGlobal = 1;
+
+        for (let idxPeriodo = 0; idxPeriodo < periodos.length; idxPeriodo++) {
+            const periodoActual = periodos[idxPeriodo];
+            elementoEstado.innerText = `Construyendo y foliando PDF del periodo ${periodoActual}...`;
+
+            const documentoConsolidado = await PDFDocument.create();
+            let tieneArchivos = false;
+
+            // Recorremos usando la lista unificada (Normados + Libres)
+            for (let idxOrden = 0; idxOrden < ordenFinalFilas.length; idxOrden++) {
+                const nombreKardexEsperado = ordenFinalFilas[idxOrden];
+                
+                if (!archivosFisicosPorPeriodo[periodoActual]) continue;
+                const archivoFisico = archivosFisicosPorPeriodo[periodoActual][nombreKardexEsperado];
+                
+                if (archivoFisico) {
+                    tieneArchivos = true;
+                    const bufferArchivo = await archivoFisico.arrayBuffer();
+                    const pdfOrigen = await PDFDocument.load(bufferArchivo);
+                    const indicesPaginas = pdfOrigen.getPageIndices();
+                    const paginasCopiadas = await documentoConsolidado.copyPages(pdfOrigen, indicesPaginas);
+                    
+                    const configuracionParche = redaccionesPorKardex[nombreKardexEsperado];
+                    
+                    if (configuracionParche) {
+                        const caja = configuracionParche.cajaPdf;
+                        paginasCopiadas.forEach(pagina => {
+                            pagina.drawRectangle({
+                                x: caja.x,
+                                y: caja.y,
+                                width: caja.ancho,
+                                height: caja.alto,
+                                color: rgb(1, 1, 1), 
+                                opacity: 1.0
+                            });
+                        });
+                    }
+                    
+                    paginasCopiadas.forEach((pagina) => {
+                        documentoConsolidado.addPage(pagina);
+                    });
+                }
+            }
+
+            if (tieneArchivos) {
+                // ==============================================================
+                // FOLIACIÓN CONTINUA EN NEGRITA CONDICIONAL
+                // ==============================================================
+                const fuenteTimesNewRomanBold = await documentoConsolidado.embedFont(StandardFonts.TimesRomanBold);
+                const todasLasPaginasUnidas = documentoConsolidado.getPages();
+
+                for (let idxPagina = 0; idxPagina < todasLasPaginasUnidas.length; idxPagina++) {
+                    const paginaActual = todasLasPaginasUnidas[idxPagina];
+                    
+                    // Validador de rango de página física global
+                    if (indicePaginaGlobal >= limiteDesde && indicePaginaGlobal <= limiteHasta) {
+                        const numeroFolioFormateado = String(numeroCorrelativoActual).padStart(6, '0');
+                        const tamanoLetra = 16;
+                        
+                        const anchoDelTexto = fuenteTimesNewRomanBold.widthOfTextAtSize(numeroFolioFormateado, tamanoLetra);
+                        
+                        paginaActual.drawText(numeroFolioFormateado, {
+                            x: paginaActual.getWidth() - anchoDelTexto - 40,
+                            y: paginaActual.getHeight() - tamanoLetra - 10, 
+                            size: tamanoLetra,
+                            font: fuenteTimesNewRomanBold, 
+                            color: rgb(0, 0, 0),
+                        });
+
+                        // Avanzar la numeración de folio solo si fue aplicada en esta hoja
+                        numeroCorrelativoActual++;
+                    }
+
+                    // El contador de páginas físicas siempre avanza de manera global e ininterrumpida
+                    indicePaginaGlobal++;
+                }
+
+                const bytesPdfFinal = await documentoConsolidado.save();
+                descargarArchivoPdf(bytesPdfFinal, `Consolidado_Kardex_${periodoActual}.pdf`);
+            }
+        }
+        
+        elementoEstado.innerText = '¡Proceso 100% completado! Archivos unidos y foliados con numeración continua generados.';
+    });
+
+    function descargarArchivoPdf(arregloBytes, nombreArchivoGenerado) {
+        const blob = new Blob([arregloBytes], { type: 'application/pdf' });
+        const urlBlob = URL.createObjectURL(blob);
+        const enlaceDescarga = document.createElement('a');
+        enlaceDescarga.href = urlBlob;
+        enlaceDescarga.download = nombreArchivoGenerado;
+        document.body.appendChild(enlaceDescarga);
+        enlaceDescarga.click();
+        document.body.removeChild(enlaceDescarga);
+        URL.revokeObjectURL(urlBlob);
+    }
+</script>
+
+</body>
+</html>

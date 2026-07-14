@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generador PDF Ordenado - by: Henry</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght=300;500;700&display=swap" rel="stylesheet">
+    <style>
+        /* --- ESTILO MINIMALISTA --- */
+        body, html { 
+            margin: 0; padding: 0; 
+            background-color: #f5f5f5; 
+            font-family: 'Inter', sans-serif; 
+            color: #333;
+        }
+
+        .controls { 
+            padding: 40px; 
+            text-align: center; 
+            background: white; 
+            border-bottom: 1px solid #e0e0e0;
+            margin-bottom: 20px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.02);
+            position: relative;
+            z-index: 10;
+        }
+
+        h3 { 
+            font-weight: 700; 
+            margin-bottom: 5px; 
+            letter-spacing: -0.5px;
+            color: #111;
+        }
+
+        .brand {
+            font-size: 0.75rem;
+            color: #888;
+            margin-bottom: 25px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            font-weight: 500;
+        }
+
+        input[type="file"] {
+            margin: 15px 0;
+            padding: 10px;
+            font-size: 14px;
+            border: 1px dashed #ccc;
+            border-radius: 4px;
+            background: #fafafa;
+        }
+
+        button { 
+            background: #222; 
+            color: white; 
+            border: none; 
+            padding: 12px 28px; 
+            cursor: pointer; 
+            border-radius: 4px; 
+            font-size: 14px; 
+            font-weight: 500;
+            transition: background 0.2s, transform 0.1s;
+        }
+
+        button:hover { background: #000; transform: translateY(-1px); }
+
+        /* --- CONTROL DE CALIDAD: CONTENEDOR ANCLADO EN GEOMETRÍA REAL PERO INVISIBLE --- */
+        #pdf-container {
+            position: absolute;
+            top: 0;
+            left: 0;
+            opacity: 0;
+            z-index: -1;
+            pointer-events: none;
+            width: 210mm;
+            background: white;
+        }
+
+        /* --- TU GEOMETRÍA ORIGINAL DE MÁRGENES (PRESERVADA) --- */
+        .a4-page {
+            width: 210mm;
+            height: 296mm; 
+            background: white;
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: flex-start; /* Alineación superior estricta */
+            align-items: center;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* --- LAS MITADES EXACTAS --- */
+        .half-page {
+            width: 100%;
+            height: 148mm; /* Mitad exacta fija */
+            box-sizing: border-box;
+            display: flex;
+            flex-direction: column;
+            justify-content: center; /* Centrado vertical interno */
+            align-items: center;     /* Centrado horizontal interno */
+            padding: 20px;          /* Tus 20px de margen interno intactos */
+            overflow: hidden;
+        }
+
+        .half-page * { 
+            max-width: 100%; 
+            max-height: 100%;
+        }
+    </style>
+</head>
+<body>
+
+    <div class="controls">
+        <h3>Generador de Reportes (Ordenado)</h3>
+        <div class="brand">by: Henry</div>
+        
+        <input type="file" id="fileInput" multiple accept=".html, .htm">
+        <br><br>
+        <button onclick="generatePDF()">Procesar y Descargar PDF</button>
+        <p id="status" style="margin-top:15px; font-size:12px; color:#666; display:none;">Analizando datos...</p>
+    </div>
+
+    <div id="pdf-container"></div>
+
+    <script>
+        // Función auxiliar para extraer datos del HTML
+        function extractData(htmlString) {
+            const tempDiv = document.createElement('div');
+            tempDiv.innerHTML = htmlString;
+            
+            const tds = Array.from(tempDiv.querySelectorAll('td'));
+            
+            let ruc = '';
+            let comprobante = '';
+
+            for (let i = 0; i < tds.length; i++) {
+                const text = tds[i].innerText.trim();
+                
+                if (text.includes("RUC del Proveedor") && tds[i+1]) {
+                    ruc = tds[i+1].innerText.trim();
+                }
+
+                if ((text.includes("Número de Comprobante") || text.includes("Numero de Comprobante")) && tds[i+1]) {
+                    comprobante = tds[i+1].innerText.trim();
+                }
+            }
+
+            return {
+                html: htmlString,
+                ruc: ruc,
+                comprobante: comprobante
+            };
+        }
+
+        async function generatePDF() {
+            const fileInput = document.getElementById('fileInput');
+            const container = document.getElementById('pdf-container');
+            const status = document.getElementById('status');
+            const files = fileInput.files;
+
+            if (files.length === 0) { alert("Por favor, selecciona archivos HTML."); return; }
+
+            status.style.display = 'block';
+            status.innerText = "Leyendo archivos...";
+            container.innerHTML = ''; 
+
+            // 1. Lectura de archivos
+            const filePromises = Array.from(files).map(file => {
+                return new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = (e) => resolve(e.target.result);
+                    reader.readAsText(file);
+                });
+            });
+
+            const rawContents = await Promise.all(filePromises);
+
+            // 2. Extracción y Ordenamiento
+            status.innerText = "Ordenando por RUC y Comprobante...";
+            let processedFiles = rawContents.map(html => extractData(html));
+
+            processedFiles.sort((a, b) => {
+                if (a.ruc < b.ruc) return -1;
+                if (a.ruc > b.ruc) return 1;
+                if (a.comprobante < b.comprobante) return -1;
+                if (a.comprobante > b.comprobante) return 1;
+                return 0;
+            });
+
+            const sortedContents = processedFiles.map(item => item.html);
+
+            // 3. Maquetación
+            status.innerText = "Estructurando páginas...";
+            
+            for (let i = 0; i < sortedContents.length; i += 2) {
+                const pageDiv = document.createElement('div');
+                pageDiv.className = 'a4-page';
+
+                // Mitad Superior
+                const topDiv = document.createElement('div');
+                topDiv.className = 'half-page';
+                topDiv.innerHTML = sortedContents[i];
+                pageDiv.appendChild(topDiv);
+
+                // Mitad Inferior (si existe)
+                if (i + 1 < sortedContents.length) {
+                    const bottomDiv = document.createElement('div');
+                    bottomDiv.className = 'half-page';
+                    bottomDiv.innerHTML = sortedContents[i + 1];
+                    pageDiv.appendChild(bottomDiv);
+                }
+
+                container.appendChild(pageDiv);
+            }
+
+            // 4. CONTROL DE CALIDAD: Renderizado por segmentos sin alterar márgenes
+            status.innerText = "Renderizando PDF página por página...";
+            
+            setTimeout(() => {
+                const opt = {
+                    margin: 0, // Mantenemos margen 0 aquí porque los márgenes ya los controla tu CSS nativo
+                    filename: 'Reporte_Ordenado_RUC.pdf',
+                    image: { type: 'jpeg', quality: 0.98 },
+                    html2canvas: { scale: 2, useCORS: true, scrollY: 0, scrollX: 0 },
+                    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
+                };
+
+                const pages = container.querySelectorAll('.a4-page');
+                
+                if (pages.length === 0) {
+                    status.innerText = "Error: No se generaron páginas.";
+                    return;
+                }
+
+                // Forzamos el aislamiento de la primera página en su propio contenedor
+                // Esto soluciona de raíz el bug del duplicado del HTML raíz (botones)
+                let worker = html2pdf().set(opt).from(pages[0]).toContainer().toCanvas().toPdf();
+
+                // Añadimos secuencialmente las demás hojas del reporte
+                for (let i = 1; i < pages.length; i++) {
+                    worker = worker.get('pdf').then((pdf) => {
+                        pdf.addPage();
+                    }).from(pages[i]).toContainer().toCanvas().toPdf();
+                }
+
+                // Guardado final y liberación de memoria RAM
+                worker.save().then(() => {
+                    status.style.display = 'none';
+                    container.innerHTML = ''; 
+                }).catch(err => {
+                    status.innerText = "Ocurrió un error al procesar el documento.";
+                    console.error(err);
+                });
+                
+            }, 600);
+        }
+    </script>
+</body>
+</html>
