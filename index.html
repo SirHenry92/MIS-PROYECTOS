@@ -3,98 +3,180 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Repositorio de Herramientas</title>
+    <title>Portal de Herramientas Corporativas</title>
     <style>
-        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8f9fa; margin: 0; padding: 40px 20px; }
-        .container { max-width: 800px; margin: auto; }
-        .header { text-align: center; margin-bottom: 40px; }
-        .header h1 { color: #2c3e50; margin: 0; }
-        .header p { color: #7f8c8d; }
-        
-        /* Estilo de las tarjetas automáticas */
-        .card {
-            background: #ffffff; padding: 20px; margin-bottom: 15px; border-radius: 8px;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.05); display: block; text-decoration: none;
-            color: inherit; border-left: 5px solid transparent; transition: all 0.3s ease;
+        /* Variables de color para un diseño profesional */
+        :root {
+            --bg-color: #f1f5f9;
+            --primary-dark: #0f172a;
+            --accent-blue: #2563eb;
+            --text-main: #334155;
+            --text-muted: #64748b;
+            --card-bg: #ffffff;
         }
-        .card:hover { transform: translateX(5px); box-shadow: 0 4px 8px rgba(0,0,0,0.1); border-left: 5px solid #2980b9; }
-        .card h2 { margin: 0 0 5px 0; color: #2980b9; font-size: 1.2rem; }
-        .card p { margin: 0; color: #606f7b; font-size: 0.85rem; font-family: monospace; }
-        
-        .cargando { text-align: center; color: #7f8c8d; font-style: italic; }
+
+        body {
+            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-color);
+            margin: 0;
+            color: var(--text-main);
+        }
+
+        /* Barra de navegación superior */
+        .navbar {
+            background-color: var(--primary-dark);
+            color: white;
+            padding: 25px 20px;
+            text-align: center;
+            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+        }
+        .navbar h1 { margin: 0; font-size: 1.8rem; font-weight: 600; letter-spacing: 0.5px; }
+        .navbar p { margin: 8px 0 0 0; color: #cbd5e1; font-size: 0.95rem; }
+
+        /* Contenedor principal */
+        .container {
+            max-width: 1000px;
+            margin: 40px auto;
+            padding: 0 20px;
+        }
+
+        /* Buscador */
+        .search-container { margin-bottom: 30px; }
+        .search-input {
+            width: 100%;
+            padding: 16px 20px;
+            font-size: 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 8px;
+            box-sizing: border-box;
+            outline: none;
+            transition: all 0.3s ease;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+            font-family: inherit;
+        }
+        .search-input:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+
+        /* Cuadrícula de tarjetas */
+        .grid-container {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+            gap: 20px;
+        }
+
+        /* Tarjetas */
+        .card {
+            background: var(--card-bg);
+            padding: 25px;
+            border-radius: 10px;
+            text-decoration: none;
+            color: inherit;
+            border: 1px solid #e2e8f0;
+            border-top: 4px solid var(--accent-blue);
+            transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            flex-direction: column;
+        }
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+        }
+        .card h2 { margin: 0 0 10px 0; color: var(--primary-dark); font-size: 1.25rem; }
+        .card p { margin: 0; color: var(--text-muted); font-size: 0.9rem; flex-grow: 1; }
+        .card .filename { margin-top: 15px; font-size: 0.8rem; color: #94a3b8; font-family: monospace; background: #f8fafc; padding: 4px 8px; border-radius: 4px; display: inline-block; width: fit-content; }
+
+        .estado { text-align: center; color: var(--text-muted); margin-top: 40px; }
     </style>
 </head>
 <body>
 
-<div class="container">
-    <div class="header">
-        <h1>Portal de Herramientas Internas</h1>
-        <p>Índice generado automáticamente</p>
+    <div class="navbar">
+        <h1>Portal de Herramientas Corporativas</h1>
+        <p>Sistema de gestión, informes y utilidades</p>
     </div>
 
-    <!-- Aquí aparecerán las tarjetas mágicamente -->
-    <div id="lista-archivos" class="cargando">Buscando archivos en el repositorio...</div>
-</div>
+    <div class="container">
+        <!-- Buscador -->
+        <div class="search-container">
+            <input type="text" id="buscador" class="search-input" placeholder="🔍 Buscar herramienta por nombre...">
+        </div>
 
-<script>
-    // ==========================================
-    // DATOS CONFIGURADOS AUTOMÁTICAMENTE
-    // ==========================================
-    const usuarioGitHub = "SirHenry92";
-    const nombreRepositorio = "MIS-PROYECTOS";
-    // ==========================================
+        <!-- Cuadrícula donde aparecerán los archivos -->
+        <div id="lista-archivos" class="grid-container"></div>
+        <div id="mensaje-estado" class="estado">Conectando con el servidor...</div>
+    </div>
 
-    const urlAPI = `https://api.github.com/repos/${usuarioGitHub}/${nombreRepositorio}/contents/`;
-    const contenedor = document.getElementById('lista-archivos');
+    <script>
+        const usuarioGitHub = "SirHenry92";
+        const nombreRepositorio = "MIS-PROYECTOS";
+        const urlAPI = `https://api.github.com/repos/${usuarioGitHub}/${nombreRepositorio}/contents/`;
+        
+        const contenedor = document.getElementById('lista-archivos');
+        const estado = document.getElementById('mensaje-estado');
+        const buscador = document.getElementById('buscador');
 
-    async function cargarArchivos() {
-        try {
-            // 1. Le pedimos a GitHub la lista de archivos
-            const respuesta = await fetch(urlAPI);
-            if (!respuesta.ok) throw new Error("Asegúrate de que el repositorio sea público y el nombre esté bien escrito.");
-            
-            const archivos = await respuesta.json();
-            contenedor.innerHTML = ""; // Quitamos el mensaje de "Buscando..."
+        async function cargarArchivos() {
+            try {
+                const respuesta = await fetch(urlAPI);
+                if (!respuesta.ok) throw new Error("No se pudo conectar con GitHub.");
+                
+                const archivos = await respuesta.json();
+                estado.style.display = "none"; 
 
-            let hayArchivos = false;
+                let hayArchivos = false;
 
-            // 2. Revisamos archivo por archivo
-            for (let archivo of archivos) {
-                // Solo nos interesan los .html que NO sean este mismo índice
-                if (archivo.name.endsWith('.html') && archivo.name !== 'index.html') {
-                    hayArchivos = true;
-                    
-                    // 3. Leemos el contenido del archivo para buscar su etiqueta <title>
-                    const resHtml = await fetch(archivo.download_url);
-                    const textoHtml = await resHtml.text();
-                    
-                    // Extraemos el título real de la página
-                    const parser = new DOMParser();
-                    const doc = parser.parseFromString(textoHtml, "text/html");
-                    const tituloPagina = doc.querySelector("title") ? doc.querySelector("title").innerText : "Herramienta sin título";
+                for (let archivo of archivos) {
+                    if (archivo.name.endsWith('.html') && archivo.name !== 'index.html') {
+                        hayArchivos = true;
+                        
+                        const resHtml = await fetch(archivo.download_url);
+                        const textoHtml = await resHtml.text();
+                        
+                        const parser = new DOMParser();
+                        const doc = parser.parseFromString(textoHtml, "text/html");
+                        const tituloPagina = doc.querySelector("title") ? doc.querySelector("title").innerText : "Herramienta sin título";
 
-                    // 4. Dibujamos el botón (tarjeta)
-                    contenedor.innerHTML += `
-                        <a href="${archivo.name}" class="card">
-                            <h2>📌 ${tituloPagina}</h2>
-                            <p>Nombre del archivo: ${archivo.name}</p>
-                        </a>
-                    `;
+                        // Construimos la tarjeta. encodeURI protege el enlace por si olvidas quitar un espacio
+                        const enlaceSeguro = encodeURI(archivo.name);
+                        
+                        contenedor.innerHTML += `
+                            <a href="${enlaceSeguro}" class="card">
+                                <h2>📄 ${tituloPagina}</h2>
+                                <p>Acceda a este módulo haciendo clic aquí.</p>
+                                <span class="filename">${archivo.name}</span>
+                            </a>
+                        `;
+                    }
                 }
-            }
 
-            if (!hayArchivos) {
-                contenedor.innerHTML = `<p class="cargando">No se encontraron otros archivos HTML en el repositorio.</p>`;
-            }
+                if (!hayArchivos) {
+                    estado.style.display = "block";
+                    estado.innerText = "No se encontraron otras herramientas en el repositorio.";
+                }
 
-        } catch (error) {
-            contenedor.innerHTML = `<p style="color:red; text-align:center;"><b>Error:</b> ${error.message}</p>`;
+            } catch (error) {
+                estado.style.display = "block";
+                estado.innerHTML = `<span style="color:#ef4444;"><b>Error:</b> ${error.message}</span>`;
+            }
         }
-    }
 
-    // Ejecutamos la función
-    cargarArchivos();
-</script>
+        // Función del buscador en tiempo real
+        buscador.addEventListener('input', function(e) {
+            const textoBusqueda = e.target.value.toLowerCase();
+            const tarjetas = document.querySelectorAll('.card');
+            
+            tarjetas.forEach(tarjeta => {
+                const contenidoTarjeta = tarjeta.innerText.toLowerCase();
+                if(contenidoTarjeta.includes(textoBusqueda)) {
+                    tarjeta.style.display = "flex";
+                } else {
+                    tarjeta.style.display = "none";
+                }
+            });
+        });
+
+        // Iniciar
+        cargarArchivos();
+    </script>
 
 </body>
 </html>
