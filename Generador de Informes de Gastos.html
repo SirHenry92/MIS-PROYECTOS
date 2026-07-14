@@ -1,0 +1,654 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <title>Generador Optimizado de Gastos V12</title>
+    
+    <!-- Librería PDF.js para renderizar PDFs subidos a Canvas (Evita que salgan en blanco) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+
+    <style>
+        /* ================= ESTILOS GENERALES ================= */
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background-color: #e5e8e8; margin: 0; padding: 15px; display: flex; gap: 15px;
+            height: 100vh; box-sizing: border-box;
+        }
+
+        /* Panel de Control Lateral */
+        .sidebar {
+            background: white; width: 300px; padding: 20px; border-radius: 10px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05); overflow-y: auto; flex-shrink: 0;
+            display: flex; flex-direction: column;
+        }
+        .sidebar h2 { margin-top: 0; font-size: 1.1rem; color: #2c3e50; border-bottom: 2px solid #e8ecef; padding-bottom: 8px; margin-bottom: 15px;}
+        .form-group { margin-bottom: 12px; }
+        .row-group { display: flex; gap: 10px; }
+        .row-group .form-group { flex: 1; margin-bottom: 10px; }
+        
+        label { display: block; font-weight: 600; font-size: 0.8rem; margin-bottom: 3px; color: #34495e; }
+        .req { color: #e74c3c; } 
+        
+        input[type="text"], input[type="number"], input[type="date"], textarea {
+            width: 100%; padding: 8px; border: 1px solid #ced4da; border-radius: 6px; box-sizing: border-box; font-family: inherit; font-size: 0.85rem; background-color: #fdfdfd; transition: border 0.3s;
+        }
+        input:focus, textarea:focus { border-color: #3498db; outline: none; }
+        textarea { resize: vertical; height: 50px; }
+
+        /* Vista Previa Web y Contenedor */
+        .preview-wrapper { 
+            flex-grow: 1; overflow-y: auto; display: flex; justify-content: center; align-items: flex-start; 
+            background: #7f8c8d; padding: 20px; border-radius: 10px; position: relative;
+        }
+        
+        #pdf-document { 
+            background: white; width: 210mm; min-height: 297mm; padding: 20mm; box-sizing: border-box; 
+            box-shadow: 0 4px 15px rgba(0,0,0,0.3); font-family: Arial, sans-serif; font-size: 11pt; color: #000; line-height: 1.5; 
+            position: relative;
+        }
+
+        /* ================= BOTONES FLOTANTES ================= */
+        .fab-container { position: fixed; bottom: 30px; right: 30px; display: flex; flex-direction: column; gap: 15px; z-index: 100; }
+        .fab-wrapper { position: relative; display: flex; align-items: center; justify-content: flex-end; }
+        .fab-tooltip { background: rgba(0, 0, 0, 0.8); color: white; padding: 6px 12px; border-radius: 20px; font-size: 0.85rem; margin-right: 15px; font-weight: bold; opacity: 0; pointer-events: none; transition: opacity 0.2s, transform 0.2s; transform: translateX(10px); white-space: nowrap; }
+        .fab-wrapper:hover .fab-tooltip { opacity: 1; transform: translateX(0); }
+        .fab { width: 56px; height: 56px; border-radius: 50%; border: none; color: white; cursor: pointer; box-shadow: 0 4px 10px rgba(0,0,0,0.3); display: flex; justify-content: center; align-items: center; transition: transform 0.2s, box-shadow 0.2s; }
+        .fab:hover { transform: scale(1.1); box-shadow: 0 6px 14px rgba(0,0,0,0.4); }
+        .fab svg { width: 24px; height: 24px; fill: currentColor; }
+        .fab-blue { background-color: #3498db; }
+        .fab-purple { background-color: #9b59b6; }
+        .fab-red { background-color: #e74c3c; }
+
+        /* ================= WIDGET COMPACTO ================= */
+        .modal-overlay { display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 1000; justify-content: center; align-items: center; backdrop-filter: blur(3px); }
+        .modal-content { background: #fff; width: 98%; max-width: 1800px; height: 96vh; border-radius: 12px; display: flex; flex-direction: column; box-shadow: 0 10px 40px rgba(0,0,0,0.4); overflow: hidden; }
+        .modal-header { padding: 12px 25px; background: #fff; border-bottom: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .modal-header h3 { margin: 0; font-size: 1.2rem; color: #2c3e50; }
+        .widget-controls { display: flex; align-items: center; gap: 15px; background: #ebf5fb; padding: 6px 15px; border-radius: 8px; border: 1px solid #d6eaf8; }
+        .widget-controls label { margin: 0; font-size: 0.9rem; font-weight: bold; color: #2980b9; }
+        .widget-controls input[type="number"] { width: 120px; padding: 6px; border: 1px solid #bdc3c7; border-radius: 4px; font-weight: bold; color: #d35400; text-align: center; font-size: 0.95rem; }
+        .widget-controls .check-group { display: flex; align-items: center; gap: 5px; }
+        .widget-controls input[type="checkbox"] { width: 18px; height: 18px; cursor: pointer; accent-color: #3498db; }
+        .close-btn { background: none; border: none; color: #95a5a6; font-size: 2rem; cursor: pointer; padding: 0; line-height: 1; margin-left: 10px; }
+        .close-btn:hover { color: #e74c3c; }
+        .modal-body { flex-grow: 1; padding: 10px; background: #f4f6f7; overflow: hidden;}
+        .widget-columns { display: flex; gap: 10px; height: 100%; }
+        .widget-col { flex: 1; background: white; border-radius: 8px; box-shadow: 0 2px 5px rgba(0,0,0,0.05); display: flex; flex-direction: column; overflow: hidden; border: 1px solid #e0e0e0; }
+        .widget-col h4 { margin: 0; padding: 10px; font-size: 0.95rem; text-align: center; color: white; }
+        .col-admin h4 { background-color: #2980b9; }
+        .col-ventas h4 { background-color: #27ae60; }
+        .col-prod h4 { background-color: #e67e22; }
+        .col-indir h4 { background-color: #8e44ad; }
+        .col-content { flex-grow: 1; overflow-y: auto; padding: 10px; }
+        
+        /* Subtitulos en Widget */
+        .col-subtitle { display: flex; justify-content: space-between; font-size: 0.75rem; font-weight: bold; color: #7f8c8d; padding-bottom: 5px; border-bottom: 2px solid #bdc3c7; margin-bottom: 8px; }
+        .col-subtitle .sub-inputs { display: flex; gap: 5px; }
+        .col-subtitle .sub-inputs span { width: 45px; text-align: center; }
+
+        .cc-row { display: flex; justify-content: space-between; align-items: center; padding: 6px 0; border-bottom: 1px solid #f0f3f4; transition: background 0.2s;}
+        .cc-row:hover { background-color: #f8f9fa; }
+        .cc-label { font-size: 0.75rem; font-weight: 700; color: #34495e; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 65%; }
+        .cc-inputs { display: flex; gap: 5px; }
+        .cc-inputs input { width: 45px; box-sizing: border-box; text-align: center; border: 1px solid #bdc3c7; border-radius: 4px; padding: 4px; font-size: 0.8rem; font-weight: bold; color: #2c3e50; outline: none; }
+        .cc-inputs input:focus { border-color: #3498db; background: #ebf5fb; }
+        
+        .modal-footer { padding: 15px 25px; background: #fff; border-top: 1px solid #eee; display: flex; justify-content: space-between; align-items: center; }
+        .btn-save-modal { background: #27ae60; color: white; border:none; padding: 12px 35px; font-size: 1.1rem; border-radius: 25px; font-weight: bold; cursor: pointer; box-shadow: 0 4px 10px rgba(39, 174, 96, 0.3);}
+        .btn-save-modal:hover { background: #2ecc71; }
+        .btn-limpiar { background: #e74c3c; color: white; border:none; padding: 10px 25px; font-size: 0.95rem; border-radius: 20px; cursor: pointer; font-weight: bold;}
+
+        /* ================= PDF INTERIOR ================= */
+        .doc-title { text-align: center; font-weight: bold; font-size: 14pt; text-decoration: underline; margin-bottom: 25px; text-transform: uppercase;}
+        .header-table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+        .header-table td { padding: 4px 0; vertical-align: top; }
+        .header-table .lbl { width: 12%; font-weight: bold; }
+        .header-table .col { width: 3%; text-align: center; font-weight: bold; }
+        hr.separator { border: 0; border-top: 1.5px solid #000; margin: 10px 0 20px 0; }
+        
+        .doc-content { text-align: justify; margin-bottom: 20px;}
+        .doc-content p { margin-bottom: 10px; }
+        .doc-content ul { padding-left: 20px; margin-top: 5px; margin-bottom: 15px; }
+        
+        .data-table { width: 100%; border-collapse: collapse; margin-top: 10px; font-size: 9pt; }
+        .data-table th, .data-table td { border: 1px solid #000; padding: 6px; text-align: center; vertical-align: middle; }
+        .data-table th { background: #d9d9d9; font-weight: bold; }
+        .data-table .bg-gray { background: #f2f2f2; font-weight: bold; }
+        .data-table .row-left { text-align: left; }
+        .data-table .total-row { background: #e6e6e6; font-weight: bold; }
+        .data-table .total-gen { background: #bfbfbf; font-weight: bold; }
+        .col-importe { text-align: right; padding-right: 10px !important; }
+        
+        .doc-footer { margin-top: 20px; font-size: 10pt;}
+        
+        /* Firma central */
+        .doc-signatures { margin-top: 60px; display: flex; justify-content: center; page-break-inside: avoid; }
+        .sig-box { text-align: center; width: 45%; max-width: 300px; }
+        .sig-line { border-top: 1px solid #000; width: 100%; margin: 0 auto 5px auto; }
+        .sig-name { font-weight: bold; font-size: 10pt; text-transform: uppercase;}
+        .sig-title { font-size: 9pt; }
+
+        /* Anexos Section - Diseño 2 por página con Canvas para PDFs */
+        #anexos-section { display: none; page-break-before: always; padding-top: 5mm; }
+        .anexos-title { text-align: center; font-weight: bold; font-size: 14pt; text-decoration: underline; margin-bottom: 20px; }
+        
+        .anexo-item {
+            position: relative; margin-bottom: 15mm; padding: 10px; border: 1px solid #ccc;
+            background: #fff; page-break-inside: avoid; height: 110mm; box-sizing: border-box; border-radius: 8px;
+            display: flex; justify-content: center; align-items: center; overflow: hidden;
+        }
+        
+        .btn-remove-anexo {
+            position: absolute; top: 10px; right: 10px; background: #e74c3c; color: white; border: none; border-radius: 50%;
+            width: 30px; height: 30px; font-size: 20px; cursor: pointer; display: flex; align-items: center; justify-content: center; z-index: 10;
+        }
+        .btn-remove-anexo:hover { background: #c0392b; }
+
+        .anexo-img { max-width: 100%; max-height: 100%; object-fit: contain; display: block; border-radius: 4px; }
+
+        .print-footer-container { display: none; }
+
+        /* ================= IMPRESIÓN NATIVA ================= */
+        @media print {
+            body { background: white; padding: 0; margin: 0; display: block; }
+            .sidebar, .fab-container, .modal-overlay, .btn-remove-anexo { display: none !important; }
+            .preview-wrapper { display: block; padding: 0; background: white; border-radius: 0; overflow: visible;}
+            #pdf-document { width: 100%; min-height: auto; box-shadow: none; padding: 0; margin: 0; }
+            
+            /* Ajuste de Anexos para imprimir sin bordes feos */
+            .anexo-item { border: none; padding: 0; background: transparent; height: 125mm; margin-bottom: 5mm; }
+
+            /* Configuración de página y pie fijo en todas las hojas */
+            @page { size: A4 portrait; margin: 20mm; }
+            
+            .print-footer-container {
+                display: block; position: fixed; bottom: 0; right: 0;
+                font-size: 8pt; color: #555; text-align: right;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Inicialización de PDF.js -->
+    <script>
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
+    <!-- PANEL DE CONTROL LATERAL -->
+    <div class="sidebar">
+        <h2>📑 Datos Obligatorios</h2>
+        
+        <div class="row-group">
+            <div class="form-group">
+                <label>N° Informe <span class="req">*</span></label>
+                <input type="text" id="in-informe" value="INFORME 2026 - " oninput="updatePreview()" required>
+            </div>
+            <div class="form-group">
+                <label>Fecha <span class="req">*</span></label>
+                <input type="date" id="in-fecha" onchange="updatePreview()" required>
+            </div>
+        </div>
+
+        <div class="form-group">
+            <label>Destinatario (PARA) <span class="req">*</span></label>
+            <textarea id="in-para" oninput="updatePreview()" required>Sra. Rosario Vera</textarea>
+        </div>
+        
+        <div class="form-group">
+            <label>Remitente (DE) <span class="req">*</span></label>
+            <textarea id="in-de" oninput="updatePreview()" placeholder="Ej: Juan Perez" required></textarea>
+        </div>
+
+        <div class="form-group">
+            <label>Asunto / Concepto <span class="req">*</span></label>
+            <input type="text" id="in-asunto" placeholder="Ej: Agasajo por el Día del Padre" oninput="updatePreview()" required>
+        </div>
+
+        <div class="form-group">
+            <label>Justificación del Gasto <span class="req">*</span></label>
+            <textarea id="in-justificacion" oninput="updatePreview()" placeholder="Ej: Reconocer y homenajear a los colaboradores." required></textarea>
+        </div>
+    </div>
+
+    <!-- VISTA PREVIA Y BOTONES FLOTANTES -->
+    <div class="preview-wrapper">
+        <div class="fab-container">
+            <div class="fab-wrapper">
+                <span class="fab-tooltip">1. Asignar Centros de Costo</span>
+                <button class="fab fab-blue" onclick="abrirWidget()">
+                    <svg viewBox="0 0 24 24"><path d="M4 4h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 10h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4zM4 16h4v4H4zm6 0h4v4h-4zm6 0h4v4h-4z"/></svg>
+                </button>
+            </div>
+            <div class="fab-wrapper">
+                <span class="fab-tooltip">2. Añadir Fotos/PDF</span>
+                <button class="fab fab-purple" onclick="document.getElementById('file-upload').click()">
+                    <svg viewBox="0 0 24 24"><path d="M4 8V6a2 2 0 0 1 2-2h1.5l1.2-1.6A1 1 0 0 1 9.5 2h5a1 1 0 0 1 .8.4L16.5 4H18a2 2 0 0 1 2 2v2h1a1 1 0 0 1 1 1v11a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V9a1 1 0 0 1 1-1h1zm8 11a5.5 5.5 0 1 0 0-11 5.5 5.5 0 0 0 0 11zm0-2a3.5 3.5 0 1 1 0-7 3.5 3.5 0 0 1 0 7z"/></svg>
+                </button>
+                <input type="file" id="file-upload" multiple accept="image/*, application/pdf" style="display:none;" onchange="cargarAnexos(event)">
+            </div>
+            <div class="fab-wrapper">
+                <span class="fab-tooltip">3. Validar e Imprimir/PDF</span>
+                <button class="fab fab-red" onclick="validarYGenerar()">
+                    <svg viewBox="0 0 24 24"><path d="M19 8H5c-1.66 0-3 1.34-3 3v6h4v4h12v-4h4v-6c0-1.66-1.34-3-3-3zm-3 11H8v-5h8v5zm3-7c-.55 0-1-.45-1-1s.45-1 1-1 1 .45 1 1-.45 1-1 1zm-1-9H6v4h12V3z"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <div id="pdf-document">
+            <div class="doc-title" id="out-informe">INFORME</div>
+            
+            <table class="header-table">
+                <tr><td class="lbl">PARA</td><td class="col">:</td><td id="out-para"></td></tr>
+                <tr><td class="lbl">DE</td><td class="col">:</td><td id="out-de"></td></tr>
+                <tr><td class="lbl">ASUNTO</td><td class="col">:</td><td id="out-asunto"></td></tr>
+                <tr><td class="lbl">FECHA</td><td class="col">:</td><td id="out-fecha"></td></tr>
+            </table>
+            
+            <hr class="separator">
+            
+            <div class="doc-content">
+                <p>A través del presente documento, me dirijo a usted para informar sobre el gasto incurrido <span id="out-concepto-container">por concepto de <strong id="out-concepto-text"></strong></span>. Dicha erogación se realizó en estricto cumplimiento del principio de causalidad y el criterio de generalidad (Art. 37° LIR), siendo necesaria para el desarrollo de las actividades operativas y administrativas de la empresa.</p>
+                <p>La actividad y/o adquisición tuvo como propósitos principales:</p>
+                <ul id="out-justificacion"></ul>
+                <p>A continuación, se detalla el cuadro de distribución valorizado por centro de costo correspondiente al personal o área beneficiada, en concordancia con la norma de reparto interna:</p>
+            </div>
+
+            <table class="data-table">
+                <thead id="out-thead"></thead>
+                <tbody id="out-tbody"></tbody>
+            </table>
+
+            <div class="doc-footer">
+                <p>Es cuanto informo a usted, para los fines contables y de control interno pertinentes.</p>
+            </div>
+
+            <div class="doc-signatures">
+                <div class="sig-box">
+                    <div class="sig-line"></div>
+                    <div class="sig-name" id="out-sig-name1">FIRMA DEL REMITENTE</div>
+                    <div class="sig-title">Elaborado por</div>
+                </div>
+            </div>
+
+            <div id="anexos-section">
+                <div class="anexos-title">ANEXOS</div>
+                <div id="anexos-container"></div>
+            </div>
+
+            <!-- Este pie de página se imprimirá fijo en la parte inferior derecha -->
+            <div id="print-footer" class="print-footer-container"></div>
+        </div>
+    </div>
+
+    <!-- WIDGET / MODAL DE CENTROS DE COSTO -->
+    <div class="modal-overlay" id="cc-modal">
+        <div class="modal-content">
+            <div class="modal-header">
+                <h3>Distribución y Asignación de Importes por Áreas</h3>
+                <div style="display: flex; gap: 15px; align-items: center;">
+                    <div class="widget-controls">
+                        <label>Monto Global S/ :</label>
+                        <input type="number" id="in-monto-global" placeholder="Ej: 1500.00" min="0" step="0.01">
+                        <div class="check-group" style="margin-left: 10px;">
+                            <input type="checkbox" id="in-use-tipo" onchange="abrirWidget()">
+                            <label for="in-use-tipo" style="color: #2c3e50; font-weight: 600;">Desglosar tipo personal</label>
+                        </div>
+                    </div>
+                    <button class="close-btn" onclick="cerrarWidget()">&times;</button>
+                </div>
+            </div>
+            
+            <div class="modal-body">
+                <div class="widget-columns">
+                    <div class="widget-col col-admin">
+                        <h4>1. ADMINISTRACIÓN</h4>
+                        <div class="col-content" id="col-1"></div>
+                    </div>
+                    <div class="widget-col col-ventas">
+                        <h4>2. VENTAS</h4>
+                        <div class="col-content" id="col-2"></div>
+                    </div>
+                    <div class="widget-col col-prod">
+                        <h4>3. PRODUCCIÓN</h4>
+                        <div class="col-content" id="col-3"></div>
+                    </div>
+                    <div class="widget-col col-indir">
+                        <h4>4. INDIRECTOS / OTROS</h4>
+                        <div class="col-content" id="col-4"></div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="modal-footer">
+                <button class="btn-limpiar" onclick="limpiarWidget()">Limpiar Todo</button>
+                <div style="text-align: center;">
+                    <span id="widget-contador" style="font-size: 1.2rem; font-weight: 800; color: #2c3e50; margin-right: 20px;">Total Cantidad: 0</span>
+                </div>
+                <button class="btn-save-modal" onclick="guardarWidget()">✅ Aceptar y Distribuir</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const centrosCosto = {
+            "11101": "GERENCIA GENERAL", "11201": "FINANZAS Y TESORERIA", "11301": "SISTEMAS", "11401": "CONTABILIDAD",
+            "11501": "RECURSOS HUMANOS", "11601": "LOGISTICA", "11701": "SITEMAS GESTIÓN", "11801": "OFICINA LIMA",
+            "21101": "GERENCIA COMERCIAL", "21201": "VENTAS INTERNACIONES", "21202": "COMERCIO EXTERIOR", "21301": "VENTAS NACIONALES",
+            "21302": "VENTAS REMATE", "21303": "TIENDA UMACOLLO", "21304": "TIENDA YANAHUARA", "21401": "ALMACÉN PRODUCTOS TERMINADOS",
+            "21402": "DISEÑO Y DESARROLLO", "21501": "EDIFICIO LIMA", "31101": "TEJIDO INDUSTRIAL", "31102": "TEJIDO MANUAL",
+            "31201": "LAVADO  TEJIDO", "31202": "VAPORIZADO TEJIDO", "31301": "REMALLE TEJIDO", "31302": "ACABADO CONFECCIÓN TEJIDO",
+            "31401": "ACABADOS Y ETIQUETADO TEJIDO", "31402": "PLANCHA FINAL TEJIDO", "31403": "ACABADO FINAL TEJIDO", "32101": "TEJIDO CIRCULAR",
+            "32201": "TEJIDO PLANO", "32301": "ACABADOS TEJIDO DE TELAS", "33101": "CORTE Y HABILITADO", "33201": "CONFECCIÓN PRENDAS",
+            "33301": "ACABADOS TELA", "40101": "GERENCIA OPERACIONES", "41101": "GERENCIA PRODUCCIÓN PRENDAS", "41102": "SUPERVISIÓN TEJIDO PRENDAS",
+            "41103": "SUPERVISIÓN CONFECCIÓN", "41104": "SUPERVICION ACABADO", "41201": "PLANIFICACION PRENDAS", "41301": "INGENIERIA",
+            "41401": "ESTUDIOS INDUSTRIALES", "41501": "CONTROL CALIDAD PRENDAS", "41601": "ALMACEN HILADOS PRENDAS", "41701": "ALMACEN AVIOS REPUESTOS",
+            "41801": "MANTENIMIENTO PLANTA", "42101": "GERENCIA PRODUCCION TELAS", "42102": "SUPERVISION PRODUCCIÓN TELAS",
+            "42201": "PLANIFICACION DE TELAS", "42301": "INGENIERÍA TELAS", "42401": "ESTUDIOS INDUSTRIALES TELAS", "42501": "CONTROL CALIDAD TELAS", 
+            "42601": "ALMACEN HILADOS TELAS", "42701": "ALM AVÍOS Y SUMINISTROS", "42801": "MANTENIMIENTO PLANTA TELAS", 
+            "43101": "GERENCIA PROD. CONFECCIONES", "43102": "SUPERVISIÓN CONFECCIÓN", "43201": "PLANIFICACION CONFECCIONES", 
+            "43301": "INGENIERÍA", "43401": "EST.INDUSTR. CONF. TEJ.", "43501": "PATRONAJE CONFECCIONES TELA", "43601": "CONTROL CALIDAD CONFECC.", 
+            "43701": "ALMACEN TELA", "43801": "ALMACEN AVÍOS REPUESTOS", "43901": "MANTENIMIENTO CONFECCIONES", "40001": "NO ESPECIFICADO"
+        };
+
+        let tableData = [];
+
+        window.onload = function() {
+            let hoy = new Date().toLocaleDateString('es-PE', { timeZone: 'America/Lima' });
+            let parts = hoy.split('/');
+            if(parts.length === 3) {
+                document.getElementById("in-fecha").value = `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+            }
+            updatePreview();
+            renderTable();
+        };
+
+        function formatearMoneda(valor) {
+            return parseFloat(valor).toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        }
+
+        // PREVISUALIZACION
+        function updatePreview() {
+            let informeTitle = document.getElementById("in-informe").value || "INFORME";
+            document.getElementById("out-informe").innerText = informeTitle;
+            
+            let dateVal = document.getElementById("in-fecha").value;
+            if(dateVal) {
+                let dParts = dateVal.split('-');
+                document.getElementById("out-fecha").innerText = `${dParts[2]}/${dParts[1]}/${dParts[0]}`;
+            }
+            
+            document.getElementById("out-para").innerHTML = document.getElementById("in-para").value.replace(/\n/g, '<br>');
+            let deStr = document.getElementById("in-de").value.trim();
+            document.getElementById("out-de").innerHTML = deStr.replace(/\n/g, '<br>');
+            
+            if(deStr) {
+                let firstDe = deStr.split('\n')[0].split('-')[0].trim();
+                document.getElementById("out-sig-name1").innerText = firstDe.replace('Srta. ', '').replace('Sra. ', '').replace('Sr. ', '').toUpperCase();
+            } else {
+                document.getElementById("out-sig-name1").innerText = "FIRMA DEL REMITENTE";
+            }
+            
+            let asunto = document.getElementById("in-asunto").value.trim();
+            document.getElementById("out-asunto").innerText = asunto;
+            
+            if(asunto) {
+                document.getElementById("out-concepto-container").innerHTML = `por concepto de <strong>${asunto}</strong>`;
+            } else {
+                document.getElementById("out-concepto-container").innerHTML = `en el periodo correspondiente`;
+            }
+            
+            let justLines = document.getElementById("in-justificacion").value.split('\n').filter(l => l.trim() !== "");
+            let justHtml = "";
+            justLines.forEach(line => { justHtml += `<li>${line}</li>`; });
+            document.getElementById("out-justificacion").innerHTML = justHtml;
+        }
+
+        // IMPRESIÓN NATIVA CONSTRUCTOR
+        function validarYGenerar() {
+            let informe = document.getElementById('in-informe').value.trim();
+            let fecha = document.getElementById('in-fecha').value;
+            let para = document.getElementById('in-para').value.trim();
+            let deStr = document.getElementById('in-de').value.trim();
+            let asunto = document.getElementById('in-asunto').value.trim();
+            let justificacion = document.getElementById('in-justificacion').value.trim();
+            let anexos = document.getElementById('anexos-container').children.length;
+
+            let errores = [];
+            if(!informe) errores.push("falta N° Informe *");
+            if(!fecha) errores.push("falta Fecha *");
+            if(!para) errores.push("falta Destinatario (PARA) *");
+            if(!deStr) errores.push("falta Remitente (DE) *");
+            if(!asunto) errores.push("falta Asunto / Concepto *");
+            if(!justificacion) errores.push("falta Justificación del Gasto *");
+            if(tableData.length === 0) errores.push("Falta asignar Centro de Costos");
+            if(anexos === 0) errores.push("falta Añadir Fotos/PDF (Anexos)");
+
+            if(errores.length > 0) {
+                alert("⚠️ CORRIGA LOS SIGUIENTES ERRORES PARA IMPRIMIR:\n\n- " + errores.join("\n- "));
+                return;
+            }
+
+            // Fijar la hora en el pie de página
+            let now = new Date();
+            document.getElementById('print-footer').innerText = "Impreso el " + now.toLocaleDateString('es-PE') + " a las " + now.toLocaleTimeString('es-PE');
+
+            window.print();
+        }
+
+        // --- MANEJO DE PDF (RENDER A CANVAS) Y FOTOS ---
+        async function cargarAnexos(event) {
+            const container = document.getElementById('anexos-container');
+            const files = event.target.files;
+            
+            if(files.length > 0) {
+                document.getElementById('anexos-section').style.display = 'block';
+                
+                for(let file of files) {
+                    if(file.type === 'application/pdf') {
+                        // Renderizar PDF de manera nativa sobre un Canvas (Solución a PDFs en blanco)
+                        let reader = new FileReader();
+                        reader.onload = async function(e) {
+                            const typedarray = new Uint8Array(e.target.result);
+                            const pdf = await pdfjsLib.getDocument({data: typedarray}).promise;
+                            
+                            // Extraer la primera página del PDF
+                            const page = await pdf.getPage(1);
+                            const viewport = page.getViewport({scale: 1.5});
+                            
+                            const anexoWrapper = document.createElement('div');
+                            anexoWrapper.className = 'anexo-item';
+                            
+                            const canvas = document.createElement('canvas');
+                            canvas.className = 'anexo-img';
+                            const context = canvas.getContext('2d');
+                            canvas.height = viewport.height;
+                            canvas.width = viewport.width;
+                            
+                            await page.render({ canvasContext: context, viewport: viewport }).promise;
+
+                            const btnRemove = document.createElement('button');
+                            btnRemove.className = 'btn-remove-anexo';
+                            btnRemove.innerHTML = '&times;';
+                            btnRemove.title = 'Eliminar este anexo';
+                            btnRemove.onclick = function() {
+                                anexoWrapper.remove();
+                                if(container.children.length === 0) document.getElementById('anexos-section').style.display = 'none';
+                            };
+
+                            anexoWrapper.appendChild(btnRemove);
+                            anexoWrapper.appendChild(canvas);
+                            container.appendChild(anexoWrapper);
+                        };
+                        reader.readAsArrayBuffer(file);
+                        
+                    } else {
+                        // Carga normal de imágenes
+                        let reader = new FileReader();
+                        reader.onload = function(e) {
+                            const anexoWrapper = document.createElement('div');
+                            anexoWrapper.className = 'anexo-item';
+                            
+                            const btnRemove = document.createElement('button');
+                            btnRemove.className = 'btn-remove-anexo';
+                            btnRemove.innerHTML = '&times;';
+                            btnRemove.onclick = function() {
+                                anexoWrapper.remove();
+                                if(container.children.length === 0) document.getElementById('anexos-section').style.display = 'none';
+                            };
+
+                            const img = document.createElement('img');
+                            img.src = e.target.result;
+                            img.className = 'anexo-img';
+                            
+                            anexoWrapper.appendChild(btnRemove);
+                            anexoWrapper.appendChild(img);
+                            container.appendChild(anexoWrapper);
+                        }
+                        reader.readAsDataURL(file);
+                    }
+                }
+            }
+            event.target.value = ''; // Reset
+        }
+
+        // --- LÓGICA DEL WIDGET COLUMNAS Y SUBTITULOS ---
+        function getExistingVal(code, tipo) {
+            let found = tableData.find(i => i.codigo === code && i.tipo === tipo);
+            return found ? found.cantidad : '';
+        }
+
+        function abrirWidget() {
+            let useTipo = document.getElementById("in-use-tipo").checked;
+            
+            for(let i=1; i<=4; i++) document.getElementById(`col-${i}`).innerHTML = "";
+
+            // Crear los Subtítulos Limpios para cada columna
+            let subtitulos = useTipo ? 
+                `<div class="sub-inputs"><span>Ej</span><span>Em</span><span>Ob</span></div>` : 
+                `<div class="sub-inputs"><span>Cant.</span></div>`;
+
+            let headerHTML = `<div class="col-subtitle"><span>ÁREA</span>${subtitulos}</div>`;
+            
+            for(let i=1; i<=4; i++) {
+                let colTarget = document.getElementById(`col-${i}`);
+                if(colTarget) colTarget.innerHTML = headerHTML;
+            }
+
+            for (let code in centrosCosto) {
+                let name = centrosCosto[code];
+                let firstDigit = code.charAt(0);
+                let colTarget = document.getElementById(`col-${firstDigit}`) || document.getElementById('col-4');
+
+                let html = `<div class="cc-row">
+                                <div class="cc-label" title="${name}">${code}-${name}</div>
+                                <div class="cc-inputs">`;
+                // Ya no hay placeholder en los inputs
+                if(useTipo) {
+                    html += `<input type="number" min="0" title="Ejecutivos" class="cc-input cc-cant" data-code="${code}" data-tipo="EJECUTIVOS" value="${getExistingVal(code, 'EJECUTIVOS')}" oninput="calcTotalModal()">
+                             <input type="number" min="0" title="Empleados" class="cc-input cc-cant" data-code="${code}" data-tipo="EMPLEADO" value="${getExistingVal(code, 'EMPLEADO')}" oninput="calcTotalModal()">
+                             <input type="number" min="0" title="Obreros" class="cc-input cc-cant" data-code="${code}" data-tipo="OBRERO" value="${getExistingVal(code, 'OBRERO')}" oninput="calcTotalModal()">`;
+                } else {
+                    html += `<input type="number" min="0" class="cc-input cc-cant" data-code="${code}" data-tipo="GENERAL" value="${getExistingVal(code, 'GENERAL')}" oninput="calcTotalModal()">`;
+                }
+                html += `   </div></div>`;
+                colTarget.innerHTML += html;
+            }
+            calcTotalModal();
+            document.getElementById("cc-modal").style.display = "flex";
+        }
+
+        function cerrarWidget() { document.getElementById("cc-modal").style.display = "none"; }
+        
+        function limpiarWidget() {
+            document.querySelectorAll(".cc-input").forEach(inp => inp.value = "");
+            document.getElementById("in-monto-global").value = "";
+            calcTotalModal();
+        }
+
+        function calcTotalModal() {
+            let cants = document.querySelectorAll(".cc-cant");
+            let sumCant = 0;
+            cants.forEach(inp => {
+                let val = parseInt(inp.value);
+                if(!isNaN(val) && val > 0) sumCant += val;
+            });
+            document.getElementById("widget-contador").innerText = `Total Cantidad: ${sumCant}`;
+        }
+
+        function guardarWidget() {
+            let montoGlobal = parseFloat(document.getElementById("in-monto-global").value) || 0;
+            let cants = document.querySelectorAll(".cc-cant");
+            let totalCant = 0;
+            
+            cants.forEach(inp => {
+                let val = parseInt(inp.value);
+                if(!isNaN(val) && val > 0) totalCant += val;
+            });
+
+            tableData = []; 
+            
+            cants.forEach(inp => {
+                let val = parseInt(inp.value);
+                if(!isNaN(val) && val > 0) {
+                    let code = inp.getAttribute("data-code");
+                    let tipo = inp.getAttribute("data-tipo");
+                    let area = centrosCosto[code];
+                    let portionImp = (totalCant > 0) ? ((val / totalCant) * montoGlobal) : 0;
+                    tableData.push({ id: code+tipo, tipo: tipo, codigo: code, area: area, cantidad: val, importe: portionImp });
+                }
+            });
+            cerrarWidget();
+            renderTable();
+        }
+
+        // --- RENDERIZADO DE LA TABLA ---
+        function renderTable() {
+            let useTipo = document.getElementById("in-use-tipo").checked;
+            let totalQty = 0; let totalAmount = 0;
+
+            if(tableData.length > 0) tableData.sort((a,b) => a.codigo.localeCompare(b.codigo));
+
+            let theadHtml = `<tr>`;
+            if (useTipo) theadHtml += `<th style="width: 15%;">TIPO</th>`;
+            theadHtml += `<th style="width: 12%;">CÓDIGO</th><th style="width: 45%;">CENTRO DE COSTO</th><th style="width: 13%;">CANT.</th><th style="width: 15%;">IMPORTE (S/)</th></tr>`;
+            document.getElementById("out-thead").innerHTML = theadHtml;
+
+            let tbody = document.getElementById("out-tbody");
+            let html = '';
+            
+            if (tableData.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${useTipo ? 5 : 4}" style="color:#7f8c8d;">Utilice el botón flotante azul para asignar Centros de Costo.</td></tr>`;
+                return;
+            }
+
+            if (useTipo) {
+                const groups = { "EJECUTIVOS": [], "EMPLEADO": [], "OBRERO": [] };
+                tableData.forEach(item => { if(groups[item.tipo]) groups[item.tipo].push(item); });
+
+                for(let tipo in groups) {
+                    let items = groups[tipo];
+                    if(items.length === 0) continue;
+                    let subQty = 0, subImp = 0;
+                    items.forEach((item, index) => {
+                        subQty += item.cantidad; subImp += item.importe;
+                        totalQty += item.cantidad; totalAmount += item.importe;
+                        html += `<tr>`;
+                        if(index === 0) html += `<td rowspan="${items.length}" class="bg-gray">${tipo}</td>`;
+                        html += `<td>${item.codigo}</td><td class="row-left">${item.area}</td><td>${item.cantidad}</td><td class="col-importe">${formatearMoneda(item.importe)}</td></tr>`;
+                    });
+                    html += `<tr class="total-row"><td colspan="3" style="text-align:right">Subtotal ${tipo}:</td><td>${subQty}</td><td class="col-importe">${formatearMoneda(subImp)}</td></tr>`;
+                }
+            } else {
+                tableData.forEach(item => {
+                    totalQty += item.cantidad; totalAmount += item.importe;
+                    html += `<tr><td>${item.codigo}</td><td class="row-left">${item.area}</td><td>${item.cantidad}</td><td class="col-importe">${formatearMoneda(item.importe)}</td></tr>`;
+                });
+            }
+
+            html += `<tr class="total-gen"><td colspan="${useTipo ? 3 : 2}" style="text-align:right; padding-right:10px;">TOTAL GENERAL:</td><td>${totalQty}</td><td class="col-importe">S/ ${formatearMoneda(totalAmount)}</td></tr>`;
+            tbody.innerHTML = html;
+        }
+    </script>
+</body>
+</html>
