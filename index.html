@@ -3,158 +3,347 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Portal de Herramientas de Henry</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-    
+    <title>Portal de Herramientas — Henry</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+
     <style>
         :root {
-            --bg-color: #f8fafc;
-            --primary-dark: #0f172a;
-            --accent-blue: #2563eb;
-            --text-main: #334155;
-            --text-muted: #64748b;
+            --ink: #0b1220;
+            --ink-soft: #3b465a;
+            --muted: #6b7688;
+            --line: #dde3ec;
+            --line-soft: #e9edf3;
+            --paper: #f6f8fb;
+            --panel: #ffffff;
+            --steel: #1d4ed8;
+            --steel-dark: #14328f;
+            --ok: #12805c;
+            --err: #b3261e;
         }
+
+        * { box-sizing: border-box; }
 
         body {
             font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background-color: var(--bg-color);
+            background:
+                linear-gradient(var(--line-soft) 1px, transparent 1px) 0 0 / 100% 32px,
+                var(--paper);
             margin: 0;
-            color: var(--text-main);
+            color: var(--ink-soft);
         }
 
-        /* Barra de navegación superior */
-        .navbar {
-            background-color: var(--primary-dark);
-            color: white;
-            padding: 25px 20px;
-            text-align: center;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-        }
-        .navbar h1 { margin: 0; font-size: 1.8rem; font-weight: 600; letter-spacing: 0.5px; }
-        .navbar p { margin: 8px 0 0 0; color: #cbd5e1; font-size: 0.95rem; }
+        .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
 
-        /* Contenedor principal */
+        /* ===== Encabezado ===== */
+        .header {
+            background: var(--ink);
+            color: #fff;
+            padding: 0;
+            border-bottom: 3px solid var(--steel);
+        }
+        .header-inner {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 28px 24px 22px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+            flex-wrap: wrap;
+            gap: 16px;
+        }
+        .header-title-block .eyebrow {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            letter-spacing: 0.14em;
+            text-transform: uppercase;
+            color: #8fa6d6;
+            margin: 0 0 8px 0;
+        }
+        .header-title-block h1 {
+            margin: 0;
+            font-size: 1.65rem;
+            font-weight: 700;
+            letter-spacing: -0.01em;
+        }
+        .header-title-block p {
+            margin: 6px 0 0 0;
+            color: #aab4c6;
+            font-size: 0.9rem;
+        }
+
+        .header-meta {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.76rem;
+            color: #93a1bd;
+            text-align: right;
+            line-height: 1.7;
+            border-left: 1px solid #29354d;
+            padding-left: 16px;
+        }
+        .header-meta .repo-path { color: #d7deec; }
+        .header-meta .dot {
+            display: inline-block;
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: var(--ok);
+            margin-right: 6px;
+            box-shadow: 0 0 0 2px rgba(18,128,92,0.15);
+        }
+
+        /* ===== Contenedor ===== */
         .container {
-            max-width: 1000px;
-            margin: 40px auto;
-            padding: 0 20px;
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 36px 24px 60px;
         }
 
-        /* Buscador */
-        .search-container { margin-bottom: 30px; }
-        .search-input {
-            width: 100%;
-            padding: 16px 20px;
-            font-size: 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            box-sizing: border-box;
-            outline: none;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
-            font-family: inherit;
-        }
-        .search-input:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
-
-        /* Cuadrícula de tarjetas */
-        .grid-container {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-            gap: 20px;
-        }
-
-        /* Tarjetas minimalistas */
-        .card {
-            background: #ffffff;
-            padding: 25px 20px;
-            border-radius: 10px;
-            text-decoration: none;
-            border: 1px solid #e2e8f0;
-            border-top: 4px solid var(--accent-blue);
-            transition: transform 0.2s, box-shadow 0.2s;
+        .toolbar {
             display: flex;
             align-items: center;
-            gap: 15px;
-        }
-        .card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
-        }
-        
-        /* El texto azul que solicitaste */
-        .card h2 { 
-            margin: 0; 
-            color: var(--accent-blue); 
-            font-size: 1.15rem; 
-            font-weight: 700;
-            line-height: 1.3;
-        }
-        
-        .card-icon {
-            font-size: 1.5rem;
-            opacity: 0.8;
+            gap: 14px;
+            margin-bottom: 22px;
         }
 
-        .estado { text-align: center; color: var(--text-muted); margin-top: 40px; }
+        .search-container { flex: 1; position: relative; }
+        .search-container::before {
+            content: "";
+            position: absolute;
+            left: 16px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 14px;
+            height: 14px;
+            border: 2px solid var(--muted);
+            border-radius: 50%;
+        }
+        .search-container::after {
+            content: "";
+            position: absolute;
+            left: 27px;
+            top: 63%;
+            width: 6px;
+            height: 2px;
+            background: var(--muted);
+            transform: rotate(45deg);
+        }
+        .search-input {
+            width: 100%;
+            padding: 13px 16px 13px 42px;
+            font-size: 0.92rem;
+            font-family: 'Inter', sans-serif;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--panel);
+            outline: none;
+            transition: border-color 0.15s ease, box-shadow 0.15s ease;
+            color: var(--ink);
+        }
+        .search-input::placeholder { color: #9aa4b5; }
+        .search-input:focus {
+            border-color: var(--steel);
+            box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+        }
+
+        .count-badge {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            color: var(--muted);
+            white-space: nowrap;
+            padding: 12px 14px;
+            border: 1px solid var(--line);
+            border-radius: 6px;
+            background: var(--panel);
+        }
+        .count-badge strong { color: var(--ink); font-weight: 600; }
+
+        .list-header {
+            display: grid;
+            grid-template-columns: 48px 1fr 100px;
+            padding: 0 18px 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+
+        /* ===== Lista de herramientas ===== */
+        .grid-container {
+            display: flex;
+            flex-direction: column;
+            border: 1px solid var(--line);
+            border-radius: 8px;
+            overflow: hidden;
+            background: var(--panel);
+        }
+
+        .card {
+            display: grid;
+            grid-template-columns: 48px 1fr 100px;
+            align-items: center;
+            padding: 16px 18px;
+            text-decoration: none;
+            border-bottom: 1px solid var(--line-soft);
+            transition: background 0.12s ease;
+            position: relative;
+        }
+        .card:last-child { border-bottom: none; }
+        .card:hover { background: #f2f6fc; }
+        .card:hover::before {
+            content: "";
+            position: absolute;
+            left: 0; top: 0; bottom: 0;
+            width: 3px;
+            background: var(--steel);
+        }
+
+        .card-index {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.78rem;
+            color: #9aa4b5;
+        }
+
+        .card-main h2 {
+            margin: 0 0 3px 0;
+            color: var(--ink);
+            font-size: 1rem;
+            font-weight: 600;
+            letter-spacing: -0.005em;
+        }
+        .card-main span {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.74rem;
+            color: var(--muted);
+        }
+
+        .card-action {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.74rem;
+            color: var(--steel);
+            text-align: right;
+            font-weight: 500;
+        }
+        .card-action::after { content: " →"; }
+
+        /* ===== Estado ===== */
+        .estado {
+            text-align: center;
+            color: var(--muted);
+            margin-top: 28px;
+            font-size: 0.9rem;
+            padding: 30px 20px;
+            border: 1px dashed var(--line);
+            border-radius: 8px;
+            background: var(--panel);
+        }
+        .estado.error-box { color: var(--err); border-color: rgba(179,38,30,0.3); }
+
+        footer {
+            max-width: 1080px;
+            margin: 0 auto;
+            padding: 0 24px 40px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.72rem;
+            color: #a9b2c1;
+            text-align: center;
+        }
+
+        @media (max-width: 640px) {
+            .header-meta { display: none; }
+            .list-header, .card { grid-template-columns: 32px 1fr 0; }
+            .card-action { display: none; }
+        }
     </style>
 </head>
 <body>
 
-    <div class="navbar">
-        <h1>Portal de Herramientas de Henry</h1>
-        <p>Sistema de gestión, informes y utilidades</p>
+    <div class="header">
+        <div class="header-inner">
+            <div class="header-title-block">
+                <p class="eyebrow">Panel interno · acceso directo</p>
+                <h1>Portal de Herramientas</h1>
+                <p>Índice de utilidades y sistemas de gestión de Henry</p>
+            </div>
+            <div class="header-meta">
+                <div><span class="dot"></span>Conexión GitHub API</div>
+                <div class="repo-path">SirHenry92/MIS-PROYECTOS</div>
+            </div>
+        </div>
     </div>
 
     <div class="container">
-        <!-- Buscador -->
-        <div class="search-container">
-            <input type="text" id="buscador" class="search-input" placeholder="🔍 Buscar herramienta por nombre...">
+        <div class="toolbar">
+            <div class="search-container">
+                <input type="text" id="buscador" class="search-input" placeholder="Buscar herramienta por nombre…">
+            </div>
+            <div class="count-badge" id="contador">— herramientas</div>
         </div>
 
-        <!-- Cuadrícula donde aparecerán los archivos -->
+        <div class="list-header">
+            <span>#</span>
+            <span>Herramienta</span>
+            <span>Abrir</span>
+        </div>
+
         <div id="lista-archivos" class="grid-container"></div>
-        <div id="mensaje-estado" class="estado">Conectando con el servidor...</div>
+        <div id="mensaje-estado" class="estado">Conectando con el servidor…</div>
     </div>
+
+    <footer>Portal de Herramientas · Sincronizado con el repositorio en tiempo real</footer>
 
     <script>
         const usuarioGitHub = "SirHenry92";
         const nombreRepositorio = "MIS-PROYECTOS";
         const urlAPI = `https://api.github.com/repos/${usuarioGitHub}/${nombreRepositorio}/contents/`;
-        
+
         const contenedor = document.getElementById('lista-archivos');
         const estado = document.getElementById('mensaje-estado');
         const buscador = document.getElementById('buscador');
+        const contador = document.getElementById('contador');
 
         async function cargarArchivos() {
             try {
                 const respuesta = await fetch(urlAPI);
                 if (!respuesta.ok) throw new Error("No se pudo conectar con GitHub.");
-                
+
                 const archivos = await respuesta.json();
-                estado.style.display = "none"; 
+                estado.style.display = "none";
 
                 let hayArchivos = false;
+                let contadorIndice = 0;
 
                 for (let archivo of archivos) {
                     // Solo filtramos los archivos .html que no sean el index
                     if (archivo.name.endsWith('.html') && archivo.name !== 'index.html') {
                         hayArchivos = true;
-                        
+                        contadorIndice++;
+
                         // Quitamos el .html del nombre
                         const nombreLimpio = archivo.name.replace('.html', '');
-                        
+
                         // Protegemos la URL por si tiene espacios
                         const enlaceSeguro = encodeURI(archivo.name);
-                        
-                        // Dibujamos la tarjeta solo con el ícono y el texto azul
+
+                        const indiceFormateado = String(contadorIndice).padStart(2, '0');
+
+                        // Dibujamos la fila con índice, nombre y acción
                         contenedor.innerHTML += `
                             <a href="${enlaceSeguro}" class="card">
-                                <span class="card-icon">📄</span>
-                                <h2>${nombreLimpio}</h2>
+                                <span class="card-index mono">${indiceFormateado}</span>
+                                <span class="card-main">
+                                    <h2>${nombreLimpio}</h2>
+                                    <span>${archivo.name}</span>
+                                </span>
+                                <span class="card-action">Abrir</span>
                             </a>
                         `;
                     }
                 }
+
+                contador.innerHTML = hayArchivos
+                    ? `<strong>${contadorIndice}</strong> herramienta${contadorIndice !== 1 ? 's' : ''} disponible${contadorIndice !== 1 ? 's' : ''}`
+                    : `<strong>0</strong> herramientas`;
 
                 if (!hayArchivos) {
                     estado.style.display = "block";
@@ -163,7 +352,9 @@
 
             } catch (error) {
                 estado.style.display = "block";
-                estado.innerHTML = `<span style="color:#ef4444;"><b>Error:</b> ${error.message}</span>`;
+                estado.classList.add("error-box");
+                estado.innerHTML = `<b>Error de conexión:</b> ${error.message}`;
+                contador.innerHTML = `<strong>—</strong> herramientas`;
             }
         }
 
@@ -171,15 +362,19 @@
         buscador.addEventListener('input', function(e) {
             const textoBusqueda = e.target.value.toLowerCase();
             const tarjetas = document.querySelectorAll('.card');
-            
+            let visibles = 0;
+
             tarjetas.forEach(tarjeta => {
                 const contenidoTarjeta = tarjeta.innerText.toLowerCase();
-                if(contenidoTarjeta.includes(textoBusqueda)) {
-                    tarjeta.style.display = "flex";
+                if (contenidoTarjeta.includes(textoBusqueda)) {
+                    tarjeta.style.display = "grid";
+                    visibles++;
                 } else {
                     tarjeta.style.display = "none";
                 }
             });
+
+            contador.innerHTML = `<strong>${visibles}</strong> resultado${visibles !== 1 ? 's' : ''}`;
         });
 
         cargarArchivos();
