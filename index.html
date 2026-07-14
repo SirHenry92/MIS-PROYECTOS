@@ -4,112 +4,184 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Portal de Herramientas de Henry</title>
+    <!-- Fuente premium 'Inter' -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
     <style>
-        /* Variables de color para un diseño profesional */
         :root {
-            --bg-color: #f1f5f9;
-            --primary-dark: #0f172a;
-            --accent-blue: #2563eb;
-            --text-main: #334155;
+            --bg-body: #f8fafc;
+            --text-main: #0f172a;
             --text-muted: #64748b;
-            --card-bg: #ffffff;
+            --primary: #2563eb;
         }
 
         body {
-            font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
-            background-color: var(--bg-color);
-            margin: 0;
+            font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            background-color: var(--bg-body);
             color: var(--text-main);
+            margin: 0;
+            padding: 0;
+            -webkit-font-smoothing: antialiased;
         }
 
-        /* Barra de navegación superior */
-        .navbar {
-            background-color: var(--primary-dark);
-            color: white;
-            padding: 25px 20px;
+        /* Cabecera con degradado */
+        .hero {
+            background: linear-gradient(135deg, #0f172a 0%, #1e3a8a 100%);
+            padding: 70px 20px 90px 20px;
             text-align: center;
-            box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            color: white;
         }
-        .navbar h1 { margin: 0; font-size: 1.8rem; font-weight: 600; letter-spacing: 0.5px; }
-        .navbar p { margin: 8px 0 0 0; color: #cbd5e1; font-size: 0.95rem; }
+        .hero h1 {
+            font-size: 2.5rem;
+            font-weight: 700;
+            margin: 0 0 12px 0;
+            letter-spacing: -0.5px;
+        }
+        .hero p {
+            font-size: 1.1rem;
+            color: #94a3b8;
+            margin: 0;
+            font-weight: 300;
+        }
 
-        /* Contenedor principal */
         .container {
-            max-width: 1000px;
-            margin: 40px auto;
+            max-width: 1100px;
+            margin: 0 auto;
             padding: 0 20px;
         }
 
-        /* Buscador */
-        .search-container { margin-bottom: 30px; }
+        /* Buscador flotante */
+        .search-wrapper {
+            position: relative;
+            max-width: 650px;
+            margin: -35px auto 50px auto;
+        }
         .search-input {
             width: 100%;
-            padding: 16px 20px;
-            font-size: 16px;
-            border: 2px solid #e2e8f0;
-            border-radius: 8px;
-            box-sizing: border-box;
+            padding: 22px 25px 22px 60px;
+            font-size: 1.05rem;
+            border: none;
+            border-radius: 50px;
+            background: white;
+            box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.08);
             outline: none;
-            transition: all 0.3s ease;
-            box-shadow: 0 2px 4px rgba(0,0,0,0.02);
             font-family: inherit;
+            color: var(--text-main);
+            transition: all 0.3s ease;
+            box-sizing: border-box;
         }
-        .search-input:focus { border-color: var(--accent-blue); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.1); }
+        .search-input:focus {
+            box-shadow: 0 15px 35px -5px rgba(37, 99, 235, 0.15);
+            transform: translateY(-2px);
+        }
+        .search-icon {
+            position: absolute;
+            left: 25px;
+            top: 50%;
+            transform: translateY(-50%);
+            font-size: 1.2rem;
+        }
 
         /* Cuadrícula de tarjetas */
         .grid-container {
             display: grid;
             grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
-            gap: 20px;
+            gap: 24px;
+            padding-bottom: 80px;
         }
 
-        /* Tarjetas */
+        /* Diseño de Tarjetas */
         .card {
-            background: var(--card-bg);
-            padding: 25px;
-            border-radius: 10px;
+            background: white;
+            border-radius: 20px;
+            padding: 30px;
             text-decoration: none;
             color: inherit;
-            border: 1px solid #e2e8f0;
-            border-top: 4px solid var(--accent-blue);
-            transition: transform 0.2s, box-shadow 0.2s;
+            border: 1px solid #f1f5f9;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.03);
             display: flex;
             flex-direction: column;
+            position: relative;
+            overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+            animation: fadeIn 0.6s ease-out forwards;
+        }
+        .card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; width: 100%; height: 4px;
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+            opacity: 0;
+            transition: opacity 0.3s ease;
         }
         .card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 10px 15px -3px rgba(0,0,0,0.1);
+            transform: translateY(-8px);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.08), 0 8px 10px -6px rgba(0, 0, 0, 0.04);
+            border-color: #e2e8f0;
         }
-        .card h2 { margin: 0 0 10px 0; color: var(--primary-dark); font-size: 1.25rem; }
-        .card p { margin: 0; color: var(--text-muted); font-size: 0.9rem; flex-grow: 1; }
+        .card:hover::before {
+            opacity: 1;
+        }
         
-        /* DISEÑO ACTUALIZADO DEL NOMBRE DEL ARCHIVO */
-        .card .filename { 
-            margin-top: 15px; 
-            font-size: 1.15rem;      /* Tamaño más grande */
-            font-weight: 700;        /* Negrita gruesa */
-            color: var(--accent-blue); /* Color azul para destacar */
+        .card-icon {
+            width: 54px;
+            height: 54px;
+            background: #eff6ff;
+            border-radius: 14px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 26px;
+            margin-bottom: 20px;
+        }
+        
+        /* ESTILO DEL TÍTULO PRINCIPAL (Nombre del archivo) */
+        .card h2 {
+            font-size: 1.3rem;
+            font-weight: 700;
+            margin: 0 0 10px 0;
+            line-height: 1.3;
+            color: var(--text-main);
+        }
+        
+        .card p {
+            font-size: 0.95rem;
+            color: var(--text-muted);
+            margin: 0;
+            line-height: 1.5;
+            flex-grow: 1;
         }
 
-        .estado { text-align: center; color: var(--text-muted); margin-top: 40px; }
+        .estado {
+            text-align: center;
+            color: var(--text-muted);
+            font-weight: 500;
+            margin-top: 40px;
+        }
+
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(15px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
     </style>
 </head>
 <body>
 
-    <div class="navbar">
+    <div class="hero">
         <h1>Portal de Herramientas de Henry</h1>
         <p>Sistema de gestión, informes y utilidades</p>
     </div>
 
     <div class="container">
-        <!-- Buscador -->
-        <div class="search-container">
-            <input type="text" id="buscador" class="search-input" placeholder="🔍 Buscar herramienta por nombre...">
+        <!-- Buscador flotante -->
+        <div class="search-wrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="buscador" class="search-input" placeholder="Buscar herramienta, reporte o módulo...">
         </div>
 
-        <!-- Cuadrícula donde aparecerán los archivos -->
+        <!-- Cuadrícula donde aparecerán las herramientas -->
         <div id="lista-archivos" class="grid-container"></div>
-        <div id="mensaje-estado" class="estado">Conectando con el servidor...</div>
+        <div id="mensaje-estado" class="estado">Sincronizando con el directorio...</div>
     </div>
 
     <script>
@@ -124,7 +196,7 @@
         async function cargarArchivos() {
             try {
                 const respuesta = await fetch(urlAPI);
-                if (!respuesta.ok) throw new Error("No se pudo conectar con GitHub.");
+                if (!respuesta.ok) throw new Error("No se pudo conectar con el servidor.");
                 
                 const archivos = await respuesta.json();
                 estado.style.display = "none"; 
@@ -135,24 +207,18 @@
                     if (archivo.name.endsWith('.html') && archivo.name !== 'index.html') {
                         hayArchivos = true;
                         
-                        const resHtml = await fetch(archivo.download_url);
-                        const textoHtml = await resHtml.text();
-                        
-                        const parser = new DOMParser();
-                        const doc = parser.parseFromString(textoHtml, "text/html");
-                        const tituloPagina = doc.querySelector("title") ? doc.querySelector("title").innerText : "Herramienta sin título";
-
-                        // URL segura para evitar el error 404
-                        const enlaceSeguro = encodeURI(archivo.name);
-                        
-                        // Quitamos la extensión .html del texto a mostrar
+                        // Extraemos el nombre del archivo y le quitamos el .html
                         const nombreLimpio = archivo.name.replace('.html', '');
                         
+                        // Creamos una ruta segura
+                        const enlaceSeguro = encodeURI(archivo.name);
+                        
+                        // Construimos la tarjeta usando nombreLimpio en el <h2> principal
                         contenedor.innerHTML += `
                             <a href="${enlaceSeguro}" class="card">
-                                <h2>📄 ${tituloPagina}</h2>
-                                <p>Acceda a este módulo haciendo clic aquí.</p>
-                                <span class="filename">${nombreLimpio}</span>
+                                <div class="card-icon">📄</div>
+                                <h2>${nombreLimpio}</h2>
+                                <p>Haga clic para iniciar esta herramienta en su navegador.</p>
                             </a>
                         `;
                     }
@@ -160,16 +226,16 @@
 
                 if (!hayArchivos) {
                     estado.style.display = "block";
-                    estado.innerText = "No se encontraron otras herramientas en el repositorio.";
+                    estado.innerText = "No hay módulos disponibles en este momento.";
                 }
 
             } catch (error) {
                 estado.style.display = "block";
-                estado.innerHTML = `<span style="color:#ef4444;"><b>Error:</b> ${error.message}</span>`;
+                estado.innerHTML = `<span style="color:#ef4444;"><b>Error de conexión:</b> ${error.message}</span>`;
             }
         }
 
-        // Función del buscador en tiempo real
+        // Filtro de búsqueda animado
         buscador.addEventListener('input', function(e) {
             const textoBusqueda = e.target.value.toLowerCase();
             const tarjetas = document.querySelectorAll('.card');
@@ -184,7 +250,6 @@
             });
         });
 
-        // Iniciar
         cargarArchivos();
     </script>
 
