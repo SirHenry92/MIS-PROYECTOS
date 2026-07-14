@@ -4,290 +4,383 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Portal de Herramientas — Henry</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 
     <style>
         :root {
-            --ink: #0b1220;
-            --ink-soft: #3b465a;
-            --muted: #6b7688;
-            --line: #dde3ec;
-            --line-soft: #e9edf3;
-            --paper: #f6f8fb;
-            --panel: #ffffff;
-            --steel: #1d4ed8;
-            --steel-dark: #14328f;
-            --ok: #12805c;
-            --err: #b3261e;
+            /* SAP Horizon / Quartz Light tokens */
+            --shell: #29323d;
+            --shell-2: #354a5f;
+            --sap-blue: #0070f2;
+            --sap-blue-dark: #0040a0;
+            --sap-blue-tint: #e5f1ff;
+            --canvas: #f7f7f7;
+            --tile: #ffffff;
+            --border: #d9d9d9;
+            --border-strong: #89919a;
+            --text: #1d2d3e;
+            --text-soft: #556577;
+            --text-muted: #6a6d70;
+            --positive: #257a3e;
+            --positive-bg: #e3f4e8;
+            --negative: #b00;
+            --negative-bg: #ffebeb;
+            --radius: 4px;
         }
 
         * { box-sizing: border-box; }
 
-        body {
-            font-family: 'Inter', system-ui, -apple-system, sans-serif;
-            background:
-                linear-gradient(var(--line-soft) 1px, transparent 1px) 0 0 / 100% 32px,
-                var(--paper);
+        html, body {
             margin: 0;
-            color: var(--ink-soft);
-        }
-
-        .mono { font-family: 'JetBrains Mono', ui-monospace, monospace; }
-
-        /* ===== Encabezado ===== */
-        .header {
-            background: var(--ink);
-            color: #fff;
             padding: 0;
-            border-bottom: 3px solid var(--steel);
+            background: var(--canvas);
+            color: var(--text);
+            font-family: "72", "Segoe UI", Arial, sans-serif;
+            font-size: 14px;
         }
-        .header-inner {
-            max-width: 1080px;
-            margin: 0 auto;
-            padding: 28px 24px 22px;
+
+        .mono { font-family: "SAP Mono", "Consolas", monospace; }
+
+        /* ===== Shell Bar ===== */
+        .shellbar {
+            height: 48px;
+            background: var(--shell);
             display: flex;
-            justify-content: space-between;
-            align-items: flex-end;
-            flex-wrap: wrap;
-            gap: 16px;
+            align-items: center;
+            padding: 0 8px 0 4px;
+            gap: 4px;
+            position: sticky;
+            top: 0;
+            z-index: 20;
+            border-bottom: 1px solid #1c232b;
         }
-        .header-title-block .eyebrow {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.72rem;
-            letter-spacing: 0.14em;
-            text-transform: uppercase;
-            color: #8fa6d6;
-            margin: 0 0 8px 0;
-        }
-        .header-title-block h1 {
-            margin: 0;
-            font-size: 1.65rem;
-            font-weight: 700;
-            letter-spacing: -0.01em;
-        }
-        .header-title-block p {
-            margin: 6px 0 0 0;
-            color: #aab4c6;
-            font-size: 0.9rem;
-        }
-
-        .header-meta {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.76rem;
-            color: #93a1bd;
-            text-align: right;
-            line-height: 1.7;
-            border-left: 1px solid #29354d;
-            padding-left: 16px;
-        }
-        .header-meta .repo-path { color: #d7deec; }
-        .header-meta .dot {
-            display: inline-block;
-            width: 6px;
-            height: 6px;
+        .shellbar-icon-btn {
+            width: 44px;
+            height: 44px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
             border-radius: 50%;
-            background: var(--ok);
+            flex-shrink: 0;
+        }
+        .shellbar-icon-btn svg { width: 18px; height: 18px; }
+        .grid-icon {
+            display: grid;
+            grid-template-columns: repeat(3, 3px);
+            grid-template-rows: repeat(3, 3px);
+            gap: 2px;
+            width: 13px; height: 13px;
+        }
+        .grid-icon span { background: #d8dee5; width: 3px; height: 3px; }
+
+        .shellbar-divider {
+            width: 1px;
+            height: 24px;
+            background: rgba(255,255,255,0.18);
+            margin: 0 6px;
+            flex-shrink: 0;
+        }
+        .shellbar-title {
+            color: #fff;
+            font-size: 1rem;
+            font-weight: 700;
+            letter-spacing: 0.01em;
+            white-space: nowrap;
+            padding-right: 10px;
+        }
+        .shellbar-crumb {
+            color: #aeb8c4;
+            font-size: 0.78rem;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .shellbar-crumb b { color: #e7ebef; font-weight: 600; }
+
+        .shellbar-spacer { flex: 1; }
+
+        .shellbar-status {
+            display: flex;
+            align-items: center;
+            gap: 6px;
+            font-size: 0.72rem;
+            color: #c9d2db;
+            padding: 5px 12px;
+            border-radius: 12px;
+            background: rgba(255,255,255,0.06);
             margin-right: 6px;
-            box-shadow: 0 0 0 2px rgba(18,128,92,0.15);
+            white-space: nowrap;
+        }
+        .shellbar-status .dot {
+            width: 6px; height: 6px; border-radius: 50%;
+            background: #4cd97b;
+            box-shadow: 0 0 0 3px rgba(76,217,123,0.18);
+        }
+        .shellbar-status.is-error .dot {
+            background: #ff6a6a;
+            box-shadow: 0 0 0 3px rgba(255,106,106,0.18);
         }
 
-        /* ===== Contenedor ===== */
-        .container {
-            max-width: 1080px;
+        .avatar {
+            width: 30px; height: 30px;
+            border-radius: 50%;
+            background: #6f42c1;
+            color: #fff;
+            font-size: 0.72rem;
+            font-weight: 700;
+            display: flex; align-items: center; justify-content: center;
+            flex-shrink: 0;
+        }
+
+        /* ===== Page ===== */
+        .page {
+            max-width: 1140px;
             margin: 0 auto;
-            padding: 36px 24px 60px;
+            padding: 0 0 48px;
         }
 
+        .page-header {
+            padding: 20px 24px 16px;
+        }
+        .page-header .kicker {
+            font-size: 0.72rem;
+            text-transform: uppercase;
+            letter-spacing: 0.09em;
+            color: var(--text-muted);
+            margin: 0 0 4px;
+            font-weight: 600;
+        }
+        .page-header h1 {
+            margin: 0;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--text);
+            display: flex;
+            align-items: baseline;
+            gap: 10px;
+        }
+        .page-header h1 .count-pill {
+            font-size: 0.8rem;
+            font-weight: 700;
+            color: var(--sap-blue-dark);
+            background: var(--sap-blue-tint);
+            border: 1px solid #b8d9ff;
+            border-radius: 10px;
+            padding: 2px 10px;
+        }
+        .page-header p {
+            margin: 6px 0 0;
+            color: var(--text-soft);
+            font-size: 0.86rem;
+        }
+
+        /* ===== Toolbar ===== */
         .toolbar {
             display: flex;
             align-items: center;
-            gap: 14px;
-            margin-bottom: 22px;
+            gap: 10px;
+            padding: 0 24px 14px;
+            flex-wrap: wrap;
         }
-
-        .search-container { flex: 1; position: relative; }
-        .search-container::before {
-            content: "";
+        .search-container { position: relative; flex: 1; min-width: 220px; }
+        .search-container svg {
             position: absolute;
-            left: 16px;
-            top: 50%;
+            left: 11px; top: 50%;
             transform: translateY(-50%);
-            width: 14px;
-            height: 14px;
-            border: 2px solid var(--muted);
-            border-radius: 50%;
-        }
-        .search-container::after {
-            content: "";
-            position: absolute;
-            left: 27px;
-            top: 63%;
-            width: 6px;
-            height: 2px;
-            background: var(--muted);
-            transform: rotate(45deg);
+            width: 15px; height: 15px;
+            stroke: var(--text-muted);
         }
         .search-input {
             width: 100%;
-            padding: 13px 16px 13px 42px;
-            font-size: 0.92rem;
-            font-family: 'Inter', sans-serif;
-            border: 1px solid var(--line);
-            border-radius: 6px;
-            background: var(--panel);
+            padding: 8px 12px 8px 34px;
+            font-size: 0.86rem;
+            font-family: inherit;
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius);
+            background: var(--tile);
             outline: none;
-            transition: border-color 0.15s ease, box-shadow 0.15s ease;
-            color: var(--ink);
+            color: var(--text);
+            height: 36px;
         }
-        .search-input::placeholder { color: #9aa4b5; }
+        .search-input::placeholder { color: #99a1ab; }
         .search-input:focus {
-            border-color: var(--steel);
-            box-shadow: 0 0 0 3px rgba(29, 78, 216, 0.12);
+            border-color: var(--sap-blue);
+            box-shadow: 0 0 0 2px rgba(0,112,242,0.18);
         }
 
-        .count-badge {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.78rem;
-            color: var(--muted);
-            white-space: nowrap;
-            padding: 12px 14px;
-            border: 1px solid var(--line);
-            border-radius: 6px;
-            background: var(--panel);
-        }
-        .count-badge strong { color: var(--ink); font-weight: 600; }
-
-        .list-header {
-            display: grid;
-            grid-template-columns: 48px 1fr 100px;
-            padding: 0 18px 8px;
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.68rem;
-            letter-spacing: 0.08em;
-            text-transform: uppercase;
-            color: var(--muted);
-        }
-
-        /* ===== Lista de herramientas ===== */
-        .grid-container {
-            display: flex;
-            flex-direction: column;
-            border: 1px solid var(--line);
-            border-radius: 8px;
-            overflow: hidden;
-            background: var(--panel);
-        }
-
-        .card {
-            display: grid;
-            grid-template-columns: 48px 1fr 100px;
-            align-items: center;
-            padding: 16px 18px;
-            text-decoration: none;
-            border-bottom: 1px solid var(--line-soft);
-            transition: background 0.12s ease;
-            position: relative;
-        }
-        .card:last-child { border-bottom: none; }
-        .card:hover { background: #f2f6fc; }
-        .card:hover::before {
-            content: "";
-            position: absolute;
-            left: 0; top: 0; bottom: 0;
-            width: 3px;
-            background: var(--steel);
-        }
-
-        .card-index {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.78rem;
-            color: #9aa4b5;
-        }
-
-        .card-main h2 {
-            margin: 0 0 3px 0;
-            color: var(--ink);
-            font-size: 1rem;
+        .toolbar-btn {
+            height: 36px;
+            padding: 0 14px;
+            font-size: 0.82rem;
             font-weight: 600;
-            letter-spacing: -0.005em;
-        }
-        .card-main span {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.74rem;
-            color: var(--muted);
+            font-family: inherit;
+            color: var(--sap-blue-dark);
+            background: var(--tile);
+            border: 1px solid var(--border-strong);
+            border-radius: var(--radius);
+            cursor: default;
+            white-space: nowrap;
         }
 
-        .card-action {
-            font-family: 'JetBrains Mono', monospace;
-            font-size: 0.74rem;
-            color: var(--steel);
-            text-align: right;
-            font-weight: 500;
+        /* ===== Table (List Report pattern) ===== */
+        .table-wrap {
+            margin: 0 24px;
+            background: var(--tile);
+            border: 1px solid var(--border);
+            border-radius: var(--radius);
+            overflow: hidden;
         }
-        .card-action::after { content: " →"; }
+
+        .col-headers {
+            display: grid;
+            grid-template-columns: 56px 1fr 140px 100px;
+            background: #f2f3f5;
+            border-bottom: 1px solid var(--border);
+        }
+        .col-headers span {
+            padding: 9px 14px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            color: var(--text-muted);
+        }
+
+        .row {
+            display: grid;
+            grid-template-columns: 56px 1fr 140px 100px;
+            align-items: center;
+            text-decoration: none;
+            border-bottom: 1px solid var(--border);
+            transition: background 0.1s ease;
+        }
+        .row:last-child { border-bottom: none; }
+        .row:hover { background: var(--sap-blue-tint); }
+        .row:hover .row-open { color: var(--sap-blue-dark); text-decoration: underline; }
+
+        .row-index {
+            padding: 12px 14px;
+            font-size: 0.78rem;
+            color: var(--text-muted);
+            font-variant-numeric: tabular-nums;
+        }
+        .row-main { padding: 12px 14px; min-width: 0; }
+        .row-main h2 {
+            margin: 0 0 2px;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--sap-blue-dark);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .row-main .filename {
+            font-size: 0.74rem;
+            color: var(--text-muted);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .row-status { padding: 12px 14px; }
+        .status-chip {
+            display: inline-flex;
+            align-items: center;
+            gap: 5px;
+            font-size: 0.72rem;
+            font-weight: 600;
+            color: var(--positive);
+            background: var(--positive-bg);
+            border-radius: 3px;
+            padding: 3px 8px;
+        }
+        .status-chip::before {
+            content: "";
+            width: 6px; height: 6px;
+            border-radius: 50%;
+            background: var(--positive);
+        }
+
+        .row-open {
+            padding: 12px 14px;
+            text-align: right;
+            font-size: 0.8rem;
+            font-weight: 600;
+            color: var(--text-soft);
+        }
+        .row-open::after { content: " ›"; }
 
         /* ===== Estado ===== */
         .estado {
+            margin: 0 24px;
             text-align: center;
-            color: var(--muted);
-            margin-top: 28px;
-            font-size: 0.9rem;
-            padding: 30px 20px;
-            border: 1px dashed var(--line);
-            border-radius: 8px;
-            background: var(--panel);
+            color: var(--text-muted);
+            font-size: 0.88rem;
+            padding: 40px 20px;
+            border: 1px dashed var(--border-strong);
+            border-radius: var(--radius);
+            background: var(--tile);
         }
-        .estado.error-box { color: var(--err); border-color: rgba(179,38,30,0.3); }
+        .estado.error-box {
+            color: var(--negative);
+            border-color: #f0b3b3;
+            background: var(--negative-bg);
+        }
 
         footer {
-            max-width: 1080px;
+            max-width: 1140px;
             margin: 0 auto;
-            padding: 0 24px 40px;
-            font-family: 'JetBrains Mono', monospace;
+            padding: 22px 24px 0;
             font-size: 0.72rem;
-            color: #a9b2c1;
+            color: var(--text-muted);
             text-align: center;
         }
 
         @media (max-width: 640px) {
-            .header-meta { display: none; }
-            .list-header, .card { grid-template-columns: 32px 1fr 0; }
-            .card-action { display: none; }
+            .shellbar-title { display: none; }
+            .col-headers, .row { grid-template-columns: 40px 1fr 0 0; }
+            .row-status, .row-open, .col-headers span:nth-child(3), .col-headers span:nth-child(4) { display: none; }
         }
     </style>
 </head>
 <body>
 
-    <div class="header">
-        <div class="header-inner">
-            <div class="header-title-block">
-                <p class="eyebrow">Panel interno · acceso directo</p>
-                <h1>Portal de Herramientas</h1>
-                <p>Índice de utilidades y sistemas de gestión de Henry</p>
-            </div>
-            <div class="header-meta">
-                <div><span class="dot"></span>Conexión GitHub API</div>
-                <div class="repo-path">SirHenry92/MIS-PROYECTOS</div>
-            </div>
-        </div>
+    <div class="shellbar">
+        <div class="shellbar-icon-btn"><div class="grid-icon"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+        <div class="shellbar-divider"></div>
+        <span class="shellbar-title">Portal de Herramientas</span>
+        <span class="shellbar-crumb">Henry &nbsp;›&nbsp; <b>Panel interno</b></span>
+        <div class="shellbar-spacer"></div>
+        <div class="shellbar-status" id="shellStatus"><span class="dot"></span><span id="shellStatusText">Conectando…</span></div>
+        <div class="avatar">SH</div>
     </div>
 
-    <div class="container">
+    <div class="page">
+        <div class="page-header">
+            <p class="kicker">Panel interno · acceso directo</p>
+            <h1>Herramientas disponibles <span class="count-pill" id="countPill">—</span></h1>
+            <p>Índice de utilidades y sistemas de gestión, sincronizado con SirHenry92/MIS-PROYECTOS.</p>
+        </div>
+
         <div class="toolbar">
             <div class="search-container">
+                <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke-width="2"/><path d="M21 21l-4.3-4.3" stroke-width="2" stroke-linecap="round"/></svg>
                 <input type="text" id="buscador" class="search-input" placeholder="Buscar herramienta por nombre…">
             </div>
-            <div class="count-badge" id="contador">— herramientas</div>
+            <button class="toolbar-btn" type="button">Ordenar</button>
+            <button class="toolbar-btn" type="button">Filtrar</button>
         </div>
 
-        <div class="list-header">
-            <span>#</span>
-            <span>Herramienta</span>
-            <span>Abrir</span>
+        <div class="table-wrap">
+            <div class="col-headers">
+                <span>#</span>
+                <span>Herramienta</span>
+                <span>Estado</span>
+                <span style="text-align:right;">Abrir</span>
+            </div>
+            <div id="lista-archivos"></div>
         </div>
 
-        <div id="lista-archivos" class="grid-container"></div>
-        <div id="mensaje-estado" class="estado">Conectando con el servidor…</div>
+        <div id="mensaje-estado" class="estado" style="margin-top:16px;">Conectando con el servidor…</div>
     </div>
 
     <footer>Portal de Herramientas · Sincronizado con el repositorio en tiempo real</footer>
@@ -300,7 +393,9 @@
         const contenedor = document.getElementById('lista-archivos');
         const estado = document.getElementById('mensaje-estado');
         const buscador = document.getElementById('buscador');
-        const contador = document.getElementById('contador');
+        const countPill = document.getElementById('countPill');
+        const shellStatus = document.getElementById('shellStatus');
+        const shellStatusText = document.getElementById('shellStatusText');
 
         async function cargarArchivos() {
             try {
@@ -309,6 +404,7 @@
 
                 const archivos = await respuesta.json();
                 estado.style.display = "none";
+                shellStatusText.textContent = "Conectado";
 
                 let hayArchivos = false;
                 let contadorIndice = 0;
@@ -327,54 +423,57 @@
 
                         const indiceFormateado = String(contadorIndice).padStart(2, '0');
 
-                        // Dibujamos la fila con índice, nombre y acción
+                        // Dibujamos la fila con índice, nombre, estado y acción
                         contenedor.innerHTML += `
-                            <a href="${enlaceSeguro}" class="card">
-                                <span class="card-index mono">${indiceFormateado}</span>
-                                <span class="card-main">
+                            <a href="${enlaceSeguro}" class="row">
+                                <span class="row-index mono">${indiceFormateado}</span>
+                                <span class="row-main">
                                     <h2>${nombreLimpio}</h2>
-                                    <span>${archivo.name}</span>
+                                    <span class="filename">${archivo.name}</span>
                                 </span>
-                                <span class="card-action">Abrir</span>
+                                <span class="row-status"><span class="status-chip">Activo</span></span>
+                                <span class="row-open">Abrir</span>
                             </a>
                         `;
                     }
                 }
 
-                contador.innerHTML = hayArchivos
-                    ? `<strong>${contadorIndice}</strong> herramienta${contadorIndice !== 1 ? 's' : ''} disponible${contadorIndice !== 1 ? 's' : ''}`
-                    : `<strong>0</strong> herramientas`;
+                countPill.textContent = contadorIndice;
 
                 if (!hayArchivos) {
                     estado.style.display = "block";
+                    estado.style.marginTop = "16px";
                     estado.innerText = "No se encontraron otras herramientas en el repositorio.";
                 }
 
             } catch (error) {
                 estado.style.display = "block";
+                estado.style.marginTop = "16px";
                 estado.classList.add("error-box");
                 estado.innerHTML = `<b>Error de conexión:</b> ${error.message}`;
-                contador.innerHTML = `<strong>—</strong> herramientas`;
+                countPill.textContent = "—";
+                shellStatus.classList.add("is-error");
+                shellStatusText.textContent = "Error";
             }
         }
 
         // Buscador en tiempo real
         buscador.addEventListener('input', function(e) {
             const textoBusqueda = e.target.value.toLowerCase();
-            const tarjetas = document.querySelectorAll('.card');
+            const filas = document.querySelectorAll('.row');
             let visibles = 0;
 
-            tarjetas.forEach(tarjeta => {
-                const contenidoTarjeta = tarjeta.innerText.toLowerCase();
-                if (contenidoTarjeta.includes(textoBusqueda)) {
-                    tarjeta.style.display = "grid";
+            filas.forEach(fila => {
+                const contenidoFila = fila.innerText.toLowerCase();
+                if (contenidoFila.includes(textoBusqueda)) {
+                    fila.style.display = "grid";
                     visibles++;
                 } else {
-                    tarjeta.style.display = "none";
+                    fila.style.display = "none";
                 }
             });
 
-            contador.innerHTML = `<strong>${visibles}</strong> resultado${visibles !== 1 ? 's' : ''}`;
+            countPill.textContent = visibles;
         });
 
         cargarArchivos();
