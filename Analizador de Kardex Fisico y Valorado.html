@@ -1,0 +1,559 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Resumen Inteligente Kardex (V5.3 - Final)</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        body { font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; background-color: #f8fafc; }
+        .spinner { border: 4px solid rgba(0, 0, 0, 0.1); width: 36px; height: 36px; border-radius: 50%; border-left-color: #2563eb; animation: spin 1s linear infinite; }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        .hidden { display: none !important; }
+        table { border-collapse: collapse; width: 100%; white-space: nowrap; }
+        th, td { text-align: right; padding: 10px 12px; border-bottom: 1px solid #e2e8f0; font-size: 0.85rem; }
+        td:first-child, th:first-child, td:nth-child(2), th:nth-child(2) { text-align: left; }
+        th { background-color: #f1f5f9; font-weight: 600; color: #334155; position: sticky; top: 0; z-index: 10;}
+        tr:hover { background-color: #f8fafc; }
+        
+        .sticky-col { position: sticky; left: 0; background-color: white; z-index: 5; box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
+        .sticky-col-2 { position: sticky; left: 100px; background-color: white; z-index: 5; box-shadow: 2px 0 5px rgba(0,0,0,0.05); max-width: 250px; overflow: hidden; text-overflow: ellipsis; }
+        .th-sticky-col { position: sticky; left: 0; background-color: #f1f5f9; z-index: 15; box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
+        .th-sticky-col-2 { position: sticky; left: 100px; background-color: #f1f5f9; z-index: 15; box-shadow: 2px 0 5px rgba(0,0,0,0.05); }
+        
+        .sortable { cursor: pointer; user-select: none; transition: background 0.2s; }
+        .sortable:hover { background-color: #e2e8f0; }
+        .sort-icon { font-size: 0.75rem; margin-left: 4px; color: #64748b; }
+    </style>
+</head>
+<body class="p-4 md:p-8">
+
+    <div class="max-w-[1500px] mx-auto space-y-6">
+        
+        <!-- Header -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-200 flex flex-col md:flex-row justify-between items-center gap-4">
+            <div>
+                <h1 class="text-2xl font-bold text-gray-800">Kardex Master - Analizador SUNAT</h1>
+                <p class="text-gray-500 text-sm mt-1">Busca al instante, ordena columnas y exporta salidas en negativo.</p>
+            </div>
+            <div class="flex items-center gap-4">
+                <div class="bg-gray-100 p-1.5 rounded-lg border border-gray-200 flex text-sm">
+                    <label class="cursor-pointer px-4 py-1.5 rounded-md font-semibold text-gray-700 flex items-center gap-2">
+                        <input type="radio" name="modoDatos" value="fisico" class="accent-blue-600" onchange="renderDashboard()"> Físico
+                    </label>
+                    <label class="cursor-pointer px-4 py-1.5 rounded-md font-semibold text-gray-700 flex items-center gap-2">
+                        <input type="radio" name="modoDatos" value="valorado" class="accent-blue-600" checked onchange="renderDashboard()"> Valorado
+                    </label>
+                </div>
+                <label class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-6 rounded-lg cursor-pointer transition shadow-sm flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zM6.293 6.707a1 1 0 010-1.414l3-3a1 1 0 011.414 0l3 3a1 1 0 01-1.414 1.414L11 5.414V13a1 1 0 11-2 0V5.414L7.707 6.707a1 1 0 01-1.414 0z" clip-rule="evenodd" /></svg>
+                    Cargar Excel(s)
+                    <input type="file" id="fileInput" multiple accept=".xlsx, .xls" class="hidden">
+                </label>
+            </div>
+        </div>
+
+        <!-- Indicador de Carga -->
+        <div id="loadingIndicator" class="hidden bg-white p-12 rounded-xl shadow-sm border border-gray-200 text-center">
+            <div class="flex justify-center mb-4"><div class="spinner"></div></div>
+            <h2 class="text-xl font-bold text-gray-800" id="loadingText">Leyendo archivos...</h2>
+            <p class="text-gray-500 text-sm mt-2">Por favor espera, procesando base de datos en memoria.</p>
+        </div>
+
+        <!-- Dashboard -->
+        <div id="dashboard" class="hidden space-y-6">
+            
+            <!-- Filtros (Automáticos) -->
+            <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-200">
+                <h3 class="font-bold text-gray-800 mb-4 flex items-center gap-2">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5 text-gray-500" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M3 3a1 1 0 011-1h12a1 1 0 011 1v3a1 1 0 01-.293.707L12 11.414V15a1 1 0 01-.293.707l-2 2A1 1 0 018 17v-5.586L3.293 6.707A1 1 0 013 6V3z" clip-rule="evenodd" /></svg>
+                    Búsqueda Instantánea
+                </h3>
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-4 items-end">
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Buscar (Código o Nombre)</label>
+                        <input type="text" id="filtroTexto" placeholder="Escribe y buscará automáticamente..." class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Desde Fecha</label>
+                        <input type="date" id="fechaInicio" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm">
+                    </div>
+                    <div>
+                        <label class="block text-xs font-semibold text-gray-600 mb-1">Hasta Fecha</label>
+                        <input type="date" id="fechaFin" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm">
+                    </div>
+                </div>
+            </div>
+
+            <!-- KPIs -->
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider">Mostrando</h3>
+                    <p class="text-2xl font-bold text-gray-800 mt-1"><span id="kpi-articulos">0</span> <span class="text-sm font-normal text-gray-500">ítems</span></p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider">Saldo Inicial (Calculado)</h3>
+                    <p class="text-2xl font-bold text-blue-600 mt-1" id="kpi-inicial">0.00</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider">Total Entradas (Periodo)</h3>
+                    <p class="text-2xl font-bold text-green-600 mt-1" id="kpi-entradas">0.00</p>
+                </div>
+                <div class="bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+                    <h3 class="text-gray-500 text-xs font-bold uppercase tracking-wider">Saldo Final (Teórico)</h3>
+                    <p class="text-2xl font-bold text-purple-600 mt-1" id="kpi-final">0.00</p>
+                </div>
+            </div>
+
+            <!-- Tabla de Resumen -->
+            <div class="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden flex flex-col">
+                <div class="p-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center">
+                    <div>
+                        <h2 class="text-lg font-bold text-gray-800">Detalle <span id="lblModoTexto">Valorado</span></h2>
+                        <p class="text-xs text-gray-500">Muestra los primeros 100 registros en pantalla para no saturar. Exporta para ver la totalidad.</p>
+                    </div>
+                    <button id="btnExportar" class="text-sm bg-green-600 hover:bg-green-700 text-white py-1.5 px-4 rounded shadow transition flex items-center gap-2">
+                        Exportar Todo a Excel
+                    </button>
+                </div>
+                <div class="overflow-x-auto overflow-y-auto max-h-[600px]">
+                    <table id="tabla-resumen">
+                        <thead id="tabla-head"></thead>
+                        <tbody id="tabla-body"></tbody>
+                        <tfoot id="tabla-foot" class="font-bold bg-gray-50 sticky bottom-0 z-10 border-t border-gray-300"></tfoot>
+                    </table>
+                </div>
+            </div>
+            
+        </div>
+    </div>
+
+    <script>
+        const TABLA_12 = {
+            '01': 'Venta Nac.', 
+            '02': 'Compra Nac.', 
+            '03': 'Consign. Rec.', 
+            '04': 'Consign. Ent.',
+            '05': 'Devol. Rec.', 
+            '06': 'Devol. Ent.', 
+            '07': 'Promoción', 
+            '08': 'Premio',
+            '09': 'Donación', 
+            '10': 'Salida Prod.', 
+            '11': 'Sal. Transf.', 
+            '12': 'Retiro',
+            '13': 'Mermas', 
+            '14': 'Desmedros', 
+            '15': 'Destrucción', 
+            '16': 'Saldo Inicial',
+            '17': 'Exportación', 
+            '18': 'Importación', 
+            '19': 'Ent. Prod.', 
+            '21': 'Ent. Transf.',
+            '22': 'Otras Salidas', 
+            '23': 'Salida Error', 
+            '24': 'Devol. Cliente', 
+            '25': 'Devol. Prov.', 
+            '28': 'Ajuste Inv.', 
+            '91': 'Consumo Int.', 
+            '92': 'Dev. Interna', 
+            '93': 'Repos/Canje', 
+            '94': 'Regul. Doc.', 
+            '99': 'Otros'
+        };
+
+        const formatearMoneda = (valor) => {
+            if(!valor) return "0.00";
+            return valor.toLocaleString('es-PE', {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        };
+        
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        const parseExcelDate = (val) => {
+            if (!val) return null;
+            if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+            if (typeof val === 'number') return new Date(Math.round((val - 25569) * 86400 * 1000));
+            
+            let strVal = String(val).trim();
+            if (strVal.match(/^\d{4}-\d{2}-\d{2}\s\d{2}:\d{2}:\d{2}/)) strVal = strVal.replace(' ', 'T');
+            let d = new Date(strVal);
+            if (!isNaN(d.getTime())) return d;
+            
+            let parts = strVal.split('/');
+            if (parts.length === 3) {
+                let day = parseInt(parts[0], 10), month = parseInt(parts[1], 10) - 1, year = parseInt(parts[2].substring(0,4), 10);
+                d = new Date(year, month, day);
+                if (!isNaN(d.getTime())) return d;
+            }
+            return null;
+        };
+
+        let dbArticulos = {}; 
+        let minDateGlobal = null;
+        let maxDateGlobal = null;
+        let resumenDataExport = [];
+        
+        let sortCol = 'codigo';
+        let sortAsc = true;
+
+        document.getElementById('fileInput').addEventListener('change', async function(e) {
+            const files = e.target.files;
+            if (files.length === 0) return;
+
+            document.getElementById('loadingIndicator').classList.remove('hidden');
+            document.getElementById('dashboard').classList.add('hidden');
+            await sleep(50); 
+            
+            dbArticulos = {};
+            minDateGlobal = null;
+            maxDateGlobal = null;
+
+            try {
+                await procesarMultiplesArchivos(files);
+            } catch (err) {
+                console.error(err);
+                alert("Error al leer archivos: " + err.message);
+                document.getElementById('loadingIndicator').classList.add('hidden');
+            }
+        });
+
+        async function procesarMultiplesArchivos(files) {
+            for (let f = 0; f < files.length; f++) {
+                document.getElementById('loadingText').innerText = `Leyendo archivo ${f+1} de ${files.length}...`;
+                await sleep(50); 
+                
+                try {
+                    const data = await files[f].arrayBuffer();
+                    const workbook = XLSX.read(data, { type: 'array', cellDates: true });
+                    
+                    for (let sheetName of workbook.SheetNames) {
+                        try {
+                            const sheet = workbook.Sheets[sheetName];
+                            const filas = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+                            procesarHojaSUNAT(filas);
+                        } catch (errHoja) {
+                            console.warn(`Error en hoja ${sheetName}:`, errHoja);
+                        }
+                    }
+                } catch(errFile) {
+                    console.warn(`Error en archivo ${files[f].name}:`, errFile);
+                }
+            }
+
+            document.getElementById('loadingText').innerText = `Calculando saldos y renderizando...`;
+            await sleep(50);
+
+            if (minDateGlobal) document.getElementById('fechaInicio').value = minDateGlobal.toISOString().split('T')[0];
+            if (maxDateGlobal) document.getElementById('fechaFin').value = maxDateGlobal.toISOString().split('T')[0];
+
+            renderDashboard();
+            document.getElementById('loadingIndicator').classList.add('hidden');
+        }
+
+        function procesarHojaSUNAT(filas) {
+            let itemActual = null;
+            let modoTransacciones = false;
+
+            let colTipoOp = 4;
+            let colEntFis = 5, colSalFis = 8, colSaldoFis = 11;
+            let colEntVal = 7, colSalVal = 10, colSaldoVal = 13;
+
+            for (let i = 0; i < filas.length; i++) {
+                const row = filas[i];
+                if (!row || row.length === 0) continue;
+
+                const val0 = String(row[0] || '').trim().toUpperCase();
+                const val1 = String(row[1] || '').trim();
+
+                if (val0.startsWith('ITEM:')) {
+                    const codigo = val0.substring(5).trim();
+                    if (!dbArticulos[codigo]) {
+                        dbArticulos[codigo] = { codigo, descripcion: '', tipo: '', um: '', transacciones: [] };
+                    }
+                    itemActual = dbArticulos[codigo];
+                    modoTransacciones = false;
+                    continue;
+                }
+
+                if (!itemActual) continue;
+
+                if (val0 === 'DESCRIPCIÓN:' && !itemActual.descripcion) itemActual.descripcion = val1;
+                if (val0 === 'TIPO (TABLA 5):' && !itemActual.tipo) itemActual.tipo = val1;
+                if (val0 === 'U.M. (TABLA 6):' && !itemActual.um) itemActual.um = val1;
+
+                if (val0 === 'FECHA' || val0.includes('FECHA')) { 
+                    modoTransacciones = true; 
+                    
+                    let upperRow = row.map(c => String(c || '').toUpperCase().trim());
+                    colTipoOp = upperRow.findIndex(c => c.includes('TIPO OPERACI')) !== -1 ? upperRow.findIndex(c => c.includes('TIPO OPERACI')) : 4;
+                    
+                    colEntFis = upperRow.findIndex(c => c.includes('ENT.CANT'));
+                    colSalFis = upperRow.findIndex(c => c.includes('SAL.CANT'));
+                    colSaldoFis = upperRow.findIndex(c => c.includes('SALDO.CANT'));
+                    
+                    colEntVal = upperRow.findIndex(c => c === 'ENT.C.T.' || c === 'ENT.C.T');
+                    colSalVal = upperRow.findIndex(c => c === 'SAL.C.T.' || c === 'SAL.C.T');
+                    colSaldoVal = upperRow.findIndex(c => c === 'SALDO.C.T.' || c === 'SALDO.C.T');
+                    
+                    continue; 
+                }
+                
+                if (val0.includes('TOTALES DEL PERIODO') || val0 === 'TOTALES') { 
+                    modoTransacciones = false; 
+                    continue; 
+                }
+
+                if (modoTransacciones && row[colTipoOp] !== null && row[colTipoOp] !== undefined) {
+                    const fechaObj = parseExcelDate(row[0]);
+                    if (!fechaObj) continue; 
+
+                    if (!minDateGlobal || fechaObj < minDateGlobal) minDateGlobal = fechaObj;
+                    if (!maxDateGlobal || fechaObj > maxDateGlobal) maxDateGlobal = fechaObj;
+
+                    let tipoOpRaw = String(row[colTipoOp]).trim().padStart(2, '0');
+                    
+                    let eF = parseFloat(row[colEntFis]) || 0;
+                    let sF = parseFloat(row[colSalFis]) || 0;
+                    let slF = parseFloat(row[colSaldoFis]) || 0;
+                    
+                    let eV = parseFloat(row[colEntVal]) || 0;
+                    let sV = parseFloat(row[colSalVal]) || 0;
+                    let slV = parseFloat(row[colSaldoVal]) || 0;
+
+                    if (tipoOpRaw === '16' || tipoOpRaw === 'SALDO INICIAL') {
+                        tipoOpRaw = '16';
+                        if (eF === 0 && slF !== 0) eF = slF;
+                        if (eV === 0 && slV !== 0) eV = slV;
+                    }
+
+                    itemActual.transacciones.push({
+                        fecha: fechaObj,
+                        tipoOp: tipoOpRaw,
+                        eF: eF, sF: sF,
+                        eV: eV, sV: sV
+                    });
+                }
+            }
+        }
+
+        let filterTimeout;
+        document.getElementById('filtroTexto').addEventListener('input', () => {
+            clearTimeout(filterTimeout);
+            filterTimeout = setTimeout(renderDashboard, 300);
+        });
+        document.getElementById('fechaInicio').addEventListener('change', renderDashboard);
+        document.getElementById('fechaFin').addEventListener('change', renderDashboard);
+
+        window.setSort = function(colName) {
+            if (sortCol === colName) {
+                sortAsc = !sortAsc;
+            } else {
+                sortCol = colName;
+                sortAsc = true;
+            }
+            renderDashboard();
+        };
+
+        function getSortIcon(colName) {
+            if (sortCol !== colName) return '';
+            return sortAsc ? ' ▲' : ' ▼';
+        }
+
+        function renderDashboard() {
+            const textoFiltro = document.getElementById('filtroTexto').value.toLowerCase().trim();
+            const strInicio = document.getElementById('fechaInicio').value;
+            const strFin = document.getElementById('fechaFin').value;
+            const modo = document.querySelector('input[name="modoDatos"]:checked').value; 
+            
+            document.getElementById('lblModoTexto').innerText = modo === 'fisico' ? 'Físico (Cantidades)' : 'Valorado (Soles)';
+
+            const fInicio = strInicio ? new Date(strInicio + 'T00:00:00') : new Date('1900-01-01');
+            const fFin = strFin ? new Date(strFin + 'T23:59:59') : new Date('2100-01-01');
+
+            let tiposOperacionEntrada = new Set();
+            let tiposOperacionSalida = new Set();
+            let articulosFiltrados = [];
+
+            for (const key in dbArticulos) {
+                const item = dbArticulos[key];
+                
+                if (textoFiltro) {
+                    if (!item.codigo.toLowerCase().includes(textoFiltro) && 
+                        !item.descripcion.toLowerCase().includes(textoFiltro)) {
+                        continue;
+                    }
+                }
+
+                let saldo_inicial_calc = 0;
+                let entradas_calc = {};
+                let salidas_calc = {};
+                let huboMovimientos = false;
+
+                item.transacciones.forEach(tx => {
+                    let ent = modo === 'fisico' ? tx.eF : tx.eV;
+                    let sal = modo === 'fisico' ? tx.sF : tx.sV;
+
+                    if (tx.tipoOp === '16') {
+                        saldo_inicial_calc += ent;
+                    } else {
+                        if (tx.fecha < fInicio) {
+                            saldo_inicial_calc += (ent - sal);
+                            huboMovimientos = true;
+                        } else if (tx.fecha >= fInicio && tx.fecha <= fFin) {
+                            if (ent !== 0) {
+                                entradas_calc[tx.tipoOp] = (entradas_calc[tx.tipoOp] || 0) + ent;
+                                tiposOperacionEntrada.add(tx.tipoOp);
+                            }
+                            if (sal !== 0) {
+                                salidas_calc[tx.tipoOp] = (salidas_calc[tx.tipoOp] || 0) + sal;
+                                tiposOperacionSalida.add(tx.tipoOp);
+                            }
+                            huboMovimientos = true;
+                        }
+                    }
+                });
+
+                saldo_inicial_calc = Math.round(saldo_inicial_calc * 100000) / 100000;
+                let total_ent = Object.values(entradas_calc).reduce((a,b)=>a+b, 0);
+                let total_sal = Object.values(salidas_calc).reduce((a,b)=>a+b, 0);
+                let saldo_final_calc = saldo_inicial_calc + total_ent - total_sal;
+                saldo_final_calc = Math.round(saldo_final_calc * 100000) / 100000;
+
+                if (huboMovimientos || saldo_inicial_calc !== 0 || saldo_final_calc !== 0) {
+                    articulosFiltrados.push({
+                        codigo: item.codigo, descripcion: item.descripcion, tipo: item.tipo, um: item.um,
+                        saldo_inicial: saldo_inicial_calc, entradas: entradas_calc, salidas: salidas_calc, saldo_final: saldo_final_calc
+                    });
+                }
+            }
+
+            articulosFiltrados.sort((a, b) => {
+                let valA, valB;
+                if (sortCol === 'codigo') { valA = a.codigo; valB = b.codigo; }
+                else if (sortCol === 'descripcion') { valA = a.descripcion; valB = b.descripcion; }
+                else if (sortCol === 'saldo_inicial') { valA = a.saldo_inicial; valB = b.saldo_inicial; }
+                else if (sortCol === 'saldo_final') { valA = a.saldo_final; valB = b.saldo_final; }
+                else if (sortCol.startsWith('ent_')) { 
+                    let op = sortCol.split('_')[1]; valA = a.entradas[op] || 0; valB = b.entradas[op] || 0; 
+                }
+                else if (sortCol.startsWith('sal_')) { 
+                    let op = sortCol.split('_')[1]; valA = a.salidas[op] || 0; valB = b.salidas[op] || 0; 
+                }
+
+                if (typeof valA === 'string') {
+                    return sortAsc ? valA.localeCompare(valB) : valB.localeCompare(valA);
+                } else {
+                    return sortAsc ? (valA - valB) : (valB - valA);
+                }
+            });
+
+            const colsEntradas = Array.from(tiposOperacionEntrada).sort();
+            const colsSalidas = Array.from(tiposOperacionSalida).sort();
+
+            let theadHtml = `<tr>
+                <th class="th-sticky-col sortable" onclick="setSort('codigo')" style="min-width: 90px;">Código<span class="sort-icon">${getSortIcon('codigo')}</span></th>
+                <th class="th-sticky-col-2 sortable" onclick="setSort('descripcion')" style="min-width: 200px;">Descripción<span class="sort-icon">${getSortIcon('descripcion')}</span></th>
+                <th>Tipo</th><th>U.M.</th>
+                <th class="bg-blue-50 text-blue-800 sortable" onclick="setSort('saldo_inicial')">Saldo Inicial<span class="sort-icon">${getSortIcon('saldo_inicial')}</span></th>`;
+            
+            colsEntradas.forEach(op => {
+                theadHtml += `<th class="bg-green-50 text-green-800 sortable" onclick="setSort('ent_${op}')">+ ${op}-${TABLA_12[op] || 'OP'}<span class="sort-icon">${getSortIcon('ent_'+op)}</span></th>`;
+            });
+            colsSalidas.forEach(op => {
+                theadHtml += `<th class="bg-red-50 text-red-800 sortable" onclick="setSort('sal_${op}')">- ${op}-${TABLA_12[op] || 'OP'}<span class="sort-icon">${getSortIcon('sal_'+op)}</span></th>`;
+            });
+            
+            theadHtml += `<th class="bg-purple-50 text-purple-800 sortable" onclick="setSort('saldo_final')">Saldo Final<span class="sort-icon">${getSortIcon('saldo_final')}</span></th></tr>`;
+            document.getElementById('tabla-head').innerHTML = theadHtml;
+
+            let gTotalInicial = 0, gTotalFinal = 0, gTotalEntradas = 0;
+            let tColsEntradas = {}, tColsSalidas = {};
+            colsEntradas.forEach(c => tColsEntradas[c] = 0);
+            colsSalidas.forEach(c => tColsSalidas[c] = 0);
+            resumenDataExport = []; 
+
+            // Construir exportable asegurando salidas en negativo
+            articulosFiltrados.forEach(item => {
+                gTotalInicial += item.saldo_inicial;
+                gTotalFinal += item.saldo_final;
+
+                let exportRow = {
+                    'Código': item.codigo, 'Descripción': item.descripcion, 'Tipo': item.tipo, 'U.M.': item.um,
+                    'Saldo Inicial': item.saldo_inicial
+                };
+
+                colsEntradas.forEach(op => {
+                    let val = item.entradas[op] || 0;
+                    tColsEntradas[op] += val; gTotalEntradas += val;
+                    exportRow[`+ ${op}-${TABLA_12[op] || 'OP'}`] = val;
+                });
+                
+                colsSalidas.forEach(op => {
+                    let val = item.salidas[op] || 0;
+                    tColsSalidas[op] += val;
+                    // Exportar salidas como números negativos
+                    exportRow[`- ${op}-${TABLA_12[op] || 'OP'}`] = val !== 0 ? -Math.abs(val) : 0;
+                });
+
+                exportRow['Saldo Final'] = item.saldo_final;
+                resumenDataExport.push(exportRow);
+            });
+
+            const itemsVisuales = articulosFiltrados.slice(0, 100);
+            let tbodyHtml = '';
+
+            itemsVisuales.forEach(item => {
+                tbodyHtml += `<tr>
+                    <td class="sticky-col font-medium text-gray-700">${item.codigo}</td>
+                    <td class="sticky-col-2 text-gray-600 truncate" title="${item.descripcion}">${item.descripcion}</td>
+                    <td class="text-center">${item.tipo}</td><td class="text-center">${item.um}</td>
+                    <td class="font-semibold">${formatearMoneda(item.saldo_inicial)}</td>`;
+
+                colsEntradas.forEach(op => {
+                    let val = item.entradas[op] || 0;
+                    tbodyHtml += `<td class="text-green-700">${val ? formatearMoneda(val) : '-'}</td>`;
+                });
+                colsSalidas.forEach(op => {
+                    let val = item.salidas[op] || 0;
+                    tbodyHtml += `<td class="text-red-700">${val ? '('+formatearMoneda(val)+')' : '-'}</td>`;
+                });
+
+                tbodyHtml += `<td class="font-bold text-purple-700">${formatearMoneda(item.saldo_final)}</td></tr>`;
+            });
+            document.getElementById('tabla-body').innerHTML = tbodyHtml;
+
+            let tfootHtml = `<tr>
+                <td class="sticky-col"></td><td class="sticky-col-2 text-right">TOTALES:</td><td></td><td></td>
+                <td class="text-blue-700">${formatearMoneda(gTotalInicial)}</td>`;
+            colsEntradas.forEach(op => tfootHtml += `<td class="text-green-700">${formatearMoneda(tColsEntradas[op])}</td>`);
+            colsSalidas.forEach(op => tfootHtml += `<td class="text-red-700">(${formatearMoneda(tColsSalidas[op])})</td>`);
+            tfootHtml += `<td class="text-purple-700">${formatearMoneda(gTotalFinal)}</td></tr>`;
+            document.getElementById('tabla-foot').innerHTML = tfootHtml;
+
+            // Fila de Total para el Exportable (asegurando salidas en negativo)
+            let totalsExportRow = { 'Código': 'TOTALES', 'Descripción': '', 'Tipo': '', 'U.M.': '', 'Saldo Inicial': gTotalInicial };
+            colsEntradas.forEach(op => totalsExportRow[`+ ${op}-${TABLA_12[op] || 'OP'}`] = tColsEntradas[op]);
+            colsSalidas.forEach(op => totalsExportRow[`- ${op}-${TABLA_12[op] || 'OP'}`] = tColsSalidas[op] !== 0 ? -Math.abs(tColsSalidas[op]) : 0);
+            totalsExportRow['Saldo Final'] = gTotalFinal;
+            resumenDataExport.push(totalsExportRow);
+
+            let prefix = modo === 'fisico' ? '' : 'S/ ';
+            document.getElementById('kpi-articulos').innerText = articulosFiltrados.length;
+            document.getElementById('kpi-inicial').innerText = prefix + formatearMoneda(gTotalInicial);
+            document.getElementById('kpi-entradas').innerText = prefix + formatearMoneda(gTotalEntradas);
+            document.getElementById('kpi-final').innerText = prefix + formatearMoneda(gTotalFinal);
+            
+            document.getElementById('dashboard').classList.remove('hidden');
+        }
+
+        document.getElementById('btnExportar').addEventListener('click', () => {
+            if (resumenDataExport.length === 0) return;
+            const ws = XLSX.utils.json_to_sheet(resumenDataExport);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Kardex_Filtrado");
+            XLSX.writeFile(wb, "Resumen_Kardex_Master.xlsx");
+        });
+    </script>
+</body>
+</html>
