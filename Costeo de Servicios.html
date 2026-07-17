@@ -29,8 +29,11 @@
         .ticket-badge { background: rgba(255,255,255,0.1); border: 1px solid rgba(255,255,255,0.3); padding: 4px 12px; border-radius: 20px; font-size: 13px; font-weight: bold; display: flex; align-items: center; gap: 6px; }
         .ticket-input { background: transparent; border: none; border-bottom: 1px solid rgba(255,255,255,0.5); color: #FFF; font-family: 'Consolas', monospace; font-size: 14px; font-weight: bold; outline: none; width: 130px; text-align: center; }
         .ticket-input:focus { border-bottom-color: #FFF; }
-        .btn-pdf { background: #E9730C; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 12px; margin-left: 15px;}
-        .btn-pdf:hover { background: #C55E06; }
+        .btn-action-bar { background: #E9730C; color: white; border: none; padding: 6px 14px; border-radius: 4px; font-weight: bold; cursor: pointer; display: flex; align-items: center; gap: 5px; font-size: 12px; margin-left: 10px; transition: background 0.2s;}
+        .btn-action-bar:hover { filter: brightness(1.1); }
+        .btn-pdf { background: #E9730C; }
+        .btn-save-bkp { background: #0A6ED1; }
+        .btn-load-bkp { background: #1E8A44; }
 
         .page-wrap { padding: 20px; max-width: 1600px; margin: 0 auto; }
         #capture-area { position: relative; padding: 10px; border-radius: 6px; background: var(--bg-color); }
@@ -124,7 +127,13 @@
                 SERVICIO N° 
                 <input type="text" class="ticket-input" id="ticket-id" placeholder="Ej: S202606001" autocomplete="off">
             </div>
-            <button class="btn-pdf" onclick="generarPDF()">📄 Generar PDF</button>
+            
+            <!-- Botones de Backup y Restauración -->
+            <button class="btn-action-bar btn-save-bkp" onclick="descargarBackup()" style="margin-left: 20px;">💾 Backup</button>
+            <button class="btn-action-bar btn-load-bkp" onclick="triggerCargarBackup()">📂 Cargar</button>
+            <input type="file" id="input-backup" accept=".json" style="display:none" onchange="procesarCargarBackup(event)">
+            
+            <button class="btn-action-bar btn-pdf" onclick="generarPDF()">📄 Generar PDF</button>
         </div>
     </div>
 
@@ -261,6 +270,7 @@
                 </div>
 
                 <div id="form-wip" style="display:none;">
+                    <div class="form-group"><label>Servicio de Origen (Referencia)</label><input type="text" id="wip-servicio" class="form-control" placeholder="Ej. S202605001" autocomplete="off"></div>
                     <div class="grid-2">
                         <div class="form-group"><label>Referencia / Lote Anterior</label><input type="text" id="wip-ref" class="form-control"></div>
                         <div class="form-group"><label>Fecha Original</label><input type="date" id="wip-fecha" class="form-control"></div>
@@ -341,6 +351,65 @@
             document.getElementById('wip-fecha').valueAsDate = now;
         });
 
+        // ==========================================
+        // FUNCIONES DE BACKUP Y CARGA
+        // ==========================================
+        function descargarBackup() {
+            const ticket = document.getElementById('ticket-id').value || 'SinNumero';
+            const backupData = {
+                ticket: ticket,
+                colSalidas: document.getElementById('col-salidas').innerHTML,
+                colIngresos: document.getElementById('col-ingresos').innerHTML,
+                colFacturas: document.getElementById('col-facturas').innerHTML,
+                colDevoluciones: document.getElementById('col-devoluciones').innerHTML,
+                linkGroups: linkGroups
+            };
+
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(backupData));
+            const downloadAnchorNode = document.createElement('a');
+            downloadAnchorNode.setAttribute("href", dataStr);
+            downloadAnchorNode.setAttribute("download", `Backup_Costeo_${ticket}.json`);
+            document.body.appendChild(downloadAnchorNode);
+            downloadAnchorNode.click();
+            downloadAnchorNode.remove();
+        }
+
+        function triggerCargarBackup() {
+            document.getElementById('input-backup').click();
+        }
+
+        function procesarCargarBackup(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const backupData = JSON.parse(e.target.result);
+                    
+                    document.getElementById('ticket-id').value = backupData.ticket || '';
+                    document.getElementById('col-salidas').innerHTML = backupData.colSalidas || '';
+                    document.getElementById('col-ingresos').innerHTML = backupData.colIngresos || '';
+                    document.getElementById('col-facturas').innerHTML = backupData.colFacturas || '';
+                    document.getElementById('col-devoluciones').innerHTML = backupData.colDevoluciones || '';
+                    
+                    linkGroups = backupData.linkGroups || [];
+                    
+                    // Limpiar input file para permitir cargar el mismo archivo varias veces si se desea
+                    document.getElementById('input-backup').value = "";
+                    
+                    cancelarSeleccion();
+                    recalcularTodo();
+                    
+                } catch (err) {
+                    alert("Error al cargar el backup. Asegúrese de que el archivo es válido.");
+                    console.error(err);
+                }
+            };
+            reader.readAsText(file);
+        }
+        // ==========================================
+
         function validarServicio() {
             const val = document.getElementById('ticket-id').value.trim();
             if(!val || val.length < 3) {
@@ -366,6 +435,8 @@
             } else if(tipo === 'wip') { 
                 titulo.innerText = 'Cargar Saldo Anterior (WIP)'; 
                 document.getElementById('form-wip').style.display = 'block'; 
+                document.getElementById('wip-servicio').value = '';
+                document.getElementById('wip-ref').value = '';
             } else { 
                 titulo.innerText = tipo === 'salida' ? 'Cargar Salidas SAP' : (tipo === 'ingreso' ? 'Cargar Ingresos SAP' : 'Cargar Devoluciones SAP'); 
                 document.getElementById('form-sap').style.display = 'block'; 
@@ -439,6 +510,7 @@
 
         function procesarWip() {
             const ref = document.getElementById('wip-ref').value || 'WIP';
+            const servicioRef = document.getElementById('wip-servicio').value.trim();
             const cant = parseFloat(document.getElementById('wip-cant').value);
             const costo = parseFloat(document.getElementById('wip-costo').value);
             const fechaVal = document.getElementById('wip-fecha').value;
@@ -448,18 +520,22 @@
             
             const cu = costo / cant;
             const cardId = `card-wip-${Date.now()}`;
+            
+            const descText = servicioRef ? `Saldo Anterior: ${ref} (Serv: ${servicioRef})` : `Saldo Anterior: ${ref}`;
+
             const html = `
                 <div class="card wip" id="${cardId}" data-doc="${ref}" data-fecha="${fechaDisplay}">
                     <button class="btn-action-icon btn-edit" title="Editar Documento" onclick="editarDocumento('${cardId}')">✏️</button>
                     <button class="btn-action-icon btn-delete" title="Eliminar" onclick="eliminarElemento('${cardId}')">🗑️</button>
-                    <div class="card-header-info" style="margin-bottom:4px;">
+                    <div class="card-header-info" style="margin-bottom:4px; display:flex; flex-wrap:wrap; gap:8px;">
                         <span><strong style="color:var(--wip-text);">Lote Ant: </strong><span class="val-doc">${ref}</span></span>
-                        <span style="font-size:10px; color:var(--text-muted);"><strong>Fecha: </strong><span class="val-fecha">${fechaDisplay}</span></span>
+                        ${servicioRef ? `<span><strong style="color:var(--wip-text);">Serv: </strong><span>${servicioRef}</span></span>` : ''}
+                        <span style="font-size:10px; color:var(--text-muted); margin-left:auto;"><strong>Fecha: </strong><span class="val-fecha">${fechaDisplay}</span></span>
                     </div>
                     <table class="card-table">
                         <thead><tr><th class="col-art">Código de Artículo</th><th class="num">Cant.</th><th class="num">Costo Unitario</th><th class="num">Costo Tot.</th></tr></thead>
                         <tbody>
-                            <tr id="row-${cardId}" class="selectable-row row-origen unprocessed" onclick="toggleOrigin('row-${cardId}')" data-costo="${costo}" data-cant="${cant}" data-desc="Saldo Anterior: ${ref}" data-art="Saldo WIP" data-tipo="salida" data-processed="0">
+                            <tr id="row-${cardId}" class="selectable-row row-origen unprocessed" onclick="toggleOrigin('row-${cardId}')" data-costo="${costo}" data-cant="${cant}" data-desc="${descText}" data-art="Saldo WIP" data-tipo="salida" data-processed="0">
                                 <td class="col-art">Saldo Base</td><td class="num">${cant.toFixed(3)}</td><td class="num">${formaterCU.format(cu)}</td><td class="num" style="font-weight:bold;">${formater.format(costo)}</td>
                             </tr>
                         </tbody>
@@ -1071,6 +1147,7 @@
             
             doc.setFontSize(10);
             doc.setFont("helvetica", "normal");
+            
             doc.text(`Servicio N°: ${ticket}`, 15, 40);
             doc.text(`Fecha : ${fechaStr}`, 195, 40, { align: "right" });
             doc.text(`Hora : ${horaStr}`, 195, 45, { align: "right" });
