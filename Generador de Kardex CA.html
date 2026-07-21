@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kardex SUNAT - Definitivo 13.1</title>
+    <title>Kardex SUNAT - Multianual Definitivo</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
@@ -14,8 +14,8 @@
     <div class="max-w-5xl w-full mx-auto">
         <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-200">
             <div class="text-center mb-6">
-                <h1 class="text-3xl font-bold text-gray-800 mb-2">Impresión Kardex 13.1 (Final)</h1>
-                <p class="text-gray-500">Generación multi-mes con PDFs independientes, etiquetas limpias y proyección de impresión.</p>
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">Impresión Kardex 13.1 (Multianual)</h1>
+                <p class="text-gray-500">Base de datos de múltiples años soportada. Lógica de Cierres (CI) automatizada al 100%.</p>
             </div>
 
             <!-- Controles y Formulario -->
@@ -23,8 +23,8 @@
                 <div class="bg-gray-50 p-5 rounded-lg border border-gray-200">
                     <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
                         <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-1">AÑO:</label>
-                            <input type="text" id="inputAnio" placeholder="Ej. 2021" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm font-semibold">
+                            <label class="block text-sm font-bold text-gray-700 mb-1">AÑO(S):</label>
+                            <input type="text" id="inputAnio" placeholder="Ej. 2021 o 2020,2021 (Vacío = Todos)" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm font-semibold">
                         </div>
                         <div>
                             <label class="block text-sm font-bold text-gray-700 mb-1">ESTABLECIMIENTO :</label>
@@ -153,7 +153,7 @@
             };
 
             let dbArticulos = {};
-            let empData = { periodo: '', ruc: '', razonSocial: '', establecimiento: '', anioInput: '' };
+            let empData = { periodo: '', ruc: '', razonSocial: '', establecimiento: '' };
             let overrides = {};
             let cancelado = false;
 
@@ -215,17 +215,25 @@
                         let sC = parseFloat(row[colS_C]) || 0; let sCU = parseFloat(row[colS_CU]) || 0; let sCT = parseFloat(row[colS_CT]) || 0;
                         let fC = parseFloat(row[colF_C]) || 0; let fCU = parseFloat(row[colF_CU]) || 0; let fCT = parseFloat(row[colF_CT]) || 0;
 
+                        if (!fechaObj) continue;
+
+                        // LOGICA INTELIGENTE DE CIERRE: 
+                        // Traslada el cierre de diciembre al 1ero de Enero del año siguiente automáticamente
                         if (tipoOpRaw === 'SALDO INICIAL' || tipoOpRaw === '16' || t10Val === 'CIERRE' || serieVal === 'CI') {
                             tipoOpRaw = '16';
-                            if (overrides.anio) {
-                                fechaObj = new Date(parseInt(overrides.anio), 0, 1);
+                            
+                            if (t10Val === 'CIERRE' || serieVal === 'CI') {
+                                if (fechaObj.getMonth() === 11) { // 11 = Diciembre
+                                    fechaObj = new Date(fechaObj.getFullYear() + 1, 0, 1);
+                                } else {
+                                    fechaObj = new Date(fechaObj.getFullYear(), fechaObj.getMonth(), 1);
+                                }
                             }
+
                             if (eC === 0 && fC !== 0) eC = fC;
                             if (eCT === 0 && fCT !== 0) eCT = fCT;
                             if (eCU === 0 && fCU !== 0) eCU = fCU;
                         }
-
-                        if (!fechaObj) continue;
 
                         itemActual.transacciones.push({
                             fecha: fechaObj,
@@ -259,7 +267,7 @@
 
                 cancelado = false;
                 dbArticulos = {};
-                empData = { periodo: '', ruc: '', razonSocial: '', establecimiento: '', anioInput: e.data.anio };
+                empData = { periodo: '', ruc: '', razonSocial: '', establecimiento: '' };
                 overrides = { anio: e.data.anio, estab: e.data.estab, meses: e.data.meses, umDefault: e.data.umDefault };
                 const rawBuffer = e.data.file;
 
@@ -307,12 +315,15 @@
                     let mesesArr = Array.from(mesesSet).sort();
                     let articulosOrdenados = Object.values(dbArticulos).sort((a, b) => a.codigo.localeCompare(b.codigo));
                     
-                    // Filtrar solo los meses que el usuario seleccionó
-                    let mesesAProcesar = [];
-                    if (overrides.meses && overrides.meses.length > 0 && overrides.anio) {
-                        const permitidos = overrides.meses.map(m => overrides.anio + '-' + m);
-                        mesesAProcesar = mesesArr.filter(mes => permitidos.includes(mes));
-                    }
+                    // Filtrar por años y meses
+                    let aniosInput = overrides.anio ? overrides.anio.split(',').map(a => a.trim()).filter(a => a !== '') : [];
+                    
+                    let mesesAProcesar = mesesArr.filter(mes => {
+                        let partes = mes.split('-');
+                        let pasaAnio = aniosInput.length === 0 || aniosInput.includes(partes[0]);
+                        let pasaMes = overrides.meses && overrides.meses.includes(partes[1]);
+                        return pasaAnio && pasaMes;
+                    });
 
                     let bloquesPDF = [];
                     let totalMovimientos = 0;
@@ -440,11 +451,10 @@
             const files = e.target.files;
             if (files.length === 0) return;
 
-            const valAnio = document.getElementById('inputAnio').value.trim() || new Date().getFullYear().toString();
+            const valAnio = document.getElementById('inputAnio').value.trim();
             const valEstablecimiento = document.getElementById('inputEstablecimiento').value.trim();
             const valUmDefault = document.getElementById('inputUmDefault').value.trim();
             
-            // Recoger meses seleccionados
             const checkedMeses = Array.from(document.querySelectorAll('#mesesCheckboxes input:checked')).map(cb => cb.value);
             
             if (checkedMeses.length === 0) {
@@ -481,7 +491,7 @@
                         empDataGlobal = data.empData;
                         
                         if(totalBloques === 0) {
-                            alert("No se encontraron movimientos para los meses y año seleccionados.");
+                            alert("No se encontraron movimientos para los años y meses seleccionados.");
                             resetUI();
                             return;
                         }
@@ -499,7 +509,7 @@
                         let tableHTML = `<table class="w-full text-sm text-left border-collapse">
                             <thead>
                                 <tr class="bg-blue-100 text-blue-800 sticky top-0">
-                                    <th class="p-2 border border-blue-200">Período (Mes)</th>
+                                    <th class="p-2 border border-blue-200">Período (Mes/Año)</th>
                                     <th class="p-2 border border-blue-200 text-center">Artículos</th>
                                     <th class="p-2 border border-blue-200 text-center">Movs.</th>
                                     <th class="p-2 border border-blue-200 text-center">Hojas Est.</th>
@@ -548,8 +558,9 @@
                 doc.setFontSize(6);
                 doc.setFont("helvetica", "bold");
                 
+                let anioStr = period.split('-')[0];
                 let mesNum = period.split('-')[1];
-                let periodoStr = empDataGlobal.anioInput ? `${empDataGlobal.anioInput}-${mesNum}` : period;
+                let periodoStr = `${anioStr}-${mesNum}`;
 
                 doc.text('FORMATO 13.1: "REGISTRO DE INVENTARIO PERMANENTE VALORIZADO - DETALLE DEL INVENTARIO VALORIZADO"', 8, 6);
                 doc.text(`PERÍODO: ${periodoStr}`, 8, 9);
@@ -706,7 +717,7 @@
 
                     if (currentMonthInPdf !== null && currentMonthInPdf !== block.period) {
                         let rucStr = empDataGlobal.ruc || 'SIN_RUC';
-                        let anioStr = empDataGlobal.anioInput || '0000';
+                        let anioStr = currentMonthInPdf.split('-')[0];
                         let mesSplit = currentMonthInPdf.split('-')[1]; 
                         
                         let nombreArchivo = `${rucStr}_${anioStr}_${mesSplit}.PDF`;
@@ -733,7 +744,7 @@
 
                 if (totalBloques > 0 && currentMonthInPdf !== null) {
                     let rucStr = empDataGlobal.ruc || 'SIN_RUC';
-                    let anioStr = empDataGlobal.anioInput || '0000';
+                    let anioStr = currentMonthInPdf.split('-')[0];
                     let mesSplit = currentMonthInPdf.split('-')[1];
                     
                     let nombreArchivo = `${rucStr}_${anioStr}_${mesSplit}.PDF`;
