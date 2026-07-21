@@ -3,128 +3,170 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Kardex SUNAT - Multianual Definitivo</title>
+    <title>Kardex SUNAT 13.1 - Master Edition</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        /* Custom Scrollbar para el resumen */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; rounded-lg; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+    </style>
 </head>
-<body class="p-4 md:p-8 flex items-center justify-center min-h-screen bg-slate-50">
+<body class="p-4 md:p-8 flex items-start justify-center min-h-screen bg-gradient-to-br from-slate-50 to-blue-50 font-sans text-slate-800">
 
-    <div class="max-w-5xl w-full mx-auto">
-        <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-200">
+    <div class="max-w-6xl w-full mx-auto space-y-6">
+        
+        <!-- Encabezado -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 text-center">
+            <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">Kardex SUNAT 13.1</h1>
+            <p class="text-slate-500 mt-2 font-medium">Generador Inteligente Multianual & Separación por Meses</p>
+        </div>
+
+        <div id="controls" class="space-y-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Tarjeta: Datos de Empresa -->
+                <div class="lg:col-span-2 bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                        Datos de la Empresa
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div class="md:col-span-1">
+                            <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">RUC</label>
+                            <input type="text" id="inputRuc" value="20100207941" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-sm font-bold">
+                        </div>
+                        <div class="md:col-span-1">
+                            <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Razón Social</label>
+                            <input type="text" id="inputRazonSocial" value="CLINICA AREQUIPA S.A." class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-sm font-bold">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Establecimiento</label>
+                            <input type="text" id="inputEstablecimiento" value="ESQ.PTE.GRAU/AV.BOLOGNESI NRO. S/N (FRENTE A MONUMENTO A MIGUEL GRAU) AREQUIPA - AREQUIPA - AREQUIPA" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-sm font-bold">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tarjeta: Configuración Técnica -->
+                <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                    <h2 class="text-lg font-bold text-slate-800 mb-4 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path></svg>
+                        Parámetros
+                    </h2>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Filtrar por Año(s)</label>
+                            <input type="text" id="inputAnio" placeholder="Ej. 2021 (Vacío = Detectar todos)" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-sm font-semibold placeholder-slate-400">
+                        </div>
+                        <div>
+                            <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">U.M. por defecto</label>
+                            <input type="text" id="inputUmDefault" value="07" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-sm font-bold text-center">
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tarjeta: Selección de Meses -->
+            <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-4">
+                    <h2 class="text-lg font-bold text-slate-800 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        Meses a Generar
+                    </h2>
+                    <div class="flex gap-3 text-sm">
+                        <button id="btnSelectAll" class="text-blue-600 hover:text-blue-800 font-bold bg-blue-50 px-3 py-1.5 rounded-md transition">Marcar Todos</button>
+                        <button id="btnSelectNone" class="text-slate-500 hover:text-slate-700 font-bold bg-slate-100 px-3 py-1.5 rounded-md transition">Desmarcar</button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-4" id="mesesCheckboxes">
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="01" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Enero</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="02" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Febrero</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="03" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Marzo</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="04" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Abril</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="05" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Mayo</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="06" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Junio</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="07" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Julio</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="08" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Agosto</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="09" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Septiembre</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="10" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Octubre</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="11" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Noviembre</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-2 rounded-lg hover:bg-slate-50 transition border border-transparent hover:border-slate-200"><input type="checkbox" value="12" checked class="w-4 h-4 text-blue-600 accent-blue-600 rounded"> <span class="text-sm font-bold text-slate-700">Diciembre</span></label>
+                </div>
+            </div>
+
+            <!-- Botón Principal -->
+            <div class="flex justify-center pt-4">
+                <label class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-12 rounded-xl cursor-pointer transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 w-full md:w-auto text-lg flex justify-center items-center gap-3">
+                    <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
+                    Escanear Excel y Preparar PDF
+                    <input type="file" id="fileInput" accept=".xlsx, .xls" class="hidden">
+                </label>
+            </div>
+        </div>
+
+        <!-- Resumen de Proyección -->
+        <div id="summaryContainer" class="hidden w-full max-w-3xl mx-auto bg-white border border-blue-200 rounded-2xl p-8 shadow-lg">
             <div class="text-center mb-6">
-                <h1 class="text-3xl font-bold text-gray-800 mb-2">Impresión Kardex 13.1 (Multianual)</h1>
-                <p class="text-gray-500">Base de datos de múltiples años soportada. Lógica de Cierres (CI) automatizada al 100%.</p>
+                <h2 class="text-2xl font-bold text-blue-800">Proyección de Impresión</h2>
+                <p class="text-sm text-slate-500 mt-1">Se generará un archivo PDF separado por cada período detectado.</p>
+            </div>
+            
+            <div class="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mb-6 max-h-64 overflow-y-auto">
+                <div id="monthlyBreakdown"></div>
             </div>
 
-            <!-- Controles y Formulario -->
-            <div id="controls" class="flex flex-col gap-6">
-                <div class="bg-gray-50 p-5 rounded-lg border border-gray-200">
-                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-1">AÑO(S):</label>
-                            <input type="text" id="inputAnio" placeholder="Ej. 2021 o 2020,2021 (Vacío = Todos)" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm font-semibold">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-1">ESTABLECIMIENTO :</label>
-                            <input type="text" id="inputEstablecimiento" placeholder="Ej. Sede Principal" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm font-semibold">
-                        </div>
-                        <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-1">U.M. POR DEFECTO:</label>
-                            <input type="text" id="inputUmDefault" placeholder="Ej. 07" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm font-semibold">
-                        </div>
-                    </div>
-                    
-                    <div class="border-t border-gray-200 pt-4">
-                        <div class="flex justify-between items-center mb-3">
-                            <label class="block text-sm font-bold text-gray-700">MESES A GENERAR:</label>
-                            <div class="text-xs">
-                                <button id="btnSelectAll" class="text-blue-600 hover:text-blue-800 font-semibold mr-3 transition">Marcar Todos</button>
-                                <button id="btnSelectNone" class="text-gray-500 hover:text-gray-700 font-semibold transition">Desmarcar Todos</button>
-                            </div>
-                        </div>
-                        <div class="grid grid-cols-3 md:grid-cols-6 gap-3" id="mesesCheckboxes">
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="01" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Enero</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="02" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Febrero</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="03" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Marzo</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="04" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Abril</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="05" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Mayo</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="06" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Junio</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="07" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Julio</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="08" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Agosto</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="09" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Septiembre</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="10" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Octubre</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="11" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Noviembre</span></label>
-                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="12" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Diciembre</span></label>
-                        </div>
-                    </div>
+            <div class="grid grid-cols-3 gap-4 mb-8 pt-4 border-t border-slate-100 text-center">
+                <div>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Agrupaciones</p>
+                    <p class="text-3xl font-extrabold text-slate-700" id="sumArticulos">0</p>
                 </div>
-
-                <div class="flex justify-center">
-                    <label class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-lg cursor-pointer transition shadow-md w-full md:w-auto text-lg flex justify-center items-center gap-2">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
-                        Escanear Excel
-                        <input type="file" id="fileInput" accept=".xlsx, .xls" class="hidden">
-                    </label>
+                <div>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Movimientos</p>
+                    <p class="text-3xl font-extrabold text-slate-700" id="sumMovimientos">0</p>
+                </div>
+                <div>
+                    <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Hojas Totales Aprox.</p>
+                    <p class="text-3xl font-extrabold text-blue-600" id="sumPaginas">0</p>
                 </div>
             </div>
-
-            <!-- Resumen de Proyección -->
-            <div id="summaryContainer" class="hidden mt-8 w-full max-w-2xl mx-auto text-center bg-blue-50 border border-blue-200 rounded-xl p-6 shadow-sm">
-                <h2 class="text-2xl font-bold text-blue-800 mb-2">Proyección de Impresión</h2>
-                <p class="text-sm text-blue-600 mb-4">Se generarán PDFs independientes para cada uno de estos meses.</p>
-                
-                <div class="bg-white rounded border border-blue-100 overflow-hidden mb-6 max-h-60 overflow-y-auto">
-                    <div id="monthlyBreakdown"></div>
-                </div>
-
-                <div class="grid grid-cols-3 gap-4 mb-6 pt-4 border-t border-blue-200">
-                    <div>
-                        <p class="text-xs text-gray-500 font-bold uppercase">Total Agrupaciones</p>
-                        <p class="text-2xl font-bold text-gray-800" id="sumArticulos">0</p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-500 font-bold uppercase">Total Movimientos</p>
-                        <p class="text-2xl font-bold text-gray-800" id="sumMovimientos">0</p>
-                    </div>
-                    <div>
-                        <p class="text-xs text-gray-500 font-bold uppercase">Hojas Totales Aprox.</p>
-                        <p class="text-2xl font-bold text-blue-600" id="sumPaginas">0</p>
-                    </div>
-                </div>
-                
-                <div class="flex justify-center gap-4">
-                    <button id="btnCancelSummary" class="px-6 py-2 border border-gray-300 rounded text-gray-600 font-bold hover:bg-gray-100 transition bg-white">Cancelar</button>
-                    <button id="btnProceedSummary" class="px-6 py-2 bg-blue-600 rounded text-white font-bold hover:bg-blue-700 transition shadow">Sí, Generar PDFs</button>
-                </div>
+            
+            <div class="flex justify-center gap-4">
+                <button id="btnCancelSummary" class="px-8 py-3 border-2 border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition">Cancelar</button>
+                <button id="btnProceedSummary" class="px-8 py-3 bg-blue-600 rounded-xl text-white font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg">Generar Archivos</button>
             </div>
+        </div>
 
-            <!-- Barra de Progreso -->
-            <div id="progressContainer" class="hidden mt-8 w-full max-w-md mx-auto text-center">
-                <h2 class="text-lg font-bold text-blue-600 mb-2" id="statusText">Leyendo Excel...</h2>
-                <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner">
-                    <div id="progressBar" class="bg-blue-600 h-4 rounded-full transition-all duration-200 ease-out" style="width: 0%"></div>
-                </div>
-                <p id="progressDetail" class="text-sm text-gray-500 mt-2 font-medium">Por favor espera...</p>
-                <button id="cancelBtn" class="mt-5 text-sm font-semibold text-red-600 hover:text-red-800 underline">Cancelar proceso</button>
+        <!-- Barra de Progreso -->
+        <div id="progressContainer" class="hidden w-full max-w-md mx-auto text-center bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
+            <h2 class="text-xl font-bold text-blue-600 mb-4" id="statusText">Procesando Base de Datos...</h2>
+            <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden shadow-inner">
+                <div id="progressBar" class="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
             </div>
+            <p id="progressDetail" class="text-sm text-slate-500 mt-4 font-medium">Leyendo celdas...</p>
+            <button id="cancelBtn" class="mt-6 text-sm font-bold text-red-500 hover:text-red-700 underline">Detener Proceso</button>
+        </div>
 
-            <!-- Mensajes -->
-            <div id="successMsg" class="hidden mt-6 p-4 bg-green-50 text-green-700 rounded-lg border border-green-200 font-bold flex flex-col items-center">
-                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-                ¡PDFs generados y descargados exitosamente!
-            </div>
-            <div id="cancelMsg" class="hidden mt-6 p-4 bg-amber-50 text-amber-700 rounded-lg border border-amber-200 font-bold text-center">
-                Proceso cancelado.
-            </div>
+        <!-- Mensajes -->
+        <div id="successMsg" class="hidden mt-6 p-6 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-200 flex flex-col items-center shadow-sm max-w-md mx-auto text-center">
+            <svg class="w-12 h-12 text-emerald-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+            <h3 class="text-lg font-bold">¡Archivos Generados!</h3>
+            <p class="text-sm mt-1 opacity-80">Revisa tu carpeta de descargas.</p>
+        </div>
+        
+        <div id="cancelMsg" class="hidden mt-6 p-4 bg-amber-50 text-amber-700 rounded-xl border border-amber-200 font-bold text-center max-w-md mx-auto">
+            Proceso cancelado.
         </div>
     </div>
 
     <script>
         const { jsPDF } = window.jspdf;
 
-        // Botones de selección rápida de meses
+        // Botones rápidos
         document.getElementById('btnSelectAll').addEventListener('click', () => {
             document.querySelectorAll('#mesesCheckboxes input').forEach(cb => cb.checked = true);
         });
@@ -153,7 +195,7 @@
             };
 
             let dbArticulos = {};
-            let empData = { periodo: '', ruc: '', razonSocial: '', establecimiento: '' };
+            let empData = { ruc: '', razonSocial: '', establecimiento: '' };
             let overrides = {};
             let cancelado = false;
 
@@ -177,11 +219,6 @@
 
                     const val0 = String(row[0] || '').trim().toUpperCase();
                     const val1 = String(row[1] || '').trim();
-
-                    if (val0.includes('PERIODO') || val0.includes('PERÍODO')) empData.periodo = val1;
-                    if (val0 === 'RUC:') empData.ruc = val1;
-                    if (val0.includes('RAZÓN SOCIAL') || val0.includes('APELLIDOS Y NOMBRES')) empData.razonSocial = val1;
-                    if (val0.includes('ESTABLECIMIENTO')) empData.establecimiento = val1;
 
                     if (val0.startsWith('ITEM:')) {
                         const codigo = val0.substring(5).trim();
@@ -217,13 +254,12 @@
 
                         if (!fechaObj) continue;
 
-                        // LOGICA INTELIGENTE DE CIERRE: 
-                        // Traslada el cierre de diciembre al 1ero de Enero del año siguiente automáticamente
+                        // CIERRE INTELIGENTE (Detecta el año y pasa al 1 de enero del sgt año)
                         if (tipoOpRaw === 'SALDO INICIAL' || tipoOpRaw === '16' || t10Val === 'CIERRE' || serieVal === 'CI') {
                             tipoOpRaw = '16';
                             
                             if (t10Val === 'CIERRE' || serieVal === 'CI') {
-                                if (fechaObj.getMonth() === 11) { // 11 = Diciembre
+                                if (fechaObj.getMonth() === 11) { // Si el excel dice Diciembre
                                     fechaObj = new Date(fechaObj.getFullYear() + 1, 0, 1);
                                 } else {
                                     fechaObj = new Date(fechaObj.getFullYear(), fechaObj.getMonth(), 1);
@@ -267,8 +303,12 @@
 
                 cancelado = false;
                 dbArticulos = {};
-                empData = { periodo: '', ruc: '', razonSocial: '', establecimiento: '' };
-                overrides = { anio: e.data.anio, estab: e.data.estab, meses: e.data.meses, umDefault: e.data.umDefault };
+                overrides = { anio: e.data.anio, estab: e.data.estab, meses: e.data.meses, umDefault: e.data.umDefault, ruc: e.data.ruc, razonSocial: e.data.razonSocial };
+                
+                empData.ruc = overrides.ruc;
+                empData.razonSocial = overrides.razonSocial;
+                empData.establecimiento = overrides.estab;
+
                 const rawBuffer = e.data.file;
 
                 try {
@@ -299,9 +339,7 @@
                         filas = null; sheet = null; wbHoja = null;
                     }
 
-                    if (overrides.estab) empData.establecimiento = overrides.estab;
-
-                    self.postMessage({ type: 'progress', percent: 63, detail: 'Agrupando y filtrando meses seleccionados...' });
+                    self.postMessage({ type: 'progress', percent: 63, detail: 'Agrupando movimientos por mes y filtrando...' });
                     
                     let mesesSet = new Set();
                     Object.values(dbArticulos).forEach(item => {
@@ -315,7 +353,7 @@
                     let mesesArr = Array.from(mesesSet).sort();
                     let articulosOrdenados = Object.values(dbArticulos).sort((a, b) => a.codigo.localeCompare(b.codigo));
                     
-                    // Filtrar por años y meses
+                    // Filtrar por años (si los ingresó) y por meses seleccionados
                     let aniosInput = overrides.anio ? overrides.anio.split(',').map(a => a.trim()).filter(a => a !== '') : [];
                     
                     let mesesAProcesar = mesesArr.filter(mes => {
@@ -455,6 +493,10 @@
             const valEstablecimiento = document.getElementById('inputEstablecimiento').value.trim();
             const valUmDefault = document.getElementById('inputUmDefault').value.trim();
             
+            // Recoger valores del HTML explícitamente solicitados
+            const valRuc = document.getElementById('inputRuc').value.trim();
+            const valRazonSocial = document.getElementById('inputRazonSocial').value.trim();
+            
             const checkedMeses = Array.from(document.querySelectorAll('#mesesCheckboxes input:checked')).map(cb => cb.value);
             
             if (checkedMeses.length === 0) {
@@ -468,7 +510,7 @@
             document.getElementById('successMsg').classList.add('hidden');
             document.getElementById('cancelMsg').classList.add('hidden');
             document.getElementById('progressContainer').classList.remove('hidden');
-            document.getElementById('statusText').innerText = 'Escaneando (Segundo Plano)...';
+            document.getElementById('statusText').innerText = 'Escaneando Base de Datos...';
             setProgress(1, 'Cargando archivo en memoria...');
 
             const reader = new FileReader();
@@ -509,10 +551,10 @@
                         let tableHTML = `<table class="w-full text-sm text-left border-collapse">
                             <thead>
                                 <tr class="bg-blue-100 text-blue-800 sticky top-0">
-                                    <th class="p-2 border border-blue-200">Período (Mes/Año)</th>
-                                    <th class="p-2 border border-blue-200 text-center">Artículos</th>
-                                    <th class="p-2 border border-blue-200 text-center">Movs.</th>
-                                    <th class="p-2 border border-blue-200 text-center">Hojas Est.</th>
+                                    <th class="p-3 border border-blue-200 uppercase text-[11px] tracking-wider">Período (Mes/Año)</th>
+                                    <th class="p-3 border border-blue-200 text-center uppercase text-[11px] tracking-wider">Artículos</th>
+                                    <th class="p-3 border border-blue-200 text-center uppercase text-[11px] tracking-wider">Movs.</th>
+                                    <th class="p-3 border border-blue-200 text-center uppercase text-[11px] tracking-wider">Hojas Est.</th>
                                 </tr>
                             </thead>
                             <tbody>`;
@@ -522,11 +564,11 @@
                             let mesTexto = nombresMeses[parseInt(partesMes[1], 10) - 1] + ' ' + partesMes[0];
                             let paginasMes = Math.ceil(((stat.articulos * 22) + (stat.movimientos * 3.5)) / 263) || 1;
 
-                            tableHTML += `<tr class="hover:bg-blue-50">
-                                <td class="p-2 border-b border-blue-100 font-semibold text-gray-700">${mesTexto}</td>
-                                <td class="p-2 border-b border-blue-100 text-center text-gray-600">${stat.articulos}</td>
-                                <td class="p-2 border-b border-blue-100 text-center text-gray-600">${stat.movimientos}</td>
-                                <td class="p-2 border-b border-blue-100 text-center font-bold text-blue-600">${paginasMes}</td>
+                            tableHTML += `<tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                                <td class="p-3 font-semibold text-slate-700">${mesTexto}</td>
+                                <td class="p-3 text-center text-slate-600 font-medium">${stat.articulos}</td>
+                                <td class="p-3 text-center text-slate-600 font-medium">${stat.movimientos}</td>
+                                <td class="p-3 text-center font-bold text-blue-600">${paginasMes}</td>
                             </tr>`;
                         });
 
@@ -546,7 +588,9 @@
                     anio: valAnio, 
                     meses: checkedMeses, 
                     estab: valEstablecimiento,
-                    umDefault: valUmDefault 
+                    umDefault: valUmDefault,
+                    ruc: valRuc,
+                    razonSocial: valRazonSocial
                 }, [arrayBuffer]);
             };
             reader.readAsArrayBuffer(files[0]);
@@ -558,12 +602,8 @@
                 doc.setFontSize(6);
                 doc.setFont("helvetica", "bold");
                 
-                let anioStr = period.split('-')[0];
-                let mesNum = period.split('-')[1];
-                let periodoStr = `${anioStr}-${mesNum}`;
-
                 doc.text('FORMATO 13.1: "REGISTRO DE INVENTARIO PERMANENTE VALORIZADO - DETALLE DEL INVENTARIO VALORIZADO"', 8, 6);
-                doc.text(`PERÍODO: ${periodoStr}`, 8, 9);
+                doc.text(`PERÍODO: ${period}`, 8, 9);
                 doc.text(`RUC: ${empDataGlobal.ruc}`, 8, 12);
                 doc.text(`APELLIDOS Y NOMBRES, DENOMINACIÓN O RAZÓN SOCIAL: ${empDataGlobal.razonSocial}`, 8, 15);
                 doc.text(`ESTABLECIMIENTO : ${empDataGlobal.establecimiento}`, 8, 18);
@@ -717,10 +757,10 @@
 
                     if (currentMonthInPdf !== null && currentMonthInPdf !== block.period) {
                         let rucStr = empDataGlobal.ruc || 'SIN_RUC';
-                        let anioStr = currentMonthInPdf.split('-')[0];
+                        let anioReal = currentMonthInPdf.split('-')[0];
                         let mesSplit = currentMonthInPdf.split('-')[1]; 
                         
-                        let nombreArchivo = `${rucStr}_${anioStr}_${mesSplit}.PDF`;
+                        let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
                         doc.save(nombreArchivo);
                         
                         doc = new jsPDF('p', 'mm', 'a4');
@@ -744,10 +784,10 @@
 
                 if (totalBloques > 0 && currentMonthInPdf !== null) {
                     let rucStr = empDataGlobal.ruc || 'SIN_RUC';
-                    let anioStr = currentMonthInPdf.split('-')[0];
+                    let anioReal = currentMonthInPdf.split('-')[0];
                     let mesSplit = currentMonthInPdf.split('-')[1];
                     
-                    let nombreArchivo = `${rucStr}_${anioStr}_${mesSplit}.PDF`;
+                    let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
                     doc.save(nombreArchivo);
                 }
 
