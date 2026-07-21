@@ -258,7 +258,9 @@
                         if (!fechaObj) continue;
 
                         let tipoOpRaw = /^\\d+$/.test(tipoOpStr) ? tipoOpStr.padStart(2, '0') : tipoOpStr;
-                        let esCierre = (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.includes('SALDO INI') || tipoOpStr === 'SALDO INICIAL');
+                        // Ajustamos la detección del CIERRE
+                        let esCierre = (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.includes('CIERRE') || tipoOpStr.includes('SALDO INI') || tipoOpStr === 'SALDO INICIAL');
+                        let isCierreArrastre = false;
 
                         let eC = parseFloat(row[colE_C]) || 0; let eCU = parseFloat(row[colE_CU]) || 0; let eCT = parseFloat(row[colE_CT]) || 0;
                         let sC = parseFloat(row[colS_C]) || 0; let sCU = parseFloat(row[colS_CU]) || 0; let sCT = parseFloat(row[colS_CT]) || 0;
@@ -268,13 +270,18 @@
                             tipoOpRaw = '16';
                             
                             if (esCierre) {
-                                // Si es un saldo de arrastre detectado el día 1, retrocedemos la fecha 1 segundo.
-                                // Esto fuerza que la fecha caiga a finales del mes anterior. De esa manera 
-                                // nuestro bloque "txs_before" lo detectará como el "último saldo" previo 
-                                // a este mes y se pintará perfectamente como "SALDO INICIAL".
-                                if (fechaObj.getDate() === 1) {
-                                    fechaObj = new Date(fechaObj.getTime() - 1000);
-                                }
+                                // Lógica corregida:
+                                // El "CIERRE" (sin importar si dice 31 de Enero o 01 de Enero) NO debe imprimirse en el mes original.
+                                // Sirve única y exclusivamente como el "Saldo Inicial" del MES SIGUIENTE.
+                                // Lo mandamos al ultimísimo instante del mes, así es el último registro, y con la bandera 'isCierreArrastre'
+                                // lo ocultamos de los movimientos normales del mes original.
+                                let y = fechaObj.getFullYear();
+                                let m = fechaObj.getMonth();
+                                fechaObj = new Date(y, m + 1, 0, 23, 59, 59, 999);
+                                isCierreArrastre = true;
+                                
+                                // Por si el sistema exportador arrojó el saldo final en la columna de Entradas erróneamente:
+                                if (fC === 0 && eC !== 0) { fC = eC; fCU = eCU; fCT = eCT; }
                             } else {
                                 // Si es un ajuste regular tipo 16
                                 if (eC === 0 && fC !== 0) { eC = fC; eCT = fCT; eCU = fCU; }
@@ -286,7 +293,8 @@
                             t10: String(row[colT10] || ''), serie: String(row[colSerie] || ''), num: String(row[colNum] || ''), t12: tipoOpRaw,
                             eC: eC, eCU: eCU, eCT: eCT,
                             sC: sC, sCU: sCU, sCT: sCT,
-                            fC: fC, fCU: fCU, fCT: fCT
+                            fC: fC, fCU: fCU, fCT: fCT,
+                            isCierreArrastre: isCierreArrastre // <-- Nueva bandera clave
                         });
                     }
                 }
@@ -355,7 +363,11 @@
                     Object.values(dbArticulos).forEach(item => {
                         if (item.transacciones.length > 0) {
                             let txFinal = item.transacciones[item.transacciones.length - 1];
-                            if (txFinal.eC === 0 && txFinal.sC === 0) item.transacciones.pop();
+                            // Si por casualidad queda un bloque en blanco (como a veces escupe Excel), lo quitamos,
+                            // siempre que no sea nuestro preciado registro de arrastre.
+                            if (txFinal.eC === 0 && txFinal.sC === 0 && !txFinal.isCierreArrastre) {
+                                item.transacciones.pop();
+                            }
                         }
                         item.transacciones.forEach(tx => mesesSet.add(getYYYYMM(tx.fecha)));
                     });
@@ -381,7 +393,10 @@
                         let movsEnMes = 0;
 
                         articulosOrdenados.forEach(item => {
-                            let txs_mes = item.transacciones.filter(tx => getYYYYMM(tx.fecha) === mes);
+                            // MAGIA: Filtramos el isCierreArrastre para que NO APAREZCA en los movimientos impresos de este mes
+                            let txs_mes = item.transacciones.filter(tx => getYYYYMM(tx.fecha) === mes && !tx.isCierreArrastre);
+                            
+                            // Pero SÍ permitimos que el isCierreArrastre figure cronológicamente como el Saldo Inicial en el mes siguiente
                             let txs_before = item.transacciones.filter(tx => getYYYYMM(tx.fecha) < mes);
                             
                             if (txs_mes.length > 0 || txs_before.length > 0) {
