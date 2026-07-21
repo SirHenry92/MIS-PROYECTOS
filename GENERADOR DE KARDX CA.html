@@ -1,0 +1,758 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kardex SUNAT - Definitivo 13.1</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+</head>
+<body class="p-4 md:p-8 flex items-center justify-center min-h-screen bg-slate-50">
+
+    <div class="max-w-5xl w-full mx-auto">
+        <div class="bg-white p-8 rounded-xl shadow-lg border border-gray-200">
+            <div class="text-center mb-6">
+                <h1 class="text-3xl font-bold text-gray-800 mb-2">Impresión Kardex 13.1 (Final)</h1>
+                <p class="text-gray-500">Generación multi-mes con PDFs independientes, etiquetas limpias y proyección de impresión.</p>
+            </div>
+
+            <!-- Controles y Formulario -->
+            <div id="controls" class="flex flex-col gap-6">
+                <div class="bg-gray-50 p-5 rounded-lg border border-gray-200">
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-5">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">AÑO:</label>
+                            <input type="text" id="inputAnio" placeholder="Ej. 2021" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm font-semibold">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">ESTABLECIMIENTO :</label>
+                            <input type="text" id="inputEstablecimiento" placeholder="Ej. Sede Principal" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm font-semibold">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-1">U.M. POR DEFECTO:</label>
+                            <input type="text" id="inputUmDefault" placeholder="Ej. 07" class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:border-blue-500 text-sm font-semibold">
+                        </div>
+                    </div>
+                    
+                    <div class="border-t border-gray-200 pt-4">
+                        <div class="flex justify-between items-center mb-3">
+                            <label class="block text-sm font-bold text-gray-700">MESES A GENERAR:</label>
+                            <div class="text-xs">
+                                <button id="btnSelectAll" class="text-blue-600 hover:text-blue-800 font-semibold mr-3 transition">Marcar Todos</button>
+                                <button id="btnSelectNone" class="text-gray-500 hover:text-gray-700 font-semibold transition">Desmarcar Todos</button>
+                            </div>
+                        </div>
+                        <div class="grid grid-cols-3 md:grid-cols-6 gap-3" id="mesesCheckboxes">
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="01" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Enero</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="02" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Febrero</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="03" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Marzo</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="04" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Abril</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="05" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Mayo</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="06" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Junio</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="07" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Julio</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="08" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Agosto</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="09" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Septiembre</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="10" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Octubre</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="11" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Noviembre</span></label>
+                            <label class="flex items-center space-x-2 cursor-pointer"><input type="checkbox" value="12" checked class="w-4 h-4 text-blue-600 accent-blue-600"> <span class="text-sm font-medium text-gray-700">Diciembre</span></label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="flex justify-center">
+                    <label class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-10 rounded-lg cursor-pointer transition shadow-md w-full md:w-auto text-lg flex justify-center items-center gap-2">
+                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" /></svg>
+                        Escanear Excel
+                        <input type="file" id="fileInput" accept=".xlsx, .xls" class="hidden">
+                    </label>
+                </div>
+            </div>
+
+            <!-- Resumen de Proyección -->
+            <div id="summaryContainer" class="hidden mt-8 w-full max-w-2xl mx-auto text-center bg-blue-50 border border-blue-200 rounded-xl p-6 shadow-sm">
+                <h2 class="text-2xl font-bold text-blue-800 mb-2">Proyección de Impresión</h2>
+                <p class="text-sm text-blue-600 mb-4">Se generarán PDFs independientes para cada uno de estos meses.</p>
+                
+                <div class="bg-white rounded border border-blue-100 overflow-hidden mb-6 max-h-60 overflow-y-auto">
+                    <div id="monthlyBreakdown"></div>
+                </div>
+
+                <div class="grid grid-cols-3 gap-4 mb-6 pt-4 border-t border-blue-200">
+                    <div>
+                        <p class="text-xs text-gray-500 font-bold uppercase">Total Agrupaciones</p>
+                        <p class="text-2xl font-bold text-gray-800" id="sumArticulos">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 font-bold uppercase">Total Movimientos</p>
+                        <p class="text-2xl font-bold text-gray-800" id="sumMovimientos">0</p>
+                    </div>
+                    <div>
+                        <p class="text-xs text-gray-500 font-bold uppercase">Hojas Totales Aprox.</p>
+                        <p class="text-2xl font-bold text-blue-600" id="sumPaginas">0</p>
+                    </div>
+                </div>
+                
+                <div class="flex justify-center gap-4">
+                    <button id="btnCancelSummary" class="px-6 py-2 border border-gray-300 rounded text-gray-600 font-bold hover:bg-gray-100 transition bg-white">Cancelar</button>
+                    <button id="btnProceedSummary" class="px-6 py-2 bg-blue-600 rounded text-white font-bold hover:bg-blue-700 transition shadow">Sí, Generar PDFs</button>
+                </div>
+            </div>
+
+            <!-- Barra de Progreso -->
+            <div id="progressContainer" class="hidden mt-8 w-full max-w-md mx-auto text-center">
+                <h2 class="text-lg font-bold text-blue-600 mb-2" id="statusText">Leyendo Excel...</h2>
+                <div class="w-full bg-gray-200 rounded-full h-4 overflow-hidden shadow-inner">
+                    <div id="progressBar" class="bg-blue-600 h-4 rounded-full transition-all duration-200 ease-out" style="width: 0%"></div>
+                </div>
+                <p id="progressDetail" class="text-sm text-gray-500 mt-2 font-medium">Por favor espera...</p>
+                <button id="cancelBtn" class="mt-5 text-sm font-semibold text-red-600 hover:text-red-800 underline">Cancelar proceso</button>
+            </div>
+
+            <!-- Mensajes -->
+            <div id="successMsg" class="hidden mt-6 p-4 bg-green-50 text-green-700 rounded-lg border border-green-200 font-bold flex flex-col items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-8 w-8 text-green-500 mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
+                ¡PDFs generados y descargados exitosamente!
+            </div>
+            <div id="cancelMsg" class="hidden mt-6 p-4 bg-amber-50 text-amber-700 rounded-lg border border-amber-200 font-bold text-center">
+                Proceso cancelado.
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const { jsPDF } = window.jspdf;
+
+        // Botones de selección rápida de meses
+        document.getElementById('btnSelectAll').addEventListener('click', () => {
+            document.querySelectorAll('#mesesCheckboxes input').forEach(cb => cb.checked = true);
+        });
+        document.getElementById('btnSelectNone').addEventListener('click', () => {
+            document.querySelectorAll('#mesesCheckboxes input').forEach(cb => cb.checked = false);
+        });
+
+        const workerCode = `
+            self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+
+            const parseExcelDate = (val) => {
+                if (!val) return null;
+                if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+                if (typeof val === 'number') return new Date(Math.round((val - 25569) * 86400 * 1000));
+                let strVal = String(val).trim();
+                if (strVal.match(/^\\\\d{4}-\\\\d{2}-\\\\d{2}\\\\s\\\\d{2}:\\\\d{2}:\\\\d{2}/)) strVal = strVal.replace(' ', 'T');
+                let d = new Date(strVal);
+                if (!isNaN(d.getTime())) return d;
+                return null;
+            };
+
+            const getYYYYMM = (date) => {
+                if (!date) return '1900-01';
+                let m = date.getMonth() + 1;
+                return date.getFullYear() + '-' + (m < 10 ? '0'+m : m);
+            };
+
+            let dbArticulos = {};
+            let empData = { periodo: '', ruc: '', razonSocial: '', establecimiento: '', anioInput: '' };
+            let overrides = {};
+            let cancelado = false;
+
+            function procesarDatosHoja(filas, reportarProgreso) {
+                let itemActual = null;
+                let modoTransacciones = false;
+
+                let colFecha = 0, colT10 = 1, colSerie = 2, colNum = 3, colT12 = 4;
+                let colE_C = 5, colE_CU = 6, colE_CT = 7;
+                let colS_C = 8, colS_CU = 9, colS_CT = 10;
+                let colF_C = 11, colF_CU = 12, colF_CT = 13;
+
+                const total = filas.length;
+
+                for (let i = 0; i < total; i++) {
+                    if (cancelado) return;
+                    if (reportarProgreso && i % 3000 === 0) reportarProgreso(i, total);
+
+                    const row = filas[i];
+                    if (!row || row.length === 0) continue;
+
+                    const val0 = String(row[0] || '').trim().toUpperCase();
+                    const val1 = String(row[1] || '').trim();
+
+                    if (val0.includes('PERIODO') || val0.includes('PERÍODO')) empData.periodo = val1;
+                    if (val0 === 'RUC:') empData.ruc = val1;
+                    if (val0.includes('RAZÓN SOCIAL') || val0.includes('APELLIDOS Y NOMBRES')) empData.razonSocial = val1;
+                    if (val0.includes('ESTABLECIMIENTO')) empData.establecimiento = val1;
+
+                    if (val0.startsWith('ITEM:')) {
+                        const codigo = val0.substring(5).trim();
+                        if (!dbArticulos[codigo]) {
+                            dbArticulos[codigo] = { codigo, descripcion: '', tipo: '', um: '', transacciones: [] };
+                        }
+                        itemActual = dbArticulos[codigo];
+                        modoTransacciones = false;
+                        continue;
+                    }
+
+                    if (!itemActual) continue;
+
+                    if (val0 === 'DESCRIPCIÓN:' && !itemActual.descripcion) itemActual.descripcion = val1;
+                    if (val0 === 'TIPO (TABLA 5):' && !itemActual.tipo) itemActual.tipo = val1;
+                    if (val0 === 'U.M. (TABLA 6):' && !itemActual.um) itemActual.um = val1;
+
+                    if (val0 === 'FECHA' || val0.includes('FECHA')) { modoTransacciones = true; continue; }
+                    if (val0.includes('TOTALES')) { modoTransacciones = false; continue; }
+
+                    if (modoTransacciones) {
+                        let t10Val = String(row[colT10] || '').trim().toUpperCase();
+                        let serieVal = String(row[colSerie] || '').trim().toUpperCase();
+                        
+                        if (row[colT12] == null && t10Val !== 'CIERRE' && serieVal !== 'CI') continue;
+
+                        let fechaObj = parseExcelDate(row[colFecha]);
+                        let tipoOpRaw = String(row[colT12] || '').trim().padStart(2, '0');
+
+                        let eC = parseFloat(row[colE_C]) || 0; let eCU = parseFloat(row[colE_CU]) || 0; let eCT = parseFloat(row[colE_CT]) || 0;
+                        let sC = parseFloat(row[colS_C]) || 0; let sCU = parseFloat(row[colS_CU]) || 0; let sCT = parseFloat(row[colS_CT]) || 0;
+                        let fC = parseFloat(row[colF_C]) || 0; let fCU = parseFloat(row[colF_CU]) || 0; let fCT = parseFloat(row[colF_CT]) || 0;
+
+                        if (tipoOpRaw === 'SALDO INICIAL' || tipoOpRaw === '16' || t10Val === 'CIERRE' || serieVal === 'CI') {
+                            tipoOpRaw = '16';
+                            if (overrides.anio) {
+                                fechaObj = new Date(parseInt(overrides.anio), 0, 1);
+                            }
+                            if (eC === 0 && fC !== 0) eC = fC;
+                            if (eCT === 0 && fCT !== 0) eCT = fCT;
+                            if (eCU === 0 && fCU !== 0) eCU = fCU;
+                        }
+
+                        if (!fechaObj) continue;
+
+                        itemActual.transacciones.push({
+                            fecha: fechaObj,
+                            t10: String(row[colT10] || ''), serie: String(row[colSerie] || ''), num: String(row[colNum] || ''), t12: tipoOpRaw,
+                            eC: eC, eCU: eCU, eCT: eCT,
+                            sC: sC, sCU: sCU, sCT: sCT,
+                            fC: fC, fCU: fCU, fCT: fCT
+                        });
+                    }
+                }
+            }
+
+            self.onmessage = function(e) {
+                if (e.data.cmd === 'cancel') { cancelado = true; return; }
+                
+                if (e.data.cmd === 'proceed') {
+                    const TAMANO_CHUNK = 20;
+                    function enviarSiguienteLote() {
+                        if (cancelado) return;
+                        const lote = self.bloquesPDF_global.splice(0, TAMANO_CHUNK);
+                        const esUltimo = self.bloquesPDF_global.length === 0;
+                        self.postMessage({ type: 'chunk', items: lote, isLast: esUltimo });
+                        
+                        if (!esUltimo) setTimeout(enviarSiguienteLote, 0);
+                        else self.bloquesPDF_global = null;
+                    }
+                    if (self.bloquesPDF_global.length === 0) self.postMessage({ type: 'chunk', items: [], isLast: true });
+                    else enviarSiguienteLote();
+                    return;
+                }
+
+                cancelado = false;
+                dbArticulos = {};
+                empData = { periodo: '', ruc: '', razonSocial: '', establecimiento: '', anioInput: e.data.anio };
+                overrides = { anio: e.data.anio, estab: e.data.estab, meses: e.data.meses, umDefault: e.data.umDefault };
+                const rawBuffer = e.data.file;
+
+                try {
+                    self.postMessage({ type: 'progress', percent: 2, detail: 'Detectando hojas...' });
+                    const wbInfo = XLSX.read(rawBuffer, { type: 'array', bookSheets: true });
+                    const hojas = wbInfo.SheetNames;
+
+                    for (let h = 0; h < hojas.length; h++) {
+                        if (cancelado) { self.postMessage({ type: 'cancelled' }); return; }
+
+                        let wbHoja = XLSX.read(rawBuffer, {
+                            type: 'array', sheets: [h], dense: true, cellDates: true,
+                            cellText: false, cellNF: false, cellStyles: false, cellFormula: false,
+                            bookVBA: false, bookFiles: false, bookProps: false
+                        });
+
+                        let sheet = wbHoja.Sheets[hojas[h]];
+                        let filas = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+
+                        const basePct = 5 + Math.round((h / hojas.length) * 55);
+                        const rangoPct = (55 / hojas.length);
+
+                        procesarDatosHoja(filas, (i, total) => {
+                            const pct = basePct + Math.round((i / total) * rangoPct);
+                            self.postMessage({ type: 'progress', percent: Math.min(pct, 60), detail: \`Extrayendo datos...\` });
+                        });
+
+                        filas = null; sheet = null; wbHoja = null;
+                    }
+
+                    if (overrides.estab) empData.establecimiento = overrides.estab;
+
+                    self.postMessage({ type: 'progress', percent: 63, detail: 'Agrupando y filtrando meses seleccionados...' });
+                    
+                    let mesesSet = new Set();
+                    Object.values(dbArticulos).forEach(item => {
+                        if (item.transacciones.length > 0) {
+                            let txFinal = item.transacciones[item.transacciones.length - 1];
+                            if (txFinal.eC === 0 && txFinal.sC === 0) item.transacciones.pop();
+                        }
+                        item.transacciones.forEach(tx => mesesSet.add(getYYYYMM(tx.fecha)));
+                    });
+
+                    let mesesArr = Array.from(mesesSet).sort();
+                    let articulosOrdenados = Object.values(dbArticulos).sort((a, b) => a.codigo.localeCompare(b.codigo));
+                    
+                    // Filtrar solo los meses que el usuario seleccionó
+                    let mesesAProcesar = [];
+                    if (overrides.meses && overrides.meses.length > 0 && overrides.anio) {
+                        const permitidos = overrides.meses.map(m => overrides.anio + '-' + m);
+                        mesesAProcesar = mesesArr.filter(mes => permitidos.includes(mes));
+                    }
+
+                    let bloquesPDF = [];
+                    let totalMovimientos = 0;
+                    let statsPorMes = []; 
+
+                    mesesAProcesar.forEach(mes => {
+                        let artsEnMes = 0;
+                        let movsEnMes = 0;
+
+                        articulosOrdenados.forEach(item => {
+                            let txs_mes = item.transacciones.filter(tx => getYYYYMM(tx.fecha) === mes);
+                            let txs_before = item.transacciones.filter(tx => getYYYYMM(tx.fecha) < mes);
+                            
+                            if (txs_mes.length > 0 || txs_before.length > 0) {
+                                txs_before.sort((a,b) => a.fecha - b.fecha);
+                                
+                                let saldo_inicial = null;
+                                if (txs_before.length > 0) {
+                                    let last_tx = txs_before[txs_before.length - 1];
+                                    saldo_inicial = { fC: last_tx.fC, fCU: last_tx.fCU, fCT: last_tx.fCT };
+                                }
+
+                                if (txs_mes.length === 0 && (!saldo_inicial || saldo_inicial.fC === 0)) return;
+                                
+                                artsEnMes++;
+                                movsEnMes += txs_mes.length;
+                                totalMovimientos += txs_mes.length;
+
+                                bloquesPDF.push({
+                                    type: 'article',
+                                    period: mes,
+                                    item: { 
+                                        codigo: item.codigo, 
+                                        tipo: item.tipo, 
+                                        descripcion: item.descripcion, 
+                                        um: item.um ? item.um : (overrides.umDefault || '') 
+                                    },
+                                    saldo_inicial: saldo_inicial,
+                                    txs: txs_mes
+                                });
+                            }
+                        });
+
+                        if (artsEnMes > 0) {
+                            statsPorMes.push({ mes: mes, articulos: artsEnMes, movimientos: movsEnMes });
+                        }
+                    });
+
+                    dbArticulos = null;
+                    const totalBlocks = bloquesPDF.length;
+                    
+                    self.bloquesPDF_global = bloquesPDF;
+                    self.postMessage({ type: 'meta', total: totalBlocks, totalTxs: totalMovimientos, statsMeses: statsPorMes, empData });
+
+                } catch (err) {
+                    self.postMessage({ type: 'error', message: err.message });
+                }
+            };
+        `;
+
+        let worker = null;
+        let cancelledByUser = false;
+
+        let cola = [];
+        let recibidoUltimoLote = false;
+        let procesandoCola = false;
+        
+        let totalBloques = 0;
+        let bloquesDibujados = 0;
+        let doc = null;
+        let cursorY = 22; 
+        let empDataGlobal = null;
+        let lastHeaderPage = 0;
+        let currentMonthInPdf = null; 
+
+        const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+
+        const formatearNum = (valor) => {
+            const num = parseFloat(valor);
+            if (isNaN(num) || num === 0) return "-";
+            return num.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        };
+        const formatearFecha = (fecha) => {
+            if (!fecha) return '';
+            const d = new Date(fecha);
+            return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+        };
+        const cederHilo = () => new Promise(resolve => setTimeout(resolve, 0));
+        
+        function setProgress(pct, detail) {
+            document.getElementById('progressBar').style.width = `${pct}%`;
+            if (detail) document.getElementById('progressDetail').innerText = detail;
+        }
+        function resetUI() {
+            document.getElementById('progressContainer').classList.add('hidden');
+            document.getElementById('summaryContainer').classList.add('hidden');
+            document.getElementById('controls').classList.remove('hidden');
+            document.getElementById('fileInput').value = null;
+        }
+
+        document.getElementById('cancelBtn').addEventListener('click', function() {
+            cancelledByUser = true;
+            if (worker) { worker.terminate(); worker = null; }
+            cola = []; doc = null; empDataGlobal = null;
+            resetUI();
+            document.getElementById('cancelMsg').classList.remove('hidden');
+            setTimeout(() => document.getElementById('cancelMsg').classList.add('hidden'), 4000);
+        });
+
+        document.getElementById('btnCancelSummary').addEventListener('click', function() {
+            if (worker) { worker.terminate(); worker = null; }
+            cola = []; doc = null; empDataGlobal = null;
+            resetUI();
+        });
+
+        document.getElementById('btnProceedSummary').addEventListener('click', function() {
+            document.getElementById('summaryContainer').classList.add('hidden');
+            document.getElementById('progressContainer').classList.remove('hidden');
+            document.getElementById('statusText').innerText = 'Escribiendo PDFs (Vertical)...';
+            doc = new jsPDF('p', 'mm', 'a4');
+            worker.postMessage({ cmd: 'proceed' });
+        });
+
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const files = e.target.files;
+            if (files.length === 0) return;
+
+            const valAnio = document.getElementById('inputAnio').value.trim() || new Date().getFullYear().toString();
+            const valEstablecimiento = document.getElementById('inputEstablecimiento').value.trim();
+            const valUmDefault = document.getElementById('inputUmDefault').value.trim();
+            
+            // Recoger meses seleccionados
+            const checkedMeses = Array.from(document.querySelectorAll('#mesesCheckboxes input:checked')).map(cb => cb.value);
+            
+            if (checkedMeses.length === 0) {
+                alert("Por favor, selecciona al menos un mes para generar.");
+                this.value = null;
+                return;
+            }
+
+            cancelledByUser = false;
+            document.getElementById('controls').classList.add('hidden');
+            document.getElementById('successMsg').classList.add('hidden');
+            document.getElementById('cancelMsg').classList.add('hidden');
+            document.getElementById('progressContainer').classList.remove('hidden');
+            document.getElementById('statusText').innerText = 'Escaneando (Segundo Plano)...';
+            setProgress(1, 'Cargando archivo en memoria...');
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const arrayBuffer = evt.target.result;
+                const blob = new Blob([workerCode], { type: 'application/javascript' });
+                worker = new Worker(URL.createObjectURL(blob));
+
+                cola = []; recibidoUltimoLote = false; procesandoCola = false; 
+                totalBloques = 0; bloquesDibujados = 0;
+                doc = null; cursorY = 22; lastHeaderPage = 0; currentMonthInPdf = null;
+
+                worker.onmessage = function(msg) {
+                    const data = msg.data;
+                    if (data.type === 'progress') { setProgress(data.percent, data.detail); return; }
+                    if (data.type === 'error') { alert("Error: " + data.message); resetUI(); worker.terminate(); worker = null; return; }
+                    
+                    if (data.type === 'meta') {
+                        totalBloques = data.total;
+                        empDataGlobal = data.empData;
+                        
+                        if(totalBloques === 0) {
+                            alert("No se encontraron movimientos para los meses y año seleccionados.");
+                            resetUI();
+                            return;
+                        }
+
+                        let alturaEstimadaMM = (totalBloques * 22) + (data.totalTxs * 3.5);
+                        let paginasEstimadas = Math.ceil(alturaEstimadaMM / 263) || 1;
+
+                        document.getElementById('progressContainer').classList.add('hidden');
+                        document.getElementById('summaryContainer').classList.remove('hidden');
+
+                        document.getElementById('sumArticulos').innerText = totalBloques.toLocaleString('es-PE');
+                        document.getElementById('sumMovimientos').innerText = data.totalTxs.toLocaleString('es-PE');
+                        document.getElementById('sumPaginas').innerText = `~ ${paginasEstimadas.toLocaleString('es-PE')}`;
+
+                        let tableHTML = `<table class="w-full text-sm text-left border-collapse">
+                            <thead>
+                                <tr class="bg-blue-100 text-blue-800 sticky top-0">
+                                    <th class="p-2 border border-blue-200">Período (Mes)</th>
+                                    <th class="p-2 border border-blue-200 text-center">Artículos</th>
+                                    <th class="p-2 border border-blue-200 text-center">Movs.</th>
+                                    <th class="p-2 border border-blue-200 text-center">Hojas Est.</th>
+                                </tr>
+                            </thead>
+                            <tbody>`;
+                        
+                        data.statsMeses.forEach(stat => {
+                            let partesMes = stat.mes.split('-');
+                            let mesTexto = nombresMeses[parseInt(partesMes[1], 10) - 1] + ' ' + partesMes[0];
+                            let paginasMes = Math.ceil(((stat.articulos * 22) + (stat.movimientos * 3.5)) / 263) || 1;
+
+                            tableHTML += `<tr class="hover:bg-blue-50">
+                                <td class="p-2 border-b border-blue-100 font-semibold text-gray-700">${mesTexto}</td>
+                                <td class="p-2 border-b border-blue-100 text-center text-gray-600">${stat.articulos}</td>
+                                <td class="p-2 border-b border-blue-100 text-center text-gray-600">${stat.movimientos}</td>
+                                <td class="p-2 border-b border-blue-100 text-center font-bold text-blue-600">${paginasMes}</td>
+                            </tr>`;
+                        });
+
+                        tableHTML += `</tbody></table>`;
+                        document.getElementById('monthlyBreakdown').innerHTML = tableHTML;
+                        return;
+                    }
+                    
+                    if (data.type === 'chunk') {
+                        cola.push(...data.items);
+                        if (data.isLast) recibidoUltimoLote = true;
+                        consumirCola();
+                    }
+                };
+                worker.postMessage({ 
+                    file: arrayBuffer, 
+                    anio: valAnio, 
+                    meses: checkedMeses, 
+                    estab: valEstablecimiento,
+                    umDefault: valUmDefault 
+                }, [arrayBuffer]);
+            };
+            reader.readAsArrayBuffer(files[0]);
+        });
+
+        function checkAndDrawPageHeader(period) {
+            const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+            if (lastHeaderPage !== currentPage) {
+                doc.setFontSize(6);
+                doc.setFont("helvetica", "bold");
+                
+                let mesNum = period.split('-')[1];
+                let periodoStr = empDataGlobal.anioInput ? `${empDataGlobal.anioInput}-${mesNum}` : period;
+
+                doc.text('FORMATO 13.1: "REGISTRO DE INVENTARIO PERMANENTE VALORIZADO - DETALLE DEL INVENTARIO VALORIZADO"', 8, 6);
+                doc.text(`PERÍODO: ${periodoStr}`, 8, 9);
+                doc.text(`RUC: ${empDataGlobal.ruc}`, 8, 12);
+                doc.text(`APELLIDOS Y NOMBRES, DENOMINACIÓN O RAZÓN SOCIAL: ${empDataGlobal.razonSocial}`, 8, 15);
+                doc.text(`ESTABLECIMIENTO : ${empDataGlobal.establecimiento}`, 8, 18);
+                
+                lastHeaderPage = currentPage;
+            }
+        }
+
+        function dibujarArticulo(block) {
+            if (cursorY > doc.internal.pageSize.getHeight() - 40) { 
+                doc.addPage(); 
+                cursorY = 22; 
+            }
+            
+            checkAndDrawPageHeader(block.period);
+
+            doc.setFontSize(5.5);
+            doc.setFont("helvetica", "bold");
+            const addText = (label, value, yPos, xPos = 8) => {
+                doc.setFont("helvetica", "bold"); doc.text(label, xPos, yPos);
+                doc.setFont("helvetica", "normal"); doc.text(value, xPos + doc.getTextWidth(label) + 1, yPos);
+            };
+
+            addText("CÓDIGO DE LA EXISTENCIA:", block.item.codigo, cursorY); 
+            addText("DESCRIPCIÓN:", block.item.descripcion, cursorY + 2.5);
+            addText("MÉTODO DE VALUACIÓN:", "PROMEDIO PONDERADO", cursorY + 5);
+            
+            addText("TIPO:", block.item.tipo, cursorY, 110);
+            addText("CÓD. UNIDAD DE MEDIDA :", block.item.um, cursorY + 2.5, 110);
+            
+            cursorY += 8;
+
+            let tableBody = [];
+            let runningTotals = [];
+            let cEC = 0, cECT = 0, cSC = 0, cSCT = 0;
+            let sumEntCant = 0, sumEntTotal = 0, sumSalCant = 0, sumSalTotal = 0;
+
+            if (block.saldo_inicial) {
+                sumEntCant += block.saldo_inicial.fC;
+                sumEntTotal += block.saldo_inicial.fCT;
+
+                tableBody.push([
+                    '', '', '', 'SALDO INICIAL', '16', 
+                    formatearNum(block.saldo_inicial.fC), formatearNum(block.saldo_inicial.fCU), formatearNum(block.saldo_inicial.fCT), 
+                    '', '', '',
+                    formatearNum(block.saldo_inicial.fC), formatearNum(block.saldo_inicial.fCU), formatearNum(block.saldo_inicial.fCT)
+                ]);
+                runningTotals.push({ eC: cEC, eCT: cECT, sC: cSC, sCT: cSCT });
+            }
+            
+            block.txs.sort((a, b) => a.fecha - b.fecha).forEach(tx => {
+                cEC += tx.eC; cECT += tx.eCT; cSC += tx.sC; cSCT += tx.sCT;
+                sumEntCant += tx.eC; sumEntTotal += tx.eCT; sumSalCant += tx.sC; sumSalTotal += tx.sCT;
+
+                tableBody.push([
+                    formatearFecha(tx.fecha), tx.t10, tx.serie, tx.num, tx.t12,
+                    formatearNum(tx.eC), formatearNum(tx.eCU), formatearNum(tx.eCT),
+                    formatearNum(tx.sC), formatearNum(tx.sCU), formatearNum(tx.sCT),
+                    formatearNum(tx.fC), formatearNum(tx.fCU), formatearNum(tx.fCT)
+                ]);
+                runningTotals.push({ eC: cEC, eCT: cECT, sC: cSC, sCT: cSCT });
+            });
+
+            tableBody.push([
+                { content: 'TOTALES', colSpan: 5, styles: { halign: 'center', fontStyle: 'bold' } },
+                { content: formatearNum(sumEntCant), styles: { fontStyle: 'bold' } },
+                { content: '' },
+                { content: formatearNum(sumEntTotal), styles: { fontStyle: 'bold' } },
+                { content: formatearNum(sumSalCant), styles: { fontStyle: 'bold' } },
+                { content: '' },
+                { content: formatearNum(sumSalTotal), styles: { fontStyle: 'bold' } },
+                { content: '' }, { content: '' }, { content: '' }
+            ]);
+            runningTotals.push({ eC: cEC, eCT: cECT, sC: cSC, sCT: cSCT });
+
+            doc.autoTable({
+                startY: cursorY,
+                theme: 'grid',
+                styles: { fontSize: 4.5, cellPadding: 0.5, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.1 },
+                headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', valign: 'middle' },
+                head: [[
+                    { content: 'DOCUMENTO / COMPROBANTE', colSpan: 4 }, { content: 'OPER.', rowSpan: 2 },
+                    { content: 'ENTRADAS', colSpan: 3 }, { content: 'SALIDAS', colSpan: 3 }, { content: 'SALDO FINAL', colSpan: 3 }
+                ],[
+                    'FECHA', 'TIPO', 'SERIE', 'NÚMERO', 'CANTIDAD', 'COSTO\nUNITARIO', 'COSTO TOTAL', 'CANTIDAD', 'COSTO\nUNITARIO', 'COSTO TOTAL', 'CANTIDAD', 'COSTO\nUNITARIO', 'COSTO TOTAL'
+                ]],
+                body: tableBody,
+                columnStyles: {
+                    0: { halign: 'center', cellWidth: 12 }, 1: { halign: 'center', cellWidth: 8 }, 2: { halign: 'center', cellWidth: 10 }, 
+                    3: { cellWidth: 14 }, 4: { halign: 'center', cellWidth: 8 },
+                    5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' },
+                    8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' },
+                    11: { halign: 'right' }, 12: { halign: 'right' }, 13: { halign: 'right' }
+                },
+                margin: { top: 22, right: 8, bottom: 12, left: 8 }, 
+                
+                didDrawPage: function (data) {
+                    checkAndDrawPageHeader(block.period);
+
+                    let allRows = data.table.body;
+                    if(allRows.length === 0) return;
+                    let lastTableBodyRow = allRows[allRows.length - 1];
+                    let isLastPageOfTable = (lastTableBodyRow.pageNumber === data.pageNumber);
+                    
+                    if (!isLastPageOfTable) {
+                        let rowsOnPage = allRows.filter(r => r.pageNumber === data.pageNumber);
+                        if (rowsOnPage.length > 0) {
+                            let lastRow = rowsOnPage[rowsOnPage.length - 1];
+                            let sums = runningTotals[lastRow.index];
+                            if (sums) {
+                                doc.setFontSize(4.5); doc.setFont("helvetica", "bolditalic");
+                                doc.text(`VAN... Entradas Cant: ${formatearNum(sums.eC)} | Total: ${formatearNum(sums.eCT)}   ---   Salidas Cant: ${formatearNum(sums.sC)} | Total: ${formatearNum(sums.sCT)}`, data.settings.margin.left, data.cursor.y + 2);
+                            }
+                        }
+                    }
+                },
+                willDrawPage: function (data) {
+                    checkAndDrawPageHeader(block.period);
+
+                    if (data.pageNumber > 1) {
+                        let allRows = data.table.body;
+                        let rowsOnPrevPage = allRows.filter(r => r.pageNumber === data.pageNumber - 1);
+                        if (rowsOnPrevPage.length > 0) {
+                            let lastRow = rowsOnPrevPage[rowsOnPrevPage.length - 1];
+                            let sums = runningTotals[lastRow.index];
+                            if (sums) {
+                                doc.setFontSize(4.5); doc.setFont("helvetica", "bolditalic");
+                                doc.text(`VIENEN... Entradas Cant: ${formatearNum(sums.eC)} | Total: ${formatearNum(sums.eCT)}   ---   Salidas Cant: ${formatearNum(sums.sC)} | Total: ${formatearNum(sums.sCT)}`, data.settings.margin.left, data.settings.margin.top - 1.5);
+                            }
+                        }
+                    }
+                }
+            });
+
+            cursorY = doc.lastAutoTable.finalY + 8;
+        }
+
+        async function consumirCola() {
+            if (procesandoCola) return; 
+            procesandoCola = true;
+
+            try {
+                while (true) {
+                    if (cancelledByUser) { procesandoCola = false; return; }
+                    if (cola.length === 0) {
+                        if (recibidoUltimoLote) break;
+                        await cederHilo(); continue;
+                    }
+
+                    const block = cola.shift();
+
+                    if (currentMonthInPdf !== null && currentMonthInPdf !== block.period) {
+                        let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+                        let anioStr = empDataGlobal.anioInput || '0000';
+                        let mesSplit = currentMonthInPdf.split('-')[1]; 
+                        
+                        let nombreArchivo = `${rucStr}_${anioStr}_${mesSplit}.PDF`;
+                        doc.save(nombreArchivo);
+                        
+                        doc = new jsPDF('p', 'mm', 'a4');
+                        cursorY = 22;
+                        lastHeaderPage = 0;
+                    }
+
+                    currentMonthInPdf = block.period;
+                    dibujarArticulo(block);
+
+                    bloquesDibujados++;
+                    setProgress(70 + Math.round((bloquesDibujados / totalBloques) * 28), `Estructurando datos...`);
+                    
+                    await cederHilo();
+                }
+
+                if (cancelledByUser) { procesandoCola = false; return; }
+
+                setProgress(99, "Guardando PDFs...");
+                await cederHilo();
+
+                if (totalBloques > 0 && currentMonthInPdf !== null) {
+                    let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+                    let anioStr = empDataGlobal.anioInput || '0000';
+                    let mesSplit = currentMonthInPdf.split('-')[1];
+                    
+                    let nombreArchivo = `${rucStr}_${anioStr}_${mesSplit}.PDF`;
+                    doc.save(nombreArchivo);
+                }
+
+                worker && worker.terminate(); worker = null;
+                document.getElementById('progressContainer').classList.add('hidden');
+                document.getElementById('controls').classList.remove('hidden');
+                document.getElementById('successMsg').classList.remove('hidden');
+                document.getElementById('fileInput').value = null;
+
+            } catch (err) {
+                console.error(err);
+                alert("Ocurrió un error generando el PDF: " + err.message);
+                resetUI();
+            }
+            procesandoCola = false;
+        }
+    </script>
+</body>
+</html>
