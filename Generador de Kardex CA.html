@@ -173,7 +173,9 @@
     <script>
         const { jsPDF } = window.jspdf;
 
-        // Botones rápidos
+        // OPTIMIZACIÓN 1: Formateador nativo (API Intl)
+        const peFormatter = new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
         document.getElementById('btnSelectAll').addEventListener('click', () => {
             document.querySelectorAll('#mesesCheckboxes input').forEach(cb => cb.checked = true);
         });
@@ -185,10 +187,11 @@
             self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
 
             const parseExcelDate = (val) => {
-                if (!val) return null;
+                if (val == null) return null;
                 if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
                 if (typeof val === 'number') return new Date(Math.round((val - 25569) * 86400 * 1000));
-                let strVal = String(val).trim();
+                
+                let strVal = typeof val === 'string' ? val.trim() : String(val).trim();
                 if (strVal.match(/^\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}/)) strVal = strVal.replace(' ', 'T');
                 let d = new Date(strVal);
                 if (!isNaN(d.getTime())) return d;
@@ -224,8 +227,13 @@
                     const row = filas[i];
                     if (!row || row.length === 0) continue;
 
-                    const val0 = String(row[0] || '').trim().toUpperCase();
-                    const val1 = String(row[1] || '').trim();
+                    const cell0 = row[0];
+                    const val0 = (cell0 != null) ? String(cell0).trim().toUpperCase() : '';
+                    
+                    if (!val0) continue; 
+
+                    const cell1 = row[1];
+                    const val1 = (cell1 != null) ? String(cell1).trim() : '';
 
                     if (val0.startsWith('ITEM:')) {
                         const codigo = val0.substring(5).trim();
@@ -247,18 +255,20 @@
                     if (val0.includes('TOTALES')) { modoTransacciones = false; continue; }
 
                     if (modoTransacciones) {
-                        let t10Val = String(row[colT10] || '').trim().toUpperCase();
-                        let serieVal = String(row[colSerie] || '').trim().toUpperCase();
-                        let tipoOpStr = String(row[colT12] || '').trim().toUpperCase();
+                        const cellT10 = row[colT10];
+                        const cellSerie = row[colSerie];
+                        const cellT12 = row[colT12];
+
+                        let t10Val = (cellT10 != null) ? String(cellT10).trim().toUpperCase() : '';
+                        let serieVal = (cellSerie != null) ? String(cellSerie).trim().toUpperCase() : '';
+                        let tipoOpStr = (cellT12 != null) ? String(cellT12).trim().toUpperCase() : '';
                         
-                        // Validar si existe información válida
-                        if (!row[colT12] && t10Val !== 'CIERRE' && serieVal !== 'CI' && !tipoOpStr.includes('SALDO INI')) continue;
+                        if (!cellT12 && t10Val !== 'CIERRE' && serieVal !== 'CI' && !tipoOpStr.includes('SALDO INI')) continue;
 
                         let fechaObj = parseExcelDate(row[colFecha]);
                         if (!fechaObj) continue;
 
                         let tipoOpRaw = /^\\d+$/.test(tipoOpStr) ? tipoOpStr.padStart(2, '0') : tipoOpStr;
-                        // Ajustamos la detección del CIERRE
                         let esCierre = (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.includes('CIERRE') || tipoOpStr.includes('SALDO INI') || tipoOpStr === 'SALDO INICIAL');
                         let isCierreArrastre = false;
 
@@ -268,33 +278,24 @@
 
                         if (esCierre || tipoOpRaw === '16') {
                             tipoOpRaw = '16';
-                            
                             if (esCierre) {
-                                // Lógica corregida:
-                                // El "CIERRE" (sin importar si dice 31 de Enero o 01 de Enero) NO debe imprimirse en el mes original.
-                                // Sirve única y exclusivamente como el "Saldo Inicial" del MES SIGUIENTE.
-                                // Lo mandamos al ultimísimo instante del mes, así es el último registro, y con la bandera 'isCierreArrastre'
-                                // lo ocultamos de los movimientos normales del mes original.
                                 let y = fechaObj.getFullYear();
                                 let m = fechaObj.getMonth();
                                 fechaObj = new Date(y, m + 1, 0, 23, 59, 59, 999);
                                 isCierreArrastre = true;
-                                
-                                // Por si el sistema exportador arrojó el saldo final en la columna de Entradas erróneamente:
                                 if (fC === 0 && eC !== 0) { fC = eC; fCU = eCU; fCT = eCT; }
                             } else {
-                                // Si es un ajuste regular tipo 16
                                 if (eC === 0 && fC !== 0) { eC = fC; eCT = fCT; eCU = fCU; }
                             }
                         }
 
                         itemActual.transacciones.push({
                             fecha: fechaObj,
-                            t10: String(row[colT10] || ''), serie: String(row[colSerie] || ''), num: String(row[colNum] || ''), t12: tipoOpRaw,
+                            t10: t10Val, serie: serieVal, num: String(row[colNum] || ''), t12: tipoOpRaw,
                             eC: eC, eCU: eCU, eCT: eCT,
                             sC: sC, sCU: sCU, sCT: sCT,
                             fC: fC, fCU: fCU, fCT: fCT,
-                            isCierreArrastre: isCierreArrastre // <-- Nueva bandera clave
+                            isCierreArrastre: isCierreArrastre
                         });
                     }
                 }
@@ -304,7 +305,8 @@
                 if (e.data.cmd === 'cancel') { cancelado = true; return; }
                 
                 if (e.data.cmd === 'proceed') {
-                    const TAMANO_CHUNK = 20;
+                    // OPTIMIZACIÓN 2: Chunks más grandes reducen cuellos de botella de comunicación
+                    const TAMANO_CHUNK = 50; 
                     function enviarSiguienteLote() {
                         if (cancelado) return;
                         const lote = self.bloquesPDF_global.splice(0, TAMANO_CHUNK);
@@ -330,20 +332,22 @@
                 const rawBuffer = e.data.file;
 
                 try {
-                    self.postMessage({ type: 'progress', percent: 2, detail: 'Detectando hojas...' });
-                    const wbInfo = XLSX.read(rawBuffer, { type: 'array', bookSheets: true });
+                    self.postMessage({ type: 'progress', percent: 2, detail: 'Cargando y procesando hojas...' });
+                    
+                    // OPTIMIZACIÓN 3: Doble Lectura Eliminada.
+                    // Leemos completamente el libro (dense: true) de un solo golpe.
+                    const wbInfo = XLSX.read(rawBuffer, { 
+                        type: 'array', dense: true, cellDates: true,
+                        cellText: false, cellNF: false, cellStyles: false, cellFormula: false,
+                        bookVBA: false, bookFiles: false, bookProps: false
+                    });
+                    
                     const hojas = wbInfo.SheetNames;
 
                     for (let h = 0; h < hojas.length; h++) {
                         if (cancelado) { self.postMessage({ type: 'cancelled' }); return; }
 
-                        let wbHoja = XLSX.read(rawBuffer, {
-                            type: 'array', sheets: [h], dense: true, cellDates: true,
-                            cellText: false, cellNF: false, cellStyles: false, cellFormula: false,
-                            bookVBA: false, bookFiles: false, bookProps: false
-                        });
-
-                        let sheet = wbHoja.Sheets[hojas[h]];
+                        let sheet = wbInfo.Sheets[hojas[h]];
                         let filas = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
 
                         const basePct = 5 + Math.round((h / hojas.length) * 55);
@@ -351,30 +355,30 @@
 
                         procesarDatosHoja(filas, (i, total) => {
                             const pct = basePct + Math.round((i / total) * rangoPct);
-                            self.postMessage({ type: 'progress', percent: Math.min(pct, 60), detail: \`Extrayendo datos...\` });
+                            self.postMessage({ type: 'progress', percent: Math.min(pct, 60), detail: \`Extrayendo datos de: \${hojas[h]}...\` });
                         });
-
-                        filas = null; sheet = null; wbHoja = null;
                     }
 
-                    self.postMessage({ type: 'progress', percent: 63, detail: 'Agrupando movimientos por mes y filtrando...' });
+                    self.postMessage({ type: 'progress', percent: 63, detail: 'Ordenando transacciones globales...' });
                     
                     let mesesSet = new Set();
-                    Object.values(dbArticulos).forEach(item => {
+                    let articulosOrdenados = Object.values(dbArticulos).sort((a, b) => a.codigo.localeCompare(b.codigo));
+                    
+                    // PRE-SORTING: Ordenamos una sola vez a nivel global
+                    articulosOrdenados.forEach(item => {
                         if (item.transacciones.length > 0) {
                             let txFinal = item.transacciones[item.transacciones.length - 1];
-                            // Si por casualidad queda un bloque en blanco (como a veces escupe Excel), lo quitamos,
-                            // siempre que no sea nuestro preciado registro de arrastre.
                             if (txFinal.eC === 0 && txFinal.sC === 0 && !txFinal.isCierreArrastre) {
                                 item.transacciones.pop();
                             }
                         }
+                        item.transacciones.sort((a, b) => a.fecha - b.fecha);
                         item.transacciones.forEach(tx => mesesSet.add(getYYYYMM(tx.fecha)));
                     });
 
+                    self.postMessage({ type: 'progress', percent: 65, detail: 'Agrupando movimientos por mes...' });
+
                     let mesesArr = Array.from(mesesSet).sort();
-                    let articulosOrdenados = Object.values(dbArticulos).sort((a, b) => a.codigo.localeCompare(b.codigo));
-                    
                     let aniosInput = overrides.anio ? overrides.anio.split(',').map(a => a.trim()).filter(a => a !== '') : [];
                     
                     let mesesAProcesar = mesesArr.filter(mes => {
@@ -393,19 +397,27 @@
                         let movsEnMes = 0;
 
                         articulosOrdenados.forEach(item => {
-                            // MAGIA: Filtramos el isCierreArrastre para que NO APAREZCA en los movimientos impresos de este mes
-                            let txs_mes = item.transacciones.filter(tx => getYYYYMM(tx.fecha) === mes && !tx.isCierreArrastre);
-                            
-                            // Pero SÍ permitimos que el isCierreArrastre figure cronológicamente como el Saldo Inicial en el mes siguiente
-                            let txs_before = item.transacciones.filter(tx => getYYYYMM(tx.fecha) < mes);
-                            
-                            if (txs_mes.length > 0 || txs_before.length > 0) {
-                                txs_before.sort((a,b) => a.fecha - b.fecha);
+                            let txs_mes = [];
+                            let last_tx_before = null;
+
+                            // Búsqueda lineal eficiente con break
+                            for (let i = 0; i < item.transacciones.length; i++) {
+                                let tx = item.transacciones[i];
+                                let tx_m = getYYYYMM(tx.fecha);
                                 
+                                if (tx_m < mes) {
+                                    last_tx_before = tx;
+                                } else if (tx_m === mes) {
+                                    if (!tx.isCierreArrastre) txs_mes.push(tx);
+                                } else {
+                                    break; 
+                                }
+                            }
+                            
+                            if (txs_mes.length > 0 || last_tx_before) {
                                 let saldo_inicial = null;
-                                if (txs_before.length > 0) {
-                                    let last_tx = txs_before[txs_before.length - 1];
-                                    saldo_inicial = { fC: last_tx.fC, fCU: last_tx.fCU, fCT: last_tx.fCT };
+                                if (last_tx_before) {
+                                    saldo_inicial = { fC: last_tx_before.fC, fCU: last_tx_before.fCU, fCT: last_tx_before.fCT };
                                 }
 
                                 if (txs_mes.length === 0 && (!saldo_inicial || saldo_inicial.fC === 0)) return;
@@ -434,7 +446,7 @@
                         }
                     });
 
-                    dbArticulos = null;
+                    dbArticulos = null; // Liberar RAM
                     const totalBlocks = bloquesPDF.length;
                     
                     self.bloquesPDF_global = bloquesPDF;
@@ -471,15 +483,17 @@
         const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
         const formatearNum = (valor) => {
-            const num = parseFloat(valor);
-            if (isNaN(num) || num === 0) return "-";
-            return num.toLocaleString('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+            if (!valor || valor === 0) return "-";
+            return peFormatter.format(Number(valor));
         };
         const formatearFecha = (fecha) => {
             if (!fecha) return '';
             const d = new Date(fecha);
-            return `${d.getDate().toString().padStart(2, '0')}/${(d.getMonth() + 1).toString().padStart(2, '0')}/${d.getFullYear()}`;
+            const dia = d.getDate();
+            const mes = d.getMonth() + 1;
+            return (dia < 10 ? '0' + dia : dia) + '/' + (mes < 10 ? '0' + mes : mes) + '/' + d.getFullYear();
         };
+
         const cederHilo = () => new Promise(resolve => setTimeout(resolve, 0));
         
         function setProgress(pct, detail) {
@@ -741,7 +755,7 @@
                 runningTotals.push({ eC: cEC, eCT: cECT, sC: cSC, sCT: cSCT });
             }
             
-            block.txs.sort((a, b) => a.fecha - b.fecha).forEach(tx => {
+            block.txs.forEach(tx => {
                 cEC += tx.eC; cECT += tx.eCT; cSC += tx.sC; cSCT += tx.sCT;
                 sumEntCant += tx.eC; sumEntTotal += tx.eCT; sumSalCant += tx.sC; sumSalTotal += tx.sCT;
 
@@ -792,18 +806,21 @@
 
                     let allRows = data.table.body;
                     if(allRows.length === 0) return;
-                    let lastTableBodyRow = allRows[allRows.length - 1];
-                    let isLastPageOfTable = (lastTableBodyRow.pageNumber === data.pageNumber);
                     
-                    if (!isLastPageOfTable) {
-                        let rowsOnPage = allRows.filter(r => r.pageNumber === data.pageNumber);
-                        if (rowsOnPage.length > 0) {
-                            let lastRow = rowsOnPage[rowsOnPage.length - 1];
-                            let sums = runningTotals[lastRow.index];
-                            if (sums) {
-                                doc.setFontSize(4.5); doc.setFont("helvetica", "bolditalic");
-                                doc.text(`VAN... Entradas Cant: ${formatearNum(sums.eC)} | Total: ${formatearNum(sums.eCT)}   ---   Salidas Cant: ${formatearNum(sums.sC)} | Total: ${formatearNum(sums.sCT)}`, data.settings.margin.left, data.cursor.y + 2);
-                            }
+                    // OPTIMIZACIÓN 4: Búsqueda inversa en lugar de .filter()
+                    let lastRowIndex = -1;
+                    for (let i = allRows.length - 1; i >= 0; i--) {
+                        if (allRows[i].pageNumber === data.pageNumber) {
+                            lastRowIndex = i;
+                            break;
+                        }
+                    }
+
+                    if (lastRowIndex !== -1 && lastRowIndex !== allRows.length - 1) { // No es la última página global
+                        let sums = runningTotals[lastRowIndex];
+                        if (sums) {
+                            doc.setFontSize(4.5); doc.setFont("helvetica", "bolditalic");
+                            doc.text(`VAN... Entradas Cant: ${formatearNum(sums.eC)} | Total: ${formatearNum(sums.eCT)}   ---   Salidas Cant: ${formatearNum(sums.sC)} | Total: ${formatearNum(sums.sCT)}`, data.settings.margin.left, data.cursor.y + 2);
                         }
                     }
                 },
@@ -812,10 +829,18 @@
 
                     if (data.pageNumber > 1) {
                         let allRows = data.table.body;
-                        let rowsOnPrevPage = allRows.filter(r => r.pageNumber === data.pageNumber - 1);
-                        if (rowsOnPrevPage.length > 0) {
-                            let lastRow = rowsOnPrevPage[rowsOnPrevPage.length - 1];
-                            let sums = runningTotals[lastRow.index];
+                        
+                        // OPTIMIZACIÓN 4: Búsqueda inversa para la página anterior
+                        let lastRowIndex = -1;
+                        for (let i = allRows.length - 1; i >= 0; i--) {
+                            if (allRows[i].pageNumber === data.pageNumber - 1) {
+                                lastRowIndex = i;
+                                break;
+                            }
+                        }
+
+                        if (lastRowIndex !== -1) {
+                            let sums = runningTotals[lastRowIndex];
                             if (sums) {
                                 doc.setFontSize(4.5); doc.setFont("helvetica", "bolditalic");
                                 doc.text(`VIENEN... Entradas Cant: ${formatearNum(sums.eC)} | Total: ${formatearNum(sums.eCT)}   ---   Salidas Cant: ${formatearNum(sums.sC)} | Total: ${formatearNum(sums.sCT)}`, data.settings.margin.left, data.settings.margin.top - 1.5);
@@ -873,6 +898,7 @@
         async function consumirCola() {
             if (procesandoCola) return; 
             procesandoCola = true;
+            let procesadosBatch = 0; 
 
             try {
                 while (true) {
@@ -907,9 +933,13 @@
                     }
 
                     bloquesDibujados++;
-                    setProgress(70 + Math.round((bloquesDibujados / totalBloques) * 28), `Estructurando datos...`);
+                    procesadosBatch++;
                     
-                    await cederHilo();
+                    // OPTIMIZACIÓN 5: Dibujamos 10 artículos de golpe antes de parar el hilo para actualizar la barra UI
+                    if (procesadosBatch % 10 === 0) {
+                        setProgress(70 + Math.round((bloquesDibujados / totalBloques) * 28), `Estructurando datos...`);
+                        await cederHilo();
+                    }
                 }
 
                 if (cancelledByUser) { procesandoCola = false; return; }
