@@ -9,9 +9,8 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
     <style>
-        /* Custom Scrollbar para el resumen */
         ::-webkit-scrollbar { width: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; rounded-lg; }
+        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 8px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
     </style>
@@ -23,7 +22,7 @@
         <!-- Encabezado -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 text-center">
             <h1 class="text-3xl font-extrabold text-slate-800 tracking-tight">Kardex SUNAT 13.1</h1>
-            <p class="text-slate-500 mt-2 font-medium">Generador Inteligente Multianual & Separación por Meses</p>
+            <p class="text-slate-500 mt-2 font-medium">Generador Inteligente Multianual & Extracción de Base de Datos Excel</p>
         </div>
 
         <div id="controls" class="space-y-6">
@@ -103,24 +102,24 @@
             <div class="flex justify-center pt-4">
                 <label class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-12 rounded-xl cursor-pointer transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 w-full md:w-auto text-lg flex justify-center items-center gap-3">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                    Escanear Excel y Preparar PDF
+                    Escanear Excel y Proyectar
                     <input type="file" id="fileInput" accept=".xlsx, .xls" class="hidden">
                 </label>
             </div>
         </div>
 
         <!-- Resumen de Proyección -->
-        <div id="summaryContainer" class="hidden w-full max-w-3xl mx-auto bg-white border border-blue-200 rounded-2xl p-8 shadow-lg">
+        <div id="summaryContainer" class="hidden w-full mx-auto bg-white border border-blue-200 rounded-2xl p-8 shadow-lg">
             <div class="text-center mb-6">
-                <h2 class="text-2xl font-bold text-blue-800">Proyección de Impresión</h2>
-                <p class="text-sm text-slate-500 mt-1">Se generará un archivo PDF separado por cada período detectado.</p>
+                <h2 class="text-2xl font-bold text-blue-800">Proyección Exitosa</h2>
+                <p class="text-sm text-slate-500 mt-1">Elige el tipo de archivo que deseas exportar.</p>
             </div>
             
-            <div class="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mb-6 max-h-64 overflow-y-auto">
+            <div class="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mb-6 max-h-64 overflow-y-auto max-w-3xl mx-auto">
                 <div id="monthlyBreakdown"></div>
             </div>
 
-            <div class="grid grid-cols-3 gap-4 mb-8 pt-4 border-t border-slate-100 text-center">
+            <div class="grid grid-cols-3 gap-4 mb-8 pt-4 border-t border-slate-100 text-center max-w-3xl mx-auto">
                 <div>
                     <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Agrupaciones</p>
                     <p class="text-3xl font-extrabold text-slate-700" id="sumArticulos">0</p>
@@ -135,19 +134,27 @@
                 </div>
             </div>
             
-            <div class="flex justify-center gap-4">
-                <button id="btnCancelSummary" class="px-8 py-3 border-2 border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition">Cancelar</button>
-                <button id="btnProceedSummary" class="px-8 py-3 bg-blue-600 rounded-xl text-white font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg">Generar Archivos</button>
+            <div class="flex flex-col sm:flex-row justify-center gap-4">
+                <button id="btnCancelSummary" class="px-6 py-3 border-2 border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition w-full sm:w-auto">Cancelar</button>
+                <button id="btnProceedExcel" class="px-6 py-3 bg-emerald-600 rounded-xl text-white font-bold hover:bg-emerald-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Solo Excel (Resumen)
+                </button>
+                <button id="btnProceedPdf" class="px-6 py-3 bg-red-600 rounded-xl text-white font-bold hover:bg-red-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg> Solo PDF
+                </button>
+                <button id="btnProceedBoth" class="px-6 py-3 bg-blue-600 rounded-xl text-white font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg> Generar Ambos
+                </button>
             </div>
         </div>
 
         <!-- Barra de Progreso -->
         <div id="progressContainer" class="hidden w-full max-w-md mx-auto text-center bg-white p-8 rounded-2xl shadow-lg border border-slate-200">
-            <h2 class="text-xl font-bold text-blue-600 mb-4" id="statusText">Procesando Base de Datos...</h2>
+            <h2 class="text-xl font-bold text-blue-600 mb-4" id="statusText">Procesando...</h2>
             <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden shadow-inner">
                 <div id="progressBar" class="bg-blue-600 h-3 rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
             </div>
-            <p id="progressDetail" class="text-sm text-slate-500 mt-4 font-medium">Leyendo celdas...</p>
+            <p id="progressDetail" class="text-sm text-slate-500 mt-4 font-medium">Por favor espera...</p>
             <button id="cancelBtn" class="mt-6 text-sm font-bold text-red-500 hover:text-red-700 underline">Detener Proceso</button>
         </div>
 
@@ -182,7 +189,7 @@
                 if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
                 if (typeof val === 'number') return new Date(Math.round((val - 25569) * 86400 * 1000));
                 let strVal = String(val).trim();
-                if (strVal.match(/^\\\\d{4}-\\\\d{2}-\\\\d{2}\\\\s\\\\d{2}:\\\\d{2}:\\\\d{2}/)) strVal = strVal.replace(' ', 'T');
+                if (strVal.match(/^\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}/)) strVal = strVal.replace(' ', 'T');
                 let d = new Date(strVal);
                 if (!isNaN(d.getTime())) return d;
                 return null;
@@ -242,33 +249,36 @@
                     if (modoTransacciones) {
                         let t10Val = String(row[colT10] || '').trim().toUpperCase();
                         let serieVal = String(row[colSerie] || '').trim().toUpperCase();
+                        let tipoOpStr = String(row[colT12] || '').trim().toUpperCase();
                         
-                        if (row[colT12] == null && t10Val !== 'CIERRE' && serieVal !== 'CI') continue;
+                        // Validar si existe información válida
+                        if (!row[colT12] && t10Val !== 'CIERRE' && serieVal !== 'CI' && !tipoOpStr.includes('SALDO INI')) continue;
 
                         let fechaObj = parseExcelDate(row[colFecha]);
-                        let tipoOpRaw = String(row[colT12] || '').trim().padStart(2, '0');
+                        if (!fechaObj) continue;
+
+                        let tipoOpRaw = /^\\d+$/.test(tipoOpStr) ? tipoOpStr.padStart(2, '0') : tipoOpStr;
+                        let esCierre = (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.includes('SALDO INI') || tipoOpStr === 'SALDO INICIAL');
 
                         let eC = parseFloat(row[colE_C]) || 0; let eCU = parseFloat(row[colE_CU]) || 0; let eCT = parseFloat(row[colE_CT]) || 0;
                         let sC = parseFloat(row[colS_C]) || 0; let sCU = parseFloat(row[colS_CU]) || 0; let sCT = parseFloat(row[colS_CT]) || 0;
                         let fC = parseFloat(row[colF_C]) || 0; let fCU = parseFloat(row[colF_CU]) || 0; let fCT = parseFloat(row[colF_CT]) || 0;
 
-                        if (!fechaObj) continue;
-
-                        // CIERRE INTELIGENTE (Detecta el año y pasa al 1 de enero del sgt año)
-                        if (tipoOpRaw === 'SALDO INICIAL' || tipoOpRaw === '16' || t10Val === 'CIERRE' || serieVal === 'CI') {
+                        if (esCierre || tipoOpRaw === '16') {
                             tipoOpRaw = '16';
                             
-                            if (t10Val === 'CIERRE' || serieVal === 'CI') {
-                                if (fechaObj.getMonth() === 11) { // Si el excel dice Diciembre
-                                    fechaObj = new Date(fechaObj.getFullYear() + 1, 0, 1);
-                                } else {
-                                    fechaObj = new Date(fechaObj.getFullYear(), fechaObj.getMonth(), 1);
+                            if (esCierre) {
+                                // Si es un saldo de arrastre detectado el día 1, retrocedemos la fecha 1 segundo.
+                                // Esto fuerza que la fecha caiga a finales del mes anterior. De esa manera 
+                                // nuestro bloque "txs_before" lo detectará como el "último saldo" previo 
+                                // a este mes y se pintará perfectamente como "SALDO INICIAL".
+                                if (fechaObj.getDate() === 1) {
+                                    fechaObj = new Date(fechaObj.getTime() - 1000);
                                 }
+                            } else {
+                                // Si es un ajuste regular tipo 16
+                                if (eC === 0 && fC !== 0) { eC = fC; eCT = fCT; eCU = fCU; }
                             }
-
-                            if (eC === 0 && fC !== 0) eC = fC;
-                            if (eCT === 0 && fCT !== 0) eCT = fCT;
-                            if (eCU === 0 && fCU !== 0) eCU = fCU;
                         }
 
                         itemActual.transacciones.push({
@@ -353,7 +363,6 @@
                     let mesesArr = Array.from(mesesSet).sort();
                     let articulosOrdenados = Object.values(dbArticulos).sort((a, b) => a.codigo.localeCompare(b.codigo));
                     
-                    // Filtrar por años (si los ingresó) y por meses seleccionados
                     let aniosInput = overrides.anio ? overrides.anio.split(',').map(a => a.trim()).filter(a => a !== '') : [];
                     
                     let mesesAProcesar = mesesArr.filter(mes => {
@@ -419,7 +428,7 @@
                 } catch (err) {
                     self.postMessage({ type: 'error', message: err.message });
                 }
-            };
+            }
         `;
 
         let worker = null;
@@ -429,6 +438,8 @@
         let recibidoUltimoLote = false;
         let procesandoCola = false;
         
+        let generateOptions = { pdf: false, excel: false };
+
         let totalBloques = 0;
         let bloquesDibujados = 0;
         let doc = null;
@@ -436,6 +447,11 @@
         let empDataGlobal = null;
         let lastHeaderPage = 0;
         let currentMonthInPdf = null; 
+
+        // Variables para Excel Masivo
+        let excelDataRaw = [];
+        let opEntradasSeen = new Set();
+        let opSalidasSeen = new Set();
 
         const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
@@ -465,7 +481,7 @@
         document.getElementById('cancelBtn').addEventListener('click', function() {
             cancelledByUser = true;
             if (worker) { worker.terminate(); worker = null; }
-            cola = []; doc = null; empDataGlobal = null;
+            cola = []; doc = null; empDataGlobal = null; excelDataRaw = [];
             resetUI();
             document.getElementById('cancelMsg').classList.remove('hidden');
             setTimeout(() => document.getElementById('cancelMsg').classList.add('hidden'), 4000);
@@ -473,17 +489,28 @@
 
         document.getElementById('btnCancelSummary').addEventListener('click', function() {
             if (worker) { worker.terminate(); worker = null; }
-            cola = []; doc = null; empDataGlobal = null;
+            cola = []; doc = null; empDataGlobal = null; excelDataRaw = [];
             resetUI();
         });
 
-        document.getElementById('btnProceedSummary').addEventListener('click', function() {
+        function initiateProcessing(pdf, excel) {
+            generateOptions.pdf = pdf;
+            generateOptions.excel = excel;
             document.getElementById('summaryContainer').classList.add('hidden');
             document.getElementById('progressContainer').classList.remove('hidden');
-            document.getElementById('statusText').innerText = 'Escribiendo PDFs (Vertical)...';
-            doc = new jsPDF('p', 'mm', 'a4');
+            document.getElementById('statusText').innerText = `Procesando ${pdf && excel ? 'PDF y Excel' : (pdf ? 'PDF' : 'Excel')}...`;
+            
+            excelDataRaw = [];
+            opEntradasSeen = new Set();
+            opSalidasSeen = new Set();
+
+            if (pdf) doc = new jsPDF('p', 'mm', 'a4');
             worker.postMessage({ cmd: 'proceed' });
-        });
+        }
+
+        document.getElementById('btnProceedPdf').addEventListener('click', () => initiateProcessing(true, false));
+        document.getElementById('btnProceedExcel').addEventListener('click', () => initiateProcessing(false, true));
+        document.getElementById('btnProceedBoth').addEventListener('click', () => initiateProcessing(true, true));
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const files = e.target.files;
@@ -492,8 +519,6 @@
             const valAnio = document.getElementById('inputAnio').value.trim();
             const valEstablecimiento = document.getElementById('inputEstablecimiento').value.trim();
             const valUmDefault = document.getElementById('inputUmDefault').value.trim();
-            
-            // Recoger valores del HTML explícitamente solicitados
             const valRuc = document.getElementById('inputRuc').value.trim();
             const valRazonSocial = document.getElementById('inputRazonSocial').value.trim();
             
@@ -522,6 +547,7 @@
                 cola = []; recibidoUltimoLote = false; procesandoCola = false; 
                 totalBloques = 0; bloquesDibujados = 0;
                 doc = null; cursorY = 22; lastHeaderPage = 0; currentMonthInPdf = null;
+                excelDataRaw = [];
 
                 worker.onmessage = function(msg) {
                     const data = msg.data;
@@ -550,11 +576,11 @@
 
                         let tableHTML = `<table class="w-full text-sm text-left border-collapse">
                             <thead>
-                                <tr class="bg-blue-100 text-blue-800 sticky top-0">
-                                    <th class="p-3 border border-blue-200 uppercase text-[11px] tracking-wider">Período (Mes/Año)</th>
-                                    <th class="p-3 border border-blue-200 text-center uppercase text-[11px] tracking-wider">Artículos</th>
-                                    <th class="p-3 border border-blue-200 text-center uppercase text-[11px] tracking-wider">Movs.</th>
-                                    <th class="p-3 border border-blue-200 text-center uppercase text-[11px] tracking-wider">Hojas Est.</th>
+                                <tr class="bg-slate-100 text-slate-600 sticky top-0">
+                                    <th class="p-3 border border-slate-200 uppercase text-[11px] tracking-wider">Período (Mes/Año)</th>
+                                    <th class="p-3 border border-slate-200 text-center uppercase text-[11px] tracking-wider">Artículos</th>
+                                    <th class="p-3 border border-slate-200 text-center uppercase text-[11px] tracking-wider">Movs.</th>
+                                    <th class="p-3 border border-slate-200 text-center uppercase text-[11px] tracking-wider">Hojas Est.</th>
                                 </tr>
                             </thead>
                             <tbody>`;
@@ -612,6 +638,49 @@
             }
         }
 
+        function procesarBloqueParaExcel(block) {
+            let rowRaw = {
+                PERIODO: block.period,
+                CODIGO: block.item.codigo,
+                DESCRIPCION: block.item.descripcion,
+                SALDO_INI_CANT: block.saldo_inicial ? block.saldo_inicial.fC : 0,
+                SALDO_INI_TOTAL: block.saldo_inicial ? block.saldo_inicial.fCT : 0,
+                ENTRADAS: {},
+                SALIDAS: {}
+            };
+            
+            let tEntC = 0, tEntV = 0, tSalC = 0, tSalV = 0;
+            
+            block.txs.forEach(tx => {
+                let op = tx.t12;
+                if (tx.eC > 0 || tx.eCT > 0) {
+                    if (!rowRaw.ENTRADAS[op]) rowRaw.ENTRADAS[op] = {c:0, v:0};
+                    rowRaw.ENTRADAS[op].c += tx.eC;
+                    rowRaw.ENTRADAS[op].v += tx.eCT;
+                    tEntC += tx.eC; tEntV += tx.eCT;
+                    opEntradasSeen.add(op);
+                }
+                if (tx.sC > 0 || tx.sCT > 0) {
+                    if (!rowRaw.SALIDAS[op]) rowRaw.SALIDAS[op] = {c:0, v:0};
+                    rowRaw.SALIDAS[op].c += tx.sC;
+                    rowRaw.SALIDAS[op].v += tx.sCT;
+                    tSalC += tx.sC; tSalV += tx.sCT;
+                    opSalidasSeen.add(op);
+                }
+            });
+            
+            rowRaw.TOTAL_ENT_CANT = tEntC;
+            rowRaw.TOTAL_ENT_TOTAL = tEntV;
+            rowRaw.TOTAL_SAL_CANT = tSalC;
+            rowRaw.TOTAL_SAL_TOTAL = tSalV;
+            
+            let lastTx = block.txs.length > 0 ? block.txs[block.txs.length - 1] : block.saldo_inicial;
+            rowRaw.SALDO_FIN_CANT = lastTx ? lastTx.fC : 0;
+            rowRaw.SALDO_FIN_TOTAL = lastTx ? lastTx.fCT : 0;
+            
+            excelDataRaw.push(rowRaw);
+        }
+
         function dibujarArticulo(block) {
             if (cursorY > doc.internal.pageSize.getHeight() - 40) { 
                 doc.addPage(); 
@@ -644,9 +713,12 @@
             if (block.saldo_inicial) {
                 sumEntCant += block.saldo_inicial.fC;
                 sumEntTotal += block.saldo_inicial.fCT;
+                
+                let p = block.period.split('-');
+                let firstDayStr = `01/${p[1]}/${p[0]}`;
 
                 tableBody.push([
-                    '', '', '', 'SALDO INICIAL', '16', 
+                    firstDayStr, '', '', 'SALDO INICIAL', '16', 
                     formatearNum(block.saldo_inicial.fC), formatearNum(block.saldo_inicial.fCU), formatearNum(block.saldo_inicial.fCT), 
                     '', '', '',
                     formatearNum(block.saldo_inicial.fC), formatearNum(block.saldo_inicial.fCU), formatearNum(block.saldo_inicial.fCT)
@@ -741,6 +813,48 @@
             cursorY = doc.lastAutoTable.finalY + 8;
         }
 
+        function finalizarExcelMasivo() {
+            if (!generateOptions.excel || excelDataRaw.length === 0) return;
+
+            let opE = Array.from(opEntradasSeen).sort();
+            let opS = Array.from(opSalidasSeen).sort();
+            
+            let finalData = excelDataRaw.map(r => {
+                let flatRow = {
+                    'PERIODO': r.PERIODO,
+                    'CODIGO ARTICULO': r.CODIGO,
+                    'DESCRIPCION': r.DESCRIPCION,
+                    'SALDO INICIAL CANT': r.SALDO_INI_CANT,
+                    'SALDO INICIAL TOTAL': r.SALDO_INI_TOTAL
+                };
+                opE.forEach(op => {
+                    flatRow['ENT_OP_' + op + '_CANT'] = r.ENTRADAS[op] ? r.ENTRADAS[op].c : 0;
+                    flatRow['ENT_OP_' + op + '_TOTAL'] = r.ENTRADAS[op] ? r.ENTRADAS[op].v : 0;
+                });
+                flatRow['TOTAL ENTRADAS CANT'] = r.TOTAL_ENT_CANT;
+                flatRow['TOTAL ENTRADAS TOTAL'] = r.TOTAL_ENT_TOTAL;
+                
+                opS.forEach(op => {
+                    flatRow['SAL_OP_' + op + '_CANT'] = r.SALIDAS[op] ? r.SALIDAS[op].c : 0;
+                    flatRow['SAL_OP_' + op + '_TOTAL'] = r.SALIDAS[op] ? r.SALIDAS[op].v : 0;
+                });
+                flatRow['TOTAL SALIDAS CANT'] = r.TOTAL_SAL_CANT;
+                flatRow['TOTAL SALIDAS TOTAL'] = r.TOTAL_SAL_TOTAL;
+                
+                flatRow['SALDO FINAL CANT'] = r.SALDO_FIN_CANT;
+                flatRow['SALDO FINAL TOTAL'] = r.SALDO_FIN_TOTAL;
+                
+                return flatRow;
+            });
+            
+            const ws = XLSX.utils.json_to_sheet(finalData);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Resumen_Kardex");
+            
+            let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+            XLSX.writeFile(wb, `${rucStr}_Resumen_Masivo_Kardex.xlsx`);
+        }
+
         async function consumirCola() {
             if (procesandoCola) return; 
             procesandoCola = true;
@@ -755,21 +869,27 @@
 
                     const block = cola.shift();
 
-                    if (currentMonthInPdf !== null && currentMonthInPdf !== block.period) {
-                        let rucStr = empDataGlobal.ruc || 'SIN_RUC';
-                        let anioReal = currentMonthInPdf.split('-')[0];
-                        let mesSplit = currentMonthInPdf.split('-')[1]; 
-                        
-                        let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
-                        doc.save(nombreArchivo);
-                        
-                        doc = new jsPDF('p', 'mm', 'a4');
-                        cursorY = 22;
-                        lastHeaderPage = 0;
+                    if (generateOptions.pdf) {
+                        if (currentMonthInPdf !== null && currentMonthInPdf !== block.period) {
+                            let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+                            let anioReal = currentMonthInPdf.split('-')[0];
+                            let mesSplit = currentMonthInPdf.split('-')[1]; 
+                            
+                            let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
+                            doc.save(nombreArchivo);
+                            
+                            doc = new jsPDF('p', 'mm', 'a4');
+                            cursorY = 22;
+                            lastHeaderPage = 0;
+                        }
+
+                        currentMonthInPdf = block.period;
+                        dibujarArticulo(block);
                     }
 
-                    currentMonthInPdf = block.period;
-                    dibujarArticulo(block);
+                    if (generateOptions.excel) {
+                        procesarBloqueParaExcel(block);
+                    }
 
                     bloquesDibujados++;
                     setProgress(70 + Math.round((bloquesDibujados / totalBloques) * 28), `Estructurando datos...`);
@@ -779,16 +899,21 @@
 
                 if (cancelledByUser) { procesandoCola = false; return; }
 
-                setProgress(99, "Guardando PDFs...");
+                setProgress(99, "Guardando Archivos...");
                 await cederHilo();
 
-                if (totalBloques > 0 && currentMonthInPdf !== null) {
-                    let rucStr = empDataGlobal.ruc || 'SIN_RUC';
-                    let anioReal = currentMonthInPdf.split('-')[0];
-                    let mesSplit = currentMonthInPdf.split('-')[1];
-                    
-                    let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
-                    doc.save(nombreArchivo);
+                if (totalBloques > 0) {
+                    if (generateOptions.pdf && currentMonthInPdf !== null) {
+                        let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+                        let anioReal = currentMonthInPdf.split('-')[0];
+                        let mesSplit = currentMonthInPdf.split('-')[1];
+                        let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
+                        doc.save(nombreArchivo);
+                    }
+
+                    if (generateOptions.excel) {
+                        finalizarExcelMasivo();
+                    }
                 }
 
                 worker && worker.terminate(); worker = null;
@@ -799,7 +924,7 @@
 
             } catch (err) {
                 console.error(err);
-                alert("Ocurrió un error generando el PDF: " + err.message);
+                alert("Ocurrió un error generando los archivos: " + err.message);
                 resetUI();
             }
             procesandoCola = false;
