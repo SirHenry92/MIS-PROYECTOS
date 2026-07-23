@@ -59,11 +59,23 @@
                     <div class="space-y-4">
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Filtrar por Año(s)</label>
-                            <input type="text" id="inputAnio" placeholder="Ej. 2021 (Vacío = Detectar todos)" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-sm font-semibold placeholder-slate-400">
+                            <input type="text" id="inputAnio" placeholder="Ej. 2021 (Vacío = Detectar todos)" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-sm font-semibold placeholder-slate-400">
                         </div>
                         <div>
                             <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">U.M. por defecto</label>
-                            <input type="text" id="inputUmDefault" value="07" class="w-full px-4 py-2.5 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-sm font-bold text-center">
+                            <input type="text" id="inputUmDefault" value="07" class="w-full px-4 py-2 bg-slate-50 border border-slate-200 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:bg-white transition text-sm font-bold text-center">
+                        </div>
+                        <div class="pt-2 border-t border-slate-100">
+                            <label class="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">Catálogo U.M. (Excel Opcional)</label>
+                            <div class="flex items-center gap-2">
+                                <label id="labelUmFile" class="flex-1 px-3 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg cursor-pointer hover:bg-blue-100 transition text-xs font-bold text-center truncate">
+                                    Subir Mapeo U.M.
+                                    <input type="file" id="inputUmFile" accept=".xlsx, .xls" class="hidden">
+                                </label>
+                                <button type="button" id="btnLimpiarUm" class="hidden px-2 py-2 text-red-500 hover:bg-red-50 rounded-lg border border-red-200 transition" title="Limpiar Mapeo">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                </button>
+                            </div>
                         </div>
                     </div>
                 </div>
@@ -102,7 +114,7 @@
             <div class="flex justify-center pt-4">
                 <label class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-4 px-12 rounded-xl cursor-pointer transition shadow-lg hover:shadow-xl transform hover:-translate-y-0.5 w-full md:w-auto text-lg flex justify-center items-center gap-3">
                     <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12" /></svg>
-                    Escanear Excel y Proyectar
+                    Escanear Excel de Kardex y Proyectar
                     <input type="file" id="fileInput" accept=".xlsx, .xls" class="hidden">
                 </label>
             </div>
@@ -115,7 +127,6 @@
                 <p class="text-sm text-slate-500 mt-1">Revisa el resumen y elige el tipo de archivo que deseas exportar.</p>
             </div>
             
-            <!-- CONTENEDOR DE ADVERTENCIAS (NUEVO) -->
             <div id="warningMsg" class="hidden mb-6 p-4 bg-amber-50 text-amber-800 rounded-xl border border-amber-300 text-sm max-w-3xl mx-auto">
                 <div class="flex items-center gap-2 mb-2 font-bold">
                     <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
@@ -172,8 +183,8 @@
         <!-- Mensajes -->
         <div id="successMsg" class="hidden mt-6 p-6 bg-emerald-50 text-emerald-700 rounded-2xl border border-emerald-200 flex flex-col items-center shadow-sm max-w-md mx-auto text-center">
             <svg class="w-12 h-12 text-emerald-500 mb-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
-            <h3 class="text-lg font-bold">¡Archivos Generados!</h3>
-            <p class="text-sm mt-1 opacity-80">Revisa tu carpeta de descargas.</p>
+            <h3 class="text-lg font-bold">¡Proceso Finalizado!</h3>
+            <p class="text-sm mt-1 opacity-80" id="successText">Los archivos se han descargado correctamente.</p>
         </div>
         
         <div id="cancelMsg" class="hidden mt-6 p-4 bg-amber-50 text-amber-700 rounded-xl border border-amber-200 font-bold text-center max-w-md mx-auto">
@@ -183,9 +194,62 @@
 
     <script>
         const { jsPDF } = window.jspdf;
-
         const peFormatter = new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
+        // Variables Globales
+        let umMappingGlobal = {};
+        
+        // Mapeo U.M. (Cargar y limpiar)
+        document.getElementById('inputUmFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            
+            document.getElementById('labelUmFile').textContent = "Cargando...";
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const wb = XLSX.read(evt.target.result, {type: 'array'});
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const data = XLSX.utils.sheet_to_json(ws);
+                    
+                    umMappingGlobal = {};
+                    let count = 0;
+                    
+                    data.forEach(row => {
+                        let keys = Object.keys(row);
+                        // Busca coincidencia en columnas para Código/ITEM
+                        let keyItem = keys.find(k => k.trim().toUpperCase() === 'ITEM' || k.trim().toUpperCase() === 'CÓDIGO' || k.trim().toUpperCase() === 'CODIGO');
+                        // Busca coincidencia para la Unidad de medida
+                        let keyUm = keys.find(k => k.toUpperCase().includes('MEDIDA') || k.toUpperCase().includes('TABLA 6'));
+                        
+                        if (keyItem && keyUm) {
+                            let codigo = String(row[keyItem]).trim();
+                            let umVal = String(row[keyUm]).trim();
+                            if (codigo && umVal !== 'undefined' && umVal !== '') {
+                                umMappingGlobal[codigo] = umVal;
+                                count++;
+                            }
+                        }
+                    });
+                    
+                    document.getElementById('labelUmFile').innerHTML = `Excel U.M. Cargado <span class="text-[10px]">(${count} items)</span>`;
+                    document.getElementById('btnLimpiarUm').classList.remove('hidden');
+                } catch(err) {
+                    alert("Error procesando Excel de U.M.: " + err.message);
+                    document.getElementById('labelUmFile').textContent = "Subir Mapeo U.M.";
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btnLimpiarUm').addEventListener('click', function() {
+            umMappingGlobal = {};
+            document.getElementById('inputUmFile').value = null;
+            document.getElementById('labelUmFile').textContent = "Subir Mapeo U.M.";
+            this.classList.add('hidden');
+        });
+
+        // Botones Selección Meses
         document.getElementById('btnSelectAll').addEventListener('click', () => {
             document.querySelectorAll('#mesesCheckboxes input').forEach(cb => cb.checked = true);
         });
@@ -214,12 +278,21 @@
                 return date.getFullYear() + '-' + (m < 10 ? '0'+m : m);
             };
 
+            // Lógica forzada a dos dígitos "00"
+            const formatearUM = (val) => {
+                if (val === null || val === undefined) return '';
+                let s = String(val).trim();
+                if (s !== '' && !isNaN(s)) {
+                    return String(Number(s)).padStart(2, '0');
+                }
+                return s;
+            };
+
             let dbArticulos = {};
             let empData = { ruc: '', razonSocial: '', establecimiento: '' };
             let overrides = {};
             let cancelado = false;
 
-            // MODIFICACIÓN 1: Recibimos el nombre de la hoja y el array de advertencias
             function procesarDatosHoja(filas, reportarProgreso, nombreHoja, advertencias) {
                 let itemActual = null;
                 let modoTransacciones = false;
@@ -260,7 +333,8 @@
 
                     if (val0 === 'DESCRIPCIÓN:' && !itemActual.descripcion) itemActual.descripcion = val1;
                     if (val0 === 'TIPO (TABLA 5):' && !itemActual.tipo) itemActual.tipo = val1;
-                    if (val0 === 'U.M. (TABLA 6):' && !itemActual.um) itemActual.um = val1;
+                    // Mantenemos el U.M. original del Excel principal por si acaso, pero lo sobreescribiremos luego
+                    if (val0 === 'U.M. (TABLA 6):' && !itemActual.um) itemActual.um = val1; 
 
                     if (val0 === 'FECHA' || val0.includes('FECHA')) { modoTransacciones = true; continue; }
                     if (val0.includes('TOTALES')) { modoTransacciones = false; continue; }
@@ -278,7 +352,6 @@
 
                         let fechaObj = parseExcelDate(row[colFecha]);
                         
-                        // MODIFICACIÓN 2: Si es transacción y la fecha es nula o inválida, guardamos la advertencia.
                         if (!fechaObj) {
                             advertencias.push(\`Fila \${i + 1} en hoja "\${nombreHoja}": Fecha inválida o vacía para el artículo \${itemActual.codigo}.\`);
                             continue;
@@ -320,32 +393,39 @@
             self.onmessage = function(e) {
                 if (e.data.cmd === 'cancel') { cancelado = true; return; }
                 
-                if (e.data.cmd === 'proceed') {
-                    const TAMANO_CHUNK = 50; 
-                    function enviarSiguienteLote() {
-                        if (cancelado) return;
-                        const lote = self.bloquesPDF_global.splice(0, TAMANO_CHUNK);
-                        const esUltimo = self.bloquesPDF_global.length === 0;
-                        self.postMessage({ type: 'chunk', items: lote, isLast: esUltimo });
-                        
-                        if (!esUltimo) setTimeout(enviarSiguienteLote, 0);
-                        else self.bloquesPDF_global = null;
+                // BACKPRESSURE: Enviar lotes de a pocos para no saturar memoria RAM
+                if (e.data.cmd === 'proceed' || e.data.cmd === 'next_chunk') {
+                    if (!self.bloquesPDF_global || self.bloquesPDF_global.length === 0) {
+                        self.postMessage({ type: 'chunk', items: [], isLast: true });
+                        return;
                     }
-                    if (self.bloquesPDF_global.length === 0) self.postMessage({ type: 'chunk', items: [], isLast: true });
-                    else enviarSiguienteLote();
+                    
+                    const TAMANO_CHUNK = 25; // Tamaño de bloque controlado
+                    const lote = self.bloquesPDF_global.splice(0, TAMANO_CHUNK);
+                    const esUltimo = self.bloquesPDF_global.length === 0;
+                    
+                    self.postMessage({ type: 'chunk', items: lote, isLast: esUltimo });
                     return;
                 }
 
                 cancelado = false;
                 dbArticulos = {};
-                overrides = { anio: e.data.anio, estab: e.data.estab, meses: e.data.meses, umDefault: e.data.umDefault, ruc: e.data.ruc, razonSocial: e.data.razonSocial };
+                overrides = { 
+                    anio: e.data.anio, 
+                    estab: e.data.estab, 
+                    meses: e.data.meses, 
+                    umDefault: e.data.umDefault, 
+                    ruc: e.data.ruc, 
+                    razonSocial: e.data.razonSocial,
+                    mapUM: e.data.mapUM || {}
+                };
                 
                 empData.ruc = overrides.ruc;
                 empData.razonSocial = overrides.razonSocial;
                 empData.establecimiento = overrides.estab;
 
                 const rawBuffer = e.data.file;
-                let advertenciasGlobales = []; // Aquí guardaremos los errores
+                let advertenciasGlobales = [];
 
                 try {
                     self.postMessage({ type: 'progress', percent: 2, detail: 'Cargando y procesando hojas...' });
@@ -367,7 +447,6 @@
                         const basePct = 5 + Math.round((h / hojas.length) * 55);
                         const rangoPct = (55 / hojas.length);
 
-                        // Pasamos nombre de hoja y array de advertencias
                         procesarDatosHoja(filas, (i, total) => {
                             const pct = basePct + Math.round((i / total) * rangoPct);
                             self.postMessage({ type: 'progress', percent: Math.min(pct, 60), detail: \`Extrayendo datos de: \${hojas[h]}...\` });
@@ -439,6 +518,12 @@
                                 movsEnMes += txs_mes.length;
                                 totalMovimientos += txs_mes.length;
 
+                                // LÓGICA DE UNIDAD DE MEDIDA
+                                // 1. Buscar en el Excel cargado
+                                let mappedUm = overrides.mapUM[item.codigo];
+                                // 2. Si no hay, usar el default
+                                let umToUse = (mappedUm && mappedUm !== '') ? mappedUm : overrides.umDefault;
+
                                 bloquesPDF.push({
                                     type: 'article',
                                     period: mes,
@@ -446,7 +531,7 @@
                                         codigo: item.codigo, 
                                         tipo: item.tipo, 
                                         descripcion: item.descripcion, 
-                                        um: item.um ? item.um : (overrides.umDefault || '') 
+                                        um: formatearUM(umToUse) // Se fuerza el formato de 2 dígitos acá
                                     },
                                     saldo_inicial: saldo_inicial,
                                     txs: txs_mes
@@ -464,7 +549,6 @@
                     
                     self.bloquesPDF_global = bloquesPDF;
 
-                    // MODIFICACIÓN 3: Enviamos las advertencias al hilo principal
                     self.postMessage({ type: 'meta', total: totalBlocks, totalTxs: totalMovimientos, statsMeses: statsPorMes, empData, advertencias: advertenciasGlobales });
 
                 } catch (err) {
@@ -538,7 +622,7 @@
             resetUI();
         });
 
-        function initiateProcessing(pdf, excel) {
+        async function initiateProcessing(pdf, excel) {
             generateOptions.pdf = pdf;
             generateOptions.excel = excel;
             document.getElementById('summaryContainer').classList.add('hidden');
@@ -550,7 +634,9 @@
             opSalidasSeen = new Set();
 
             if (pdf) doc = new jsPDF('p', 'mm', 'a4');
-            worker.postMessage({ cmd: 'proceed' });
+            
+            // Iniciar cadena de bloques pidiendo el primer lote
+            worker.postMessage({ cmd: 'next_chunk' });
         }
 
         document.getElementById('btnProceedPdf').addEventListener('click', () => initiateProcessing(true, false));
@@ -605,13 +691,11 @@
                         totalBloques = data.total;
                         empDataGlobal = data.empData;
                         
-                        // MODIFICACIÓN 4: Mostrar advertencias en pantalla si las hay
                         if (data.advertencias && data.advertencias.length > 0) {
                             const warningMsgEl = document.getElementById('warningMsg');
                             const warningListEl = document.getElementById('warningList');
                             warningMsgEl.classList.remove('hidden');
                             
-                            // Mostrar las primeras 50 para no saturar el DOM, y avisar si hay más
                             const warningsToShow = data.advertencias.slice(0, 50);
                             warningsToShow.forEach(adv => {
                                 let li = document.createElement('li');
@@ -628,19 +712,16 @@
                         }
                         
                         if(totalBloques === 0) {
-                            alert("No se encontraron movimientos. Si cargaste datos, revisa el panel de advertencias para ver qué filas generaron error de lectura.");
-                            // No reiniciamos la UI completamente para dejar ver las advertencias
+                            alert("No se encontraron movimientos. Revisa las advertencias.");
                             document.getElementById('progressContainer').classList.add('hidden');
                             document.getElementById('summaryContainer').classList.remove('hidden');
                             
-                            // Ocultamos el desglose mensual y botones de proceder
                             document.getElementById('monthlyBreakdown').innerHTML = '<div class="p-6 text-center text-slate-500 font-bold">Sin datos para procesar.</div>';
                             document.getElementById('btnProceedBoth').classList.add('hidden');
                             document.getElementById('btnProceedExcel').classList.add('hidden');
                             document.getElementById('btnProceedPdf').classList.add('hidden');
                             return;
                         } else {
-                            // Aseguramos que los botones estén visibles por si se ocultaron antes
                             document.getElementById('btnProceedBoth').classList.remove('hidden');
                             document.getElementById('btnProceedExcel').classList.remove('hidden');
                             document.getElementById('btnProceedPdf').classList.remove('hidden');
@@ -698,7 +779,8 @@
                     estab: valEstablecimiento,
                     umDefault: valUmDefault,
                     ruc: valRuc,
-                    razonSocial: valRazonSocial
+                    razonSocial: valRazonSocial,
+                    mapUM: umMappingGlobal
                 }, [arrayBuffer]);
             };
             reader.readAsArrayBuffer(files[0]);
@@ -783,12 +865,9 @@
             addText("MÉTODO DE VALUACIÓN:", "PROMEDIO PONDERADO", cursorY + 5);
             
             addText("TIPO:", block.item.tipo, cursorY, 110);
-
-            let umFormateado = block.item.um;
-            if (!isNaN(umFormateado) && String(umFormateado).trim() !== '') {
-                umFormateado = String(Number(umFormateado)).padStart(2, '0');
-            }
-            addText("CÓD. UNIDAD DE MEDIDA :", umFormateado, cursorY + 2.5, 110);
+            
+            // La U.M. ya viene como string de 2 dígitos desde el web worker.
+            addText("CÓD. UNIDAD DE MEDIDA :", block.item.um, cursorY + 2.5, 110);
             
             cursorY += 8;
 
@@ -909,7 +988,7 @@
             cursorY = doc.lastAutoTable.finalY + 8;
         }
 
-        function finalizarExcelMasivo() {
+        async function finalizarExcelMasivo() {
             if (!generateOptions.excel || excelDataRaw.length === 0) return;
 
             let opE = Array.from(opEntradasSeen).sort();
@@ -948,32 +1027,35 @@
             XLSX.utils.book_append_sheet(wb, ws, "Resumen_Kardex");
             
             let rucStr = empDataGlobal.ruc || 'SIN_RUC';
-            XLSX.writeFile(wb, `${rucStr}_Resumen_Masivo_Kardex.xlsx`);
+            let fileName = `${rucStr}_Resumen_Masivo_Kardex.xlsx`;
+            XLSX.writeFile(wb, fileName);
         }
 
         async function consumirCola() {
             if (procesandoCola) return; 
             procesandoCola = true;
-            let procesadosBatch = 0; 
 
             try {
-                while (true) {
+                while (cola.length > 0) {
                     if (cancelledByUser) { procesandoCola = false; return; }
-                    if (cola.length === 0) {
-                        if (recibidoUltimoLote) break;
-                        await cederHilo(); continue;
-                    }
 
                     const block = cola.shift();
 
                     if (generateOptions.pdf) {
+                        // Si cambiamos de mes, guardamos el PDF actual y liberamos RAM
                         if (currentMonthInPdf !== null && currentMonthInPdf !== block.period) {
                             let rucStr = empDataGlobal.ruc || 'SIN_RUC';
                             let anioReal = currentMonthInPdf.split('-')[0];
                             let mesSplit = currentMonthInPdf.split('-')[1]; 
-                            
                             let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
-                            doc.save(nombreArchivo);
+                            
+                            setProgress(90, `Guardando mes ${mesSplit}... liberando memoria...`);
+                            doc.save(nombreArchivo); 
+                            
+                            // FORZAR LIMPIEZA DE MEMORIA
+                            doc = null; 
+                            // Dar 1 segundo de respiro al navegador para que el Garbage Collector limpie la RAM
+                            await new Promise(r => setTimeout(r, 1000)); 
                             
                             doc = new jsPDF('p', 'mm', 'a4');
                             cursorY = 22;
@@ -989,38 +1071,46 @@
                     }
 
                     bloquesDibujados++;
-                    procesadosBatch++;
                     
-                    if (procesadosBatch % 10 === 0) {
-                        setProgress(70 + Math.round((bloquesDibujados / totalBloques) * 28), `Estructurando datos...`);
-                        await cederHilo();
+                    // Actualizar UI sin bloquear
+                    if (bloquesDibujados % 15 === 0) {
+                        setProgress(70 + Math.round((bloquesDibujados / totalBloques) * 28), `Dibujando PDF/Excel... (${bloquesDibujados}/${totalBloques})`);
+                        await cederHilo(); 
                     }
                 }
 
+                // CUANDO LA COLA SE VACÍA
                 if (cancelledByUser) { procesandoCola = false; return; }
 
-                setProgress(99, "Guardando Archivos...");
-                await cederHilo();
+                if (recibidoUltimoLote) {
+                    // TERMINÓ TODO EL PROCESO
+                    setProgress(99, "Finalizando y guardando últimos archivos...");
+                    await cederHilo();
 
-                if (totalBloques > 0) {
-                    if (generateOptions.pdf && currentMonthInPdf !== null) {
-                        let rucStr = empDataGlobal.ruc || 'SIN_RUC';
-                        let anioReal = currentMonthInPdf.split('-')[0];
-                        let mesSplit = currentMonthInPdf.split('-')[1];
-                        let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
-                        doc.save(nombreArchivo);
+                    if (totalBloques > 0) {
+                        if (generateOptions.pdf && currentMonthInPdf !== null) {
+                            let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+                            let anioReal = currentMonthInPdf.split('-')[0];
+                            let mesSplit = currentMonthInPdf.split('-')[1];
+                            let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
+                            doc.save(nombreArchivo);
+                        }
+
+                        if (generateOptions.excel) {
+                            await finalizarExcelMasivo();
+                        }
                     }
 
-                    if (generateOptions.excel) {
-                        finalizarExcelMasivo();
-                    }
+                    worker && worker.terminate(); worker = null;
+                    document.getElementById('progressContainer').classList.add('hidden');
+                    document.getElementById('controls').classList.remove('hidden');
+                    document.getElementById('successMsg').classList.remove('hidden');
+                    document.getElementById('fileInput').value = null;
+                } else {
+                    // LA COLA ESTÁ VACÍA PERO FALTAN DATOS: PEDIMOS MÁS AL WORKER
+                    procesandoCola = false; 
+                    worker.postMessage({ cmd: 'next_chunk' });
                 }
-
-                worker && worker.terminate(); worker = null;
-                document.getElementById('progressContainer').classList.add('hidden');
-                document.getElementById('controls').classList.remove('hidden');
-                document.getElementById('successMsg').classList.remove('hidden');
-                document.getElementById('fileInput').value = null;
 
             } catch (err) {
                 console.error(err);
