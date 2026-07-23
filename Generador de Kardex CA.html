@@ -111,10 +111,21 @@
         <!-- Resumen de Proyección -->
         <div id="summaryContainer" class="hidden w-full mx-auto bg-white border border-blue-200 rounded-2xl p-8 shadow-lg">
             <div class="text-center mb-6">
-                <h2 class="text-2xl font-bold text-blue-800">Proyección Exitosa</h2>
-                <p class="text-sm text-slate-500 mt-1">Elige el tipo de archivo que deseas exportar.</p>
+                <h2 class="text-2xl font-bold text-blue-800">Proyección Finalizada</h2>
+                <p class="text-sm text-slate-500 mt-1">Revisa el resumen y elige el tipo de archivo que deseas exportar.</p>
             </div>
             
+            <!-- CONTENEDOR DE ADVERTENCIAS (NUEVO) -->
+            <div id="warningMsg" class="hidden mb-6 p-4 bg-amber-50 text-amber-800 rounded-xl border border-amber-300 text-sm max-w-3xl mx-auto">
+                <div class="flex items-center gap-2 mb-2 font-bold">
+                    <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    Observaciones en el Excel cargado:
+                </div>
+                <div class="max-h-32 overflow-y-auto pr-2">
+                    <ul id="warningList" class="list-disc pl-5 space-y-1 text-amber-700 font-medium text-xs"></ul>
+                </div>
+            </div>
+
             <div class="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mb-6 max-h-64 overflow-y-auto max-w-3xl mx-auto">
                 <div id="monthlyBreakdown"></div>
             </div>
@@ -173,7 +184,6 @@
     <script>
         const { jsPDF } = window.jspdf;
 
-        // OPTIMIZACIÓN 1: Formateador nativo (API Intl)
         const peFormatter = new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 
         document.getElementById('btnSelectAll').addEventListener('click', () => {
@@ -209,7 +219,8 @@
             let overrides = {};
             let cancelado = false;
 
-            function procesarDatosHoja(filas, reportarProgreso) {
+            // MODIFICACIÓN 1: Recibimos el nombre de la hoja y el array de advertencias
+            function procesarDatosHoja(filas, reportarProgreso, nombreHoja, advertencias) {
                 let itemActual = null;
                 let modoTransacciones = false;
 
@@ -266,7 +277,12 @@
                         if (!cellT12 && t10Val !== 'CIERRE' && serieVal !== 'CI' && !tipoOpStr.includes('SALDO INI')) continue;
 
                         let fechaObj = parseExcelDate(row[colFecha]);
-                        if (!fechaObj) continue;
+                        
+                        // MODIFICACIÓN 2: Si es transacción y la fecha es nula o inválida, guardamos la advertencia.
+                        if (!fechaObj) {
+                            advertencias.push(\`Fila \${i + 1} en hoja "\${nombreHoja}": Fecha inválida o vacía para el artículo \${itemActual.codigo}.\`);
+                            continue;
+                        }
 
                         let tipoOpRaw = /^\\d+$/.test(tipoOpStr) ? tipoOpStr.padStart(2, '0') : tipoOpStr;
                         let esCierre = (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.includes('CIERRE') || tipoOpStr.includes('SALDO INI') || tipoOpStr === 'SALDO INICIAL');
@@ -305,7 +321,6 @@
                 if (e.data.cmd === 'cancel') { cancelado = true; return; }
                 
                 if (e.data.cmd === 'proceed') {
-                    // OPTIMIZACIÓN 2: Chunks más grandes reducen cuellos de botella de comunicación
                     const TAMANO_CHUNK = 50; 
                     function enviarSiguienteLote() {
                         if (cancelado) return;
@@ -330,12 +345,11 @@
                 empData.establecimiento = overrides.estab;
 
                 const rawBuffer = e.data.file;
+                let advertenciasGlobales = []; // Aquí guardaremos los errores
 
                 try {
                     self.postMessage({ type: 'progress', percent: 2, detail: 'Cargando y procesando hojas...' });
                     
-                    // OPTIMIZACIÓN 3: Doble Lectura Eliminada.
-                    // Leemos completamente el libro (dense: true) de un solo golpe.
                     const wbInfo = XLSX.read(rawBuffer, { 
                         type: 'array', dense: true, cellDates: true,
                         cellText: false, cellNF: false, cellStyles: false, cellFormula: false,
@@ -353,10 +367,11 @@
                         const basePct = 5 + Math.round((h / hojas.length) * 55);
                         const rangoPct = (55 / hojas.length);
 
+                        // Pasamos nombre de hoja y array de advertencias
                         procesarDatosHoja(filas, (i, total) => {
                             const pct = basePct + Math.round((i / total) * rangoPct);
                             self.postMessage({ type: 'progress', percent: Math.min(pct, 60), detail: \`Extrayendo datos de: \${hojas[h]}...\` });
-                        });
+                        }, hojas[h], advertenciasGlobales);
                     }
 
                     self.postMessage({ type: 'progress', percent: 63, detail: 'Ordenando transacciones globales...' });
@@ -364,7 +379,6 @@
                     let mesesSet = new Set();
                     let articulosOrdenados = Object.values(dbArticulos).sort((a, b) => a.codigo.localeCompare(b.codigo));
                     
-                    // PRE-SORTING: Ordenamos una sola vez a nivel global
                     articulosOrdenados.forEach(item => {
                         if (item.transacciones.length > 0) {
                             let txFinal = item.transacciones[item.transacciones.length - 1];
@@ -400,7 +414,6 @@
                             let txs_mes = [];
                             let last_tx_before = null;
 
-                            // Búsqueda lineal eficiente con break
                             for (let i = 0; i < item.transacciones.length; i++) {
                                 let tx = item.transacciones[i];
                                 let tx_m = getYYYYMM(tx.fecha);
@@ -446,11 +459,13 @@
                         }
                     });
 
-                    dbArticulos = null; // Liberar RAM
+                    dbArticulos = null;
                     const totalBlocks = bloquesPDF.length;
                     
                     self.bloquesPDF_global = bloquesPDF;
-                    self.postMessage({ type: 'meta', total: totalBlocks, totalTxs: totalMovimientos, statsMeses: statsPorMes, empData });
+
+                    // MODIFICACIÓN 3: Enviamos las advertencias al hilo principal
+                    self.postMessage({ type: 'meta', total: totalBlocks, totalTxs: totalMovimientos, statsMeses: statsPorMes, empData, advertencias: advertenciasGlobales });
 
                 } catch (err) {
                     self.postMessage({ type: 'error', message: err.message });
@@ -475,7 +490,6 @@
         let lastHeaderPage = 0;
         let currentMonthInPdf = null; 
 
-        // Variables para Excel Masivo
         let excelDataRaw = [];
         let opEntradasSeen = new Set();
         let opSalidasSeen = new Set();
@@ -505,6 +519,8 @@
             document.getElementById('summaryContainer').classList.add('hidden');
             document.getElementById('controls').classList.remove('hidden');
             document.getElementById('fileInput').value = null;
+            document.getElementById('warningMsg').classList.add('hidden');
+            document.getElementById('warningList').innerHTML = '';
         }
 
         document.getElementById('cancelBtn').addEventListener('click', function() {
@@ -563,6 +579,8 @@
             document.getElementById('controls').classList.add('hidden');
             document.getElementById('successMsg').classList.add('hidden');
             document.getElementById('cancelMsg').classList.add('hidden');
+            document.getElementById('warningMsg').classList.add('hidden');
+            document.getElementById('warningList').innerHTML = '';
             document.getElementById('progressContainer').classList.remove('hidden');
             document.getElementById('statusText').innerText = 'Escaneando Base de Datos...';
             setProgress(1, 'Cargando archivo en memoria...');
@@ -587,10 +605,45 @@
                         totalBloques = data.total;
                         empDataGlobal = data.empData;
                         
+                        // MODIFICACIÓN 4: Mostrar advertencias en pantalla si las hay
+                        if (data.advertencias && data.advertencias.length > 0) {
+                            const warningMsgEl = document.getElementById('warningMsg');
+                            const warningListEl = document.getElementById('warningList');
+                            warningMsgEl.classList.remove('hidden');
+                            
+                            // Mostrar las primeras 50 para no saturar el DOM, y avisar si hay más
+                            const warningsToShow = data.advertencias.slice(0, 50);
+                            warningsToShow.forEach(adv => {
+                                let li = document.createElement('li');
+                                li.textContent = adv;
+                                warningListEl.appendChild(li);
+                            });
+                            
+                            if (data.advertencias.length > 50) {
+                                let li = document.createElement('li');
+                                li.textContent = `...y otras ${data.advertencias.length - 50} advertencias más no mostradas.`;
+                                li.className = "font-bold text-amber-900";
+                                warningListEl.appendChild(li);
+                            }
+                        }
+                        
                         if(totalBloques === 0) {
-                            alert("No se encontraron movimientos para los años y meses seleccionados.");
-                            resetUI();
+                            alert("No se encontraron movimientos. Si cargaste datos, revisa el panel de advertencias para ver qué filas generaron error de lectura.");
+                            // No reiniciamos la UI completamente para dejar ver las advertencias
+                            document.getElementById('progressContainer').classList.add('hidden');
+                            document.getElementById('summaryContainer').classList.remove('hidden');
+                            
+                            // Ocultamos el desglose mensual y botones de proceder
+                            document.getElementById('monthlyBreakdown').innerHTML = '<div class="p-6 text-center text-slate-500 font-bold">Sin datos para procesar.</div>';
+                            document.getElementById('btnProceedBoth').classList.add('hidden');
+                            document.getElementById('btnProceedExcel').classList.add('hidden');
+                            document.getElementById('btnProceedPdf').classList.add('hidden');
                             return;
+                        } else {
+                            // Aseguramos que los botones estén visibles por si se ocultaron antes
+                            document.getElementById('btnProceedBoth').classList.remove('hidden');
+                            document.getElementById('btnProceedExcel').classList.remove('hidden');
+                            document.getElementById('btnProceedPdf').classList.remove('hidden');
                         }
 
                         let alturaEstimadaMM = (totalBloques * 22) + (data.totalTxs * 3.5);
@@ -730,7 +783,12 @@
             addText("MÉTODO DE VALUACIÓN:", "PROMEDIO PONDERADO", cursorY + 5);
             
             addText("TIPO:", block.item.tipo, cursorY, 110);
-            addText("CÓD. UNIDAD DE MEDIDA :", block.item.um, cursorY + 2.5, 110);
+
+            let umFormateado = block.item.um;
+            if (!isNaN(umFormateado) && String(umFormateado).trim() !== '') {
+                umFormateado = String(Number(umFormateado)).padStart(2, '0');
+            }
+            addText("CÓD. UNIDAD DE MEDIDA :", umFormateado, cursorY + 2.5, 110);
             
             cursorY += 8;
 
@@ -807,7 +865,6 @@
                     let allRows = data.table.body;
                     if(allRows.length === 0) return;
                     
-                    // OPTIMIZACIÓN 4: Búsqueda inversa en lugar de .filter()
                     let lastRowIndex = -1;
                     for (let i = allRows.length - 1; i >= 0; i--) {
                         if (allRows[i].pageNumber === data.pageNumber) {
@@ -816,7 +873,7 @@
                         }
                     }
 
-                    if (lastRowIndex !== -1 && lastRowIndex !== allRows.length - 1) { // No es la última página global
+                    if (lastRowIndex !== -1 && lastRowIndex !== allRows.length - 1) {
                         let sums = runningTotals[lastRowIndex];
                         if (sums) {
                             doc.setFontSize(4.5); doc.setFont("helvetica", "bolditalic");
@@ -830,7 +887,6 @@
                     if (data.pageNumber > 1) {
                         let allRows = data.table.body;
                         
-                        // OPTIMIZACIÓN 4: Búsqueda inversa para la página anterior
                         let lastRowIndex = -1;
                         for (let i = allRows.length - 1; i >= 0; i--) {
                             if (allRows[i].pageNumber === data.pageNumber - 1) {
@@ -935,7 +991,6 @@
                     bloquesDibujados++;
                     procesadosBatch++;
                     
-                    // OPTIMIZACIÓN 5: Dibujamos 10 artículos de golpe antes de parar el hilo para actualizar la barra UI
                     if (procesadosBatch % 10 === 0) {
                         setProgress(70 + Math.round((bloquesDibujados / totalBloques) * 28), `Estructurando datos...`);
                         await cederHilo();
