@@ -1,0 +1,1124 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Kardex SUNAT 13.1 - Pro Edition</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.28/jspdf.plugin.autotable.min.js"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        body { font-family: 'Inter', sans-serif; }
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 8px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        .glass-card {
+            background: rgba(255, 255, 255, 0.85);
+            backdrop-filter: blur(16px);
+            -webkit-backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.4);
+            box-shadow: 0 10px 40px -10px rgba(0,0,0,0.08);
+        }
+    </style>
+</head>
+<body class="p-4 md:p-8 flex items-start justify-center min-h-screen bg-[radial-gradient(ellipse_at_top_right,_var(--tw-gradient-stops))] from-blue-100 via-slate-50 to-white text-slate-800">
+
+    <div class="max-w-7xl w-full mx-auto space-y-6">
+        
+        <!-- Encabezado Moderno -->
+        <div class="glass-card p-8 rounded-3xl text-center relative overflow-hidden">
+            <div class="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-indigo-500 to-purple-500"></div>
+            <h1 class="text-4xl font-extrabold text-transparent bg-clip-text bg-gradient-to-r from-blue-700 to-indigo-800 tracking-tight">Kardex SUNAT 13.1</h1>
+            <p class="text-slate-500 mt-2 font-medium tracking-wide">Inteligencia Analítica, Recálculo de Costos y Exportación Multianual</p>
+        </div>
+
+        <div id="controls" class="space-y-6">
+            
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Tarjeta: Datos de Empresa -->
+                <div class="lg:col-span-2 glass-card p-7 rounded-3xl">
+                    <h2 class="text-lg font-bold text-indigo-950 mb-5 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4"></path></svg>
+                        Identificación Fiscal
+                    </h2>
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-5">
+                        <div class="md:col-span-1">
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">RUC</label>
+                            <input type="text" id="inputRuc" value="20100207941" class="w-full px-4 py-3 bg-white/60 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-sm font-bold shadow-sm">
+                        </div>
+                        <div class="md:col-span-1">
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Razón Social</label>
+                            <input type="text" id="inputRazonSocial" value="CLINICA AREQUIPA S.A." class="w-full px-4 py-3 bg-white/60 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-sm font-bold shadow-sm">
+                        </div>
+                        <div class="md:col-span-2">
+                            <label class="block text-[11px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Establecimiento</label>
+                            <input type="text" id="inputEstablecimiento" value="ESQ.PTE.GRAU/AV.BOLOGNESI NRO. S/N (FRENTE A MONUMENTO A MIGUEL GRAU) AREQUIPA - AREQUIPA - AREQUIPA" class="w-full px-4 py-3 bg-white/60 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:bg-white transition-all text-sm font-bold shadow-sm">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Tarjeta: Configuración Técnica -->
+                <div class="glass-card p-7 rounded-3xl">
+                    <h2 class="text-lg font-bold text-indigo-950 mb-5 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4"></path></svg>
+                        Ajustes del Motor
+                    </h2>
+                    <div class="space-y-4">
+                        <div class="grid grid-cols-2 gap-3">
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Filtro Año</label>
+                                <input type="text" id="inputAnio" placeholder="Ej. 2022" class="w-full px-3 py-2.5 bg-white/60 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm font-semibold shadow-sm">
+                            </div>
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">U.M. Default</label>
+                                <input type="text" id="inputUmDefault" value="07" class="w-full px-3 py-2.5 bg-white/60 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm font-bold text-center shadow-sm">
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <label class="block text-[10px] font-bold text-slate-500 mb-1.5 uppercase tracking-widest">Filtrar Artículo Específico</label>
+                            <input type="text" id="inputArticulo" placeholder="Ej. 22771 (Vacío = Todos)" class="w-full px-4 py-2.5 bg-indigo-50/50 border border-indigo-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500 transition-all text-sm font-bold placeholder-slate-400 text-indigo-900 shadow-sm">
+                        </div>
+
+                        <div class="pt-3 border-t border-slate-100 grid grid-cols-2 gap-3">
+                            <!-- Botón U.M -->
+                            <div>
+                                <label class="block text-[10px] font-bold text-slate-400 mb-1.5 uppercase tracking-widest">Mapeo U.M.</label>
+                                <div class="flex relative">
+                                    <label id="labelUmFile" class="flex-1 px-2 py-2 bg-white border border-slate-200 text-slate-600 rounded-lg cursor-pointer hover:border-indigo-400 hover:text-indigo-600 transition-all text-[10px] font-bold text-center truncate shadow-sm">
+                                        Cargar Excel
+                                        <input type="file" id="inputUmFile" accept=".xlsx, .xls" class="hidden">
+                                    </label>
+                                    <button type="button" id="btnLimpiarUm" class="hidden absolute -right-2 -top-2 bg-red-500 text-white rounded-full p-1 shadow-sm hover:bg-red-600 transition z-10" title="Quitar">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    </button>
+                                </div>
+                            </div>
+                            <!-- Botón Saldos Iniciales -->
+                            <div>
+                                <label class="block text-[10px] font-bold text-blue-500 mb-1.5 uppercase tracking-widest">Arrastre Saldos</label>
+                                <div class="flex relative">
+                                    <label id="labelSaldosFile" class="flex-1 px-2 py-2 bg-blue-50 border border-blue-200 text-blue-700 rounded-lg cursor-pointer hover:bg-blue-100 transition-all text-[10px] font-bold text-center truncate shadow-sm">
+                                        Subir Saldos
+                                        <input type="file" id="inputSaldosFile" accept=".xlsx, .xls" class="hidden">
+                                    </label>
+                                    <button type="button" id="btnLimpiarSaldos" class="hidden absolute -right-2 -top-2 bg-red-500 text-white rounded-full p-1 shadow-sm hover:bg-red-600 transition z-10" title="Quitar">
+                                        <svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tarjeta: Selección de Meses -->
+            <div class="glass-card p-7 rounded-3xl">
+                <div class="flex flex-col sm:flex-row justify-between items-center mb-5 gap-4">
+                    <h2 class="text-lg font-bold text-indigo-950 flex items-center gap-2">
+                        <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                        Meses a Procesar
+                    </h2>
+                    <div class="flex gap-2 bg-slate-100 p-1 rounded-xl">
+                        <button id="btnSelectAll" class="text-indigo-700 hover:bg-white hover:shadow-sm font-bold px-4 py-1.5 rounded-lg transition-all text-sm">Todos</button>
+                        <button id="btnSelectNone" class="text-slate-500 hover:bg-white hover:shadow-sm font-bold px-4 py-1.5 rounded-lg transition-all text-sm">Ninguno</button>
+                    </div>
+                </div>
+                
+                <div class="grid grid-cols-2 sm:grid-cols-4 md:grid-cols-6 gap-3" id="mesesCheckboxes">
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="01" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Enero</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="02" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Febrero</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="03" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Marzo</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="04" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Abril</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="05" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Mayo</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="06" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Junio</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="07" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Julio</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="08" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Agosto</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="09" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Septiembre</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="10" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Octubre</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="11" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Noviembre</span></label>
+                    <label class="flex items-center space-x-3 cursor-pointer p-3 rounded-xl bg-white/50 hover:bg-indigo-50 border border-slate-100 hover:border-indigo-200 transition-all shadow-sm"><input type="checkbox" value="12" checked class="w-4 h-4 text-indigo-600 accent-indigo-600 rounded"> <span class="text-sm font-bold text-slate-700">Diciembre</span></label>
+                </div>
+            </div>
+
+            <!-- Botones Principales -->
+            <div class="flex flex-col md:flex-row justify-center pt-2 gap-5 relative">
+                <!-- Botón Principal Archivo (CON BOTÓN X AÑADIDO) -->
+                <div class="relative w-full md:w-1/2">
+                    <label id="labelKardexFile" class="bg-white border-2 border-dashed border-indigo-300 text-indigo-700 hover:bg-indigo-50 font-extrabold py-5 px-6 rounded-2xl cursor-pointer transition-all duration-300 w-full flex flex-col items-center justify-center gap-1 shadow-sm">
+                        <span class="flex items-center gap-2 text-lg">
+                            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" /></svg>
+                            1. Cargar Excel Base
+                        </span>
+                        <span id="kardexFileName" class="text-[13px] text-indigo-500 font-medium mt-1 text-center truncate w-full px-4">Selecciona el archivo del sistema</span>
+                        <input type="file" id="fileInput" accept=".xlsx, .xls" class="hidden">
+                    </label>
+                    <button type="button" id="btnLimpiarKardex" class="hidden absolute -right-3 -top-3 bg-red-500 text-white rounded-full p-1.5 shadow-md hover:bg-red-600 transition z-10" title="Quitar Excel">
+                        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                    </button>
+                </div>
+
+                <button id="btnEscanear" class="bg-slate-300 text-slate-100 font-extrabold py-5 px-6 rounded-2xl transition-all duration-300 w-full md:w-1/2 text-lg flex justify-center items-center gap-3 cursor-not-allowed" disabled>
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"></path></svg>
+                    2. Escanear y Proyectar
+                </button>
+            </div>
+        </div>
+
+        <!-- Resumen de Proyección (HUB PERSISTENTE) -->
+        <div id="summaryContainer" class="hidden w-full mx-auto glass-card rounded-3xl p-8">
+            <div class="text-center mb-8">
+                <h2 class="text-3xl font-extrabold text-indigo-950">Panel de Resultados</h2>
+                <p class="text-slate-500 mt-2 font-medium">Revisa las métricas y exporta tus reportes financieros las veces que necesites.</p>
+            </div>
+            
+            <div id="warningMsg" class="hidden mb-8 p-5 bg-amber-50/80 backdrop-blur-sm text-amber-900 rounded-2xl border border-amber-200 text-sm max-w-4xl mx-auto shadow-sm">
+                <div class="flex items-center gap-3 mb-3 font-bold text-amber-700 text-base">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
+                    Observaciones en la Base de Datos:
+                </div>
+                <div class="max-h-32 overflow-y-auto pr-2 custom-scrollbar">
+                    <ul id="warningList" class="list-disc pl-5 space-y-1.5 font-medium text-xs"></ul>
+                </div>
+            </div>
+
+            <div class="bg-white/60 rounded-2xl border border-slate-100 overflow-hidden mb-8 max-h-72 overflow-y-auto max-w-4xl mx-auto shadow-inner">
+                <div id="monthlyBreakdown"></div>
+            </div>
+
+            <div class="grid grid-cols-3 gap-6 mb-10 p-6 bg-slate-50/50 rounded-2xl max-w-4xl mx-auto border border-slate-100">
+                <div class="text-center">
+                    <p class="text-[11px] text-slate-400 font-extrabold uppercase tracking-widest mb-1">Artículos</p>
+                    <p class="text-4xl font-black text-slate-800" id="sumArticulos">0</p>
+                </div>
+                <div class="text-center border-l border-r border-slate-200">
+                    <p class="text-[11px] text-slate-400 font-extrabold uppercase tracking-widest mb-1">Transacciones</p>
+                    <p class="text-4xl font-black text-slate-800" id="sumMovimientos">0</p>
+                </div>
+                <div class="text-center">
+                    <p class="text-[11px] text-slate-400 font-extrabold uppercase tracking-widest mb-1">Páginas Estimadas</p>
+                    <p class="text-4xl font-black text-indigo-600" id="sumPaginas">0</p>
+                </div>
+            </div>
+            
+            <!-- CONTROLES DE EXPORTACIÓN (MULTIPLES USOS) -->
+            <div class="max-w-4xl mx-auto space-y-4">
+                <div class="flex flex-wrap justify-center gap-4">
+                    <button id="btnCancelSummary" class="px-6 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 hover:text-slate-900 transition shadow-sm w-full sm:w-auto">Volver al Menú</button>
+                    <button id="btnProceedExcel" class="px-6 py-3 bg-[#107c41] rounded-xl text-white font-bold hover:bg-[#0c6132] transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Resumen Excel
+                    </button>
+                    <!-- NUEVO BOTÓN EXCEL DETALLADO -->
+                    <button id="btnProceedExcelDetallado" class="px-6 py-3 bg-[#0d9488] rounded-xl text-white font-bold hover:bg-[#0f766e] transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Excel Detallado
+                    </button>
+                    <button id="btnProceedPdf" class="px-6 py-3 bg-[#e11d48] rounded-xl text-white font-bold hover:bg-[#be123c] transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg> Reporte PDF
+                    </button>
+                    <button id="btnProceedBoth" class="px-6 py-3 bg-indigo-600 rounded-xl text-white font-bold hover:bg-indigo-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg> Generar Todos
+                    </button>
+                </div>
+                
+                <!-- ARRASTRE DE SALDOS PARA PRÓXIMO AÑO -->
+                <div class="mt-8 p-5 bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-100 rounded-2xl flex flex-col sm:flex-row items-center justify-between gap-5 shadow-sm">
+                    <div class="text-left">
+                        <h3 class="font-bold text-indigo-900 flex items-center gap-2">
+                            <svg class="w-5 h-5 text-indigo-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                            Saldos para el Próximo Año
+                        </h3>
+                        <p class="text-xs text-indigo-700/80 mt-1 font-medium">Exporta los saldos finales absolutos. Úsalos como base inicial en tu próxima matriz.</p>
+                    </div>
+                    <button id="btnExportarSaldos" class="px-6 py-3 bg-white border border-indigo-200 text-indigo-700 text-sm font-bold rounded-xl shadow-sm hover:shadow-md hover:border-indigo-300 transition-all shrink-0">
+                        Descargar Saldos Iniciales
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Barra de Progreso -->
+        <div id="progressContainer" class="hidden w-full max-w-md mx-auto text-center glass-card p-10 rounded-3xl">
+            <div class="animate-pulse mb-6">
+                <svg class="w-12 h-12 text-indigo-500 mx-auto" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
+            </div>
+            <h2 class="text-xl font-black text-indigo-900 mb-5" id="statusText">Procesando...</h2>
+            <div class="w-full bg-slate-100 rounded-full h-3 overflow-hidden shadow-inner">
+                <div id="progressBar" class="bg-gradient-to-r from-blue-500 to-indigo-600 h-full rounded-full transition-all duration-300 ease-out" style="width: 0%"></div>
+            </div>
+            <p id="progressDetail" class="text-sm text-slate-500 mt-4 font-bold">Por favor espera...</p>
+            <button id="cancelBtn" class="mt-8 text-sm font-bold text-red-500 hover:text-red-700 transition px-4 py-2 rounded-lg hover:bg-red-50">Detener Proceso</button>
+        </div>
+
+        <!-- Mensajes -->
+        <div id="successMsg" class="hidden mt-6 p-8 bg-emerald-50/90 backdrop-blur-md text-emerald-800 rounded-3xl border border-emerald-200 flex flex-col items-center shadow-lg max-w-md mx-auto text-center">
+            <div class="bg-emerald-100 p-3 rounded-full mb-4">
+                <svg class="w-10 h-10 text-emerald-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="3" d="M5 13l4 4L19 7"></path></svg>
+            </div>
+            <h3 class="text-xl font-black">¡Descarga Completada!</h3>
+            <p class="text-sm mt-2 font-medium opacity-80" id="successText">Puedes generar otro archivo si lo deseas.</p>
+        </div>
+        
+        <div id="cancelMsg" class="hidden mt-6 p-5 bg-amber-50 text-amber-800 rounded-2xl border border-amber-200 font-bold text-center max-w-md mx-auto shadow-sm">
+            Proceso detenido por el usuario.
+        </div>
+    </div>
+
+    <script>
+        const { jsPDF } = window.jspdf;
+        const peFormatter = new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+
+        let umMappingGlobal = {};
+        let saldosImportadosGlobal = {};
+        let archivoKardexBase = null;
+
+        // FUNCIONES DE FORMATEO
+        const formatearNum = (valor) => {
+            if (!valor || valor === 0) return "-";
+            return peFormatter.format(Number(valor));
+        };
+        const formatearFecha = (fecha) => {
+            if (!fecha) return '';
+            const d = new Date(fecha);
+            const dia = d.getDate();
+            const mes = d.getMonth() + 1;
+            return (dia < 10 ? '0' + dia : dia) + '/' + (mes < 10 ? '0' + mes : mes) + '/' + d.getFullYear();
+        };
+        
+        // Mapeo U.M.
+        document.getElementById('inputUmFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            document.getElementById('labelUmFile').textContent = "Cargando...";
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const wb = XLSX.read(evt.target.result, {type: 'array'});
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const data = XLSX.utils.sheet_to_json(ws);
+                    umMappingGlobal = {};
+                    let count = 0;
+                    data.forEach(row => {
+                        let keys = Object.keys(row);
+                        let keyItem = keys.find(k => k.trim().toUpperCase() === 'ITEM' || k.trim().toUpperCase() === 'CÓDIGO' || k.trim().toUpperCase() === 'CODIGO');
+                        let keyUm = keys.find(k => k.toUpperCase().includes('MEDIDA') || k.toUpperCase().includes('TABLA 6'));
+                        if (keyItem && keyUm) {
+                            let codigo = String(row[keyItem]).trim();
+                            let umVal = String(row[keyUm]).trim();
+                            if (codigo && umVal !== 'undefined' && umVal !== '') {
+                                umMappingGlobal[codigo] = umVal;
+                                count++;
+                            }
+                        }
+                    });
+                    document.getElementById('labelUmFile').innerHTML = `U.M. Listas <span class="opacity-70">(${count})</span>`;
+                    document.getElementById('btnLimpiarUm').classList.remove('hidden');
+                } catch(err) {
+                    alert("Error procesando Excel de U.M.: " + err.message);
+                    document.getElementById('labelUmFile').textContent = "Cargar Excel";
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btnLimpiarUm').addEventListener('click', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            umMappingGlobal = {};
+            document.getElementById('inputUmFile').value = null;
+            document.getElementById('labelUmFile').textContent = "Cargar Excel";
+            this.classList.add('hidden');
+        });
+
+        // Mapeo de Saldos Iniciales
+        document.getElementById('inputSaldosFile').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            document.getElementById('labelSaldosFile').textContent = "Cargando...";
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                try {
+                    const wb = XLSX.read(evt.target.result, {type: 'array'});
+                    const ws = wb.Sheets[wb.SheetNames[0]];
+                    const data = XLSX.utils.sheet_to_json(ws);
+                    saldosImportadosGlobal = {};
+                    let count = 0;
+                    data.forEach(row => {
+                        let keys = Object.keys(row);
+                        let keyCod = keys.find(k => k.toUpperCase().includes('CÓDIGO') || k.toUpperCase().includes('CODIGO') || k.toUpperCase() === 'ITEM');
+                        let keyCant = keys.find(k => k.toUpperCase().includes('CANTIDAD') || k.toUpperCase().includes('CANT'));
+                        let keyCosto = keys.find(k => k.toUpperCase().includes('COSTO TOTAL') || k.toUpperCase().includes('TOTAL'));
+                        
+                        if (keyCod && keyCant && keyCosto) {
+                            let cod = String(row[keyCod]).trim();
+                            saldosImportadosGlobal[cod] = {
+                                c: parseFloat(row[keyCant]) || 0,
+                                ct: parseFloat(row[keyCosto]) || 0
+                            };
+                            count++;
+                        }
+                    });
+                    document.getElementById('labelSaldosFile').innerHTML = `Saldos OK <span class="opacity-70">(${count})</span>`;
+                    document.getElementById('btnLimpiarSaldos').classList.remove('hidden');
+                } catch(err) {
+                    alert("Error procesando Excel de Saldos: " + err.message);
+                    document.getElementById('labelSaldosFile').textContent = "Subir Saldos";
+                }
+            };
+            reader.readAsArrayBuffer(file);
+        });
+
+        document.getElementById('btnLimpiarSaldos').addEventListener('click', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            saldosImportadosGlobal = {};
+            document.getElementById('inputSaldosFile').value = null;
+            document.getElementById('labelSaldosFile').textContent = "Subir Saldos";
+            this.classList.add('hidden');
+        });
+
+        document.getElementById('btnSelectAll').addEventListener('click', () => {
+            document.querySelectorAll('#mesesCheckboxes input').forEach(cb => cb.checked = true);
+        });
+        document.getElementById('btnSelectNone').addEventListener('click', () => {
+            document.querySelectorAll('#mesesCheckboxes input').forEach(cb => cb.checked = false);
+        });
+
+        // Archivo Base Kardex
+        document.getElementById('fileInput').addEventListener('change', function(e) {
+            const file = e.target.files[0];
+            if (!file) return;
+            archivoKardexBase = file;
+            
+            document.getElementById('kardexFileName').textContent = file.name;
+            const label = document.getElementById('labelKardexFile');
+            label.classList.replace('border-indigo-300', 'border-emerald-400');
+            label.classList.replace('text-indigo-700', 'text-emerald-700');
+            label.classList.replace('hover:bg-indigo-50', 'hover:bg-emerald-50');
+
+            const btnEscanear = document.getElementById('btnEscanear');
+            btnEscanear.disabled = false;
+            btnEscanear.classList.replace('bg-slate-300', 'bg-gradient-to-r');
+            btnEscanear.classList.replace('text-slate-100', 'text-white');
+            btnEscanear.classList.add('from-blue-600', 'to-indigo-600', 'hover:from-blue-700', 'hover:to-indigo-700', 'cursor-pointer', 'shadow-[0_10px_20px_rgba(79,70,229,0.3)]', 'hover:-translate-y-1');
+            btnEscanear.classList.remove('cursor-not-allowed');
+            
+            document.getElementById('btnLimpiarKardex').classList.remove('hidden');
+        });
+
+        document.getElementById('btnLimpiarKardex').addEventListener('click', function(e) {
+            e.preventDefault(); e.stopPropagation();
+            archivoKardexBase = null;
+            document.getElementById('fileInput').value = null;
+            document.getElementById('kardexFileName').textContent = "Selecciona el archivo del sistema";
+            
+            const label = document.getElementById('labelKardexFile');
+            label.classList.replace('border-emerald-400', 'border-indigo-300');
+            label.classList.replace('text-emerald-700', 'text-indigo-700');
+            label.classList.replace('hover:bg-emerald-50', 'hover:bg-indigo-50');
+
+            const btnEscanear = document.getElementById('btnEscanear');
+            btnEscanear.disabled = true;
+            btnEscanear.classList.replace('bg-gradient-to-r', 'bg-slate-300');
+            btnEscanear.classList.replace('text-white', 'text-slate-100');
+            btnEscanear.classList.remove('from-blue-600', 'to-indigo-600', 'hover:from-blue-700', 'hover:to-indigo-700', 'cursor-pointer', 'shadow-[0_10px_20px_rgba(79,70,229,0.3)]', 'hover:-translate-y-1');
+            btnEscanear.classList.add('cursor-not-allowed');
+
+            this.classList.add('hidden');
+        });
+
+        const workerCode = `
+            self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
+
+            const parseExcelDate = (val) => {
+                if (val == null) return null;
+                if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
+                if (typeof val === 'number') return new Date(Math.round((val - 25569) * 86400 * 1000));
+                let strVal = typeof val === 'string' ? val.trim() : String(val).trim();
+                if (strVal.match(/^\\d{4}-\\d{2}-\\d{2}\\s\\d{2}:\\d{2}:\\d{2}/)) strVal = strVal.replace(' ', 'T');
+                let d = new Date(strVal);
+                if (!isNaN(d.getTime())) return d;
+                return null;
+            };
+
+            const getYYYYMM = (date) => {
+                if (!date) return '1900-01';
+                let m = date.getMonth() + 1;
+                return date.getFullYear() + '-' + (m < 10 ? '0'+m : m);
+            };
+
+            const formatearUM = (val) => {
+                if (val === null || val === undefined) return '';
+                let s = String(val).trim();
+                if (s !== '' && !isNaN(s)) { return String(Number(s)).padStart(2, '0'); }
+                return s;
+            };
+
+            let dbArticulos = {};
+            let overrides = {};
+            let cancelado = false;
+
+            function procesarDatosHoja(filas, reportarProgreso, nombreHoja, advertencias) {
+                let itemActual = null;
+                let modoTransacciones = false;
+
+                let colFecha = 0, colT10 = 1, colSerie = 2, colNum = 3, colT12 = 4;
+                let colE_C = 5, colE_CU = 6, colE_CT = 7;
+                let colS_C = 8, colS_CU = 9, colS_CT = 10;
+                let colF_C = 11, colF_CU = 12, colF_CT = 13;
+
+                const total = filas.length;
+
+                for (let i = 0; i < total; i++) {
+                    if (cancelado) return;
+                    if (reportarProgreso && i % 3000 === 0) reportarProgreso(i, total);
+
+                    const row = filas[i];
+                    if (!row || row.length === 0) continue;
+
+                    const cell0 = row[0];
+                    const val0 = (cell0 != null) ? String(cell0).trim().toUpperCase() : '';
+                    if (!val0) continue; 
+
+                    const cell1 = row[1];
+                    const val1 = (cell1 != null) ? String(cell1).trim() : '';
+
+                    if (val0.startsWith('ITEM:')) {
+                        const codigo = val0.substring(5).trim();
+                        if (!dbArticulos[codigo]) {
+                            dbArticulos[codigo] = { codigo, descripcion: '', tipo: '', um: '', transacciones: [] };
+                        }
+                        itemActual = dbArticulos[codigo];
+                        modoTransacciones = false;
+                        continue;
+                    }
+
+                    if (!itemActual) continue;
+
+                    if (overrides.filtroArticulo && !itemActual.codigo.includes(overrides.filtroArticulo)) {
+                        continue; 
+                    }
+
+                    if (val0 === 'DESCRIPCIÓN:' && !itemActual.descripcion) itemActual.descripcion = val1;
+                    if (val0 === 'TIPO (TABLA 5):' && !itemActual.tipo) itemActual.tipo = val1;
+                    if (val0 === 'U.M. (TABLA 6):' && !itemActual.um) itemActual.um = val1; 
+
+                    if (val0 === 'FECHA' || val0.includes('FECHA')) { modoTransacciones = true; continue; }
+                    if (val0.includes('TOTALES')) { modoTransacciones = false; continue; }
+
+                    if (modoTransacciones) {
+                        const cellT10 = row[colT10];
+                        const cellSerie = row[colSerie];
+                        const cellT12 = row[colT12];
+
+                        let t10Val = (cellT10 != null) ? String(cellT10).trim().toUpperCase() : '';
+                        let serieVal = (cellSerie != null) ? String(cellSerie).trim().toUpperCase() : '';
+                        let numVal = (row[colNum] != null) ? String(row[colNum]).trim().toUpperCase() : '';
+                        let tipoOpStr = (cellT12 != null) ? String(cellT12).trim().toUpperCase() : '';
+                        
+                        if (!t10Val && !serieVal && !numVal && !tipoOpStr) continue;
+                        if (!tipoOpStr && t10Val !== 'CIERRE' && serieVal !== 'CI' && !t10Val.includes('SALDO') && !serieVal.includes('SALDO')) continue;
+
+                        let fechaObj = parseExcelDate(row[colFecha]);
+                        if (!fechaObj) {
+                            advertencias.push(\`Fila \${i + 1} en hoja "\${nombreHoja}": Fecha vacía en artículo \${itemActual.codigo}.\`);
+                            continue;
+                        }
+
+                        let tipoOpRaw = /^\\d+$/.test(tipoOpStr) ? tipoOpStr.padStart(2, '0') : tipoOpStr;
+                        let esSaldoInicial = (tipoOpStr.includes('SALDO INI') || tipoOpStr === 'SALDO INICIAL');
+                        let esCierre = !esSaldoInicial && (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.includes('CIERRE'));
+                        
+                        let isCierreArrastre = false;
+                        let isSaldoInicialFlag = false;
+
+                        let eC = parseFloat(row[colE_C]) || 0; let eCU = parseFloat(row[colE_CU]) || 0; let eCT = parseFloat(row[colE_CT]) || 0;
+                        let sC = parseFloat(row[colS_C]) || 0; let sCU = parseFloat(row[colS_CU]) || 0; let sCT = parseFloat(row[colS_CT]) || 0;
+                        let fC = parseFloat(row[colF_C]) || 0; let fCU = parseFloat(row[colF_CU]) || 0; let fCT = parseFloat(row[colF_CT]) || 0;
+
+                        if (esSaldoInicial || esCierre || tipoOpRaw === '16') {
+                            tipoOpRaw = '16';
+                            if (esSaldoInicial) {
+                                fechaObj.setHours(0, 0, 0, 0);
+                                isSaldoInicialFlag = true;
+                                if (fC === 0 && eC !== 0) { fC = eC; fCU = eCU; fCT = eCT; }
+                            } else if (esCierre) {
+                                let y = fechaObj.getFullYear();
+                                let m = fechaObj.getMonth();
+                                fechaObj = new Date(y, m + 1, 0, 23, 59, 59, 999);
+                                isCierreArrastre = true;
+                                if (fC === 0 && eC !== 0) { fC = eC; fCU = eCU; fCT = eCT; }
+                            } else {
+                                if (eC === 0 && fC !== 0) { eC = fC; eCT = fCT; eCU = fCU; }
+                            }
+                        }
+
+                        itemActual.transacciones.push({
+                            fecha: fechaObj, t10: t10Val, serie: serieVal, num: numVal, t12: tipoOpRaw,
+                            eC: eC, eCU: eCU, eCT: eCT, sC: sC, sCU: sCU, sCT: sCT, fC: fC, fCU: fCU, fCT: fCT,
+                            isCierreArrastre: isCierreArrastre, isSaldoInicialFlag: isSaldoInicialFlag
+                        });
+                    }
+                }
+            }
+
+            self.onmessage = function(e) {
+                if (e.data.cmd === 'cancel') { cancelado = true; return; }
+                
+                if (e.data.cmd === 'reset_chunk') {
+                    self.currentChunkIndex = 0;
+                    return;
+                }
+                
+                if (e.data.cmd === 'proceed' || e.data.cmd === 'next_chunk') {
+                    if (!self.bloquesPDF_global || self.currentChunkIndex >= self.bloquesPDF_global.length) {
+                        self.postMessage({ type: 'chunk', items: [], isLast: true }); return;
+                    }
+                    const TAMANO_CHUNK = 25; 
+                    const lote = self.bloquesPDF_global.slice(self.currentChunkIndex, self.currentChunkIndex + TAMANO_CHUNK);
+                    self.currentChunkIndex += TAMANO_CHUNK;
+                    const esUltimo = self.currentChunkIndex >= self.bloquesPDF_global.length;
+                    self.postMessage({ type: 'chunk', items: lote, isLast: esUltimo });
+                    return;
+                }
+
+                cancelado = false;
+                dbArticulos = {};
+                overrides = { 
+                    anio: e.data.anio, estab: e.data.estab, meses: e.data.meses, umDefault: e.data.umDefault, 
+                    ruc: e.data.ruc, razonSocial: e.data.razonSocial, mapUM: e.data.mapUM || {},
+                    filtroArticulo: e.data.filtroArticulo, saldosImportados: e.data.saldosImportados || {}
+                };
+
+                let empDataFinal = { ruc: overrides.ruc, razonSocial: overrides.razonSocial, establecimiento: overrides.estab };
+                const rawBuffer = e.data.file;
+                let advertenciasGlobales = [];
+
+                try {
+                    self.postMessage({ type: 'progress', percent: 2, detail: 'Procesando Data...' });
+                    const wbInfo = XLSX.read(rawBuffer, { 
+                        type: 'array', dense: true, cellDates: true, cellText: false, cellNF: false, cellStyles: false, cellFormula: false, bookVBA: false
+                    });
+                    const hojas = wbInfo.SheetNames;
+
+                    for (let h = 0; h < hojas.length; h++) {
+                        if (cancelado) { self.postMessage({ type: 'cancelled' }); return; }
+                        let sheet = wbInfo.Sheets[hojas[h]];
+                        let filas = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+                        const basePct = 5 + Math.round((h / hojas.length) * 55);
+                        procesarDatosHoja(filas, (i, total) => {
+                            if(i%5000===0) self.postMessage({ type: 'progress', percent: basePct, detail: \`Leyendo: \${hojas[h]}...\` });
+                        }, hojas[h], advertenciasGlobales);
+                    }
+
+                    self.postMessage({ type: 'progress', percent: 63, detail: 'Aplicando Lógica Contable...' });
+                    
+                    let mesesSet = new Set();
+                    let articulosOrdenados = Object.values(dbArticulos).filter(item => item.transacciones.length > 0 || overrides.saldosImportados[item.codigo]);
+                    articulosOrdenados = articulosOrdenados.sort((a, b) => a.codigo.localeCompare(b.codigo));
+                    
+                    let baseYearForImport = overrides.anio ? parseInt(overrides.anio.split(',')[0]) : new Date().getFullYear();
+
+                    articulosOrdenados.forEach(item => {
+                        let txFinal = item.transacciones[item.transacciones.length - 1];
+                        if (txFinal && txFinal.eC === 0 && txFinal.sC === 0 && !txFinal.isCierreArrastre) { item.transacciones.pop(); }
+
+                        let sImp = overrides.saldosImportados[item.codigo];
+                        if (sImp) {
+                            item.transacciones = item.transacciones.filter(tx => !tx.isSaldoInicialFlag);
+                            let fakeDate = new Date(baseYearForImport, 0, 1, 0, 0, 0);
+                            item.transacciones.push({
+                                fecha: fakeDate, t10: '', serie: '', num: 'SALDO_ANT', t12: '16',
+                                eC: sImp.c, eCU: sImp.c > 0 ? sImp.ct / sImp.c : 0, eCT: sImp.ct,
+                                sC: 0, sCU: 0, sCT: 0,
+                                fC: sImp.c, fCU: sImp.c > 0 ? sImp.ct / sImp.c : 0, fCT: sImp.ct,
+                                isCierreArrastre: false, isSaldoInicialFlag: true
+                            });
+                        }
+                        
+                        item.transacciones.sort((a, b) => {
+                            if (a.fecha.getTime() === b.fecha.getTime()) {
+                                if (a.isSaldoInicialFlag && !b.isSaldoInicialFlag) return -1;
+                                if (!a.isSaldoInicialFlag && b.isSaldoInicialFlag) return 1;
+                                let aIsEnt = (a.eC > 0 || a.eCT > 0); let bIsEnt = (b.eC > 0 || b.eCT > 0);
+                                if (aIsEnt && !bIsEnt) return -1; if (!aIsEnt && bIsEnt) return 1;
+                                if (a.isCierreArrastre && !b.isCierreArrastre) return 1;
+                                if (!a.isCierreArrastre && b.isCierreArrastre) return -1;
+                            }
+                            return a.fecha - b.fecha;
+                        });
+
+                        let runC = 0; let runCT = 0;
+                        item.transacciones.forEach(tx => {
+                            if (tx.isSaldoInicialFlag) {
+                                runC = tx.fC || tx.eC; runCT = tx.fCT || tx.eCT;
+                            } else {
+                                if (tx.eC > 0 || tx.eCT > 0) { runC += tx.eC; runCT += tx.eCT; }
+                                if (tx.sC > 0 || tx.sCT > 0) {
+                                    let costoUnitarioPromedio = runC > 0 ? (runCT / runC) : 0;
+                                    if (tx.sC > 0) {
+                                        if (costoUnitarioPromedio > 0 || runC > 0) tx.sCU = costoUnitarioPromedio;
+                                        tx.sCT = tx.sC * tx.sCU;
+                                    }
+                                    if (Math.abs(runC - tx.sC) < 0.0001 && runC > 0) {
+                                        tx.sCT = runCT; if (tx.sC > 0) tx.sCU = tx.sCT / tx.sC;
+                                    }
+                                    runC -= tx.sC; runCT -= tx.sCT;
+                                }
+                                if (Math.abs(runC) < 0.0001) { runC = 0; runCT = 0; }
+                                tx.fC = runC; tx.fCT = runCT;
+                                tx.fCU = runC !== 0 ? Math.abs(runCT / runC) : 0;
+                            }
+                        });
+                        item.transacciones.forEach(tx => mesesSet.add(getYYYYMM(tx.fecha)));
+                    });
+
+                    let mesesArr = Array.from(mesesSet).sort();
+                    let aniosInput = overrides.anio ? overrides.anio.split(',').map(a => a.trim()).filter(a => a !== '') : [];
+                    let mesesAProcesar = mesesArr.filter(mes => {
+                        let partes = mes.split('-');
+                        let pasaAnio = aniosInput.length === 0 || aniosInput.includes(partes[0]);
+                        let pasaMes = overrides.meses && overrides.meses.includes(partes[1]);
+                        return pasaAnio && pasaMes;
+                    });
+
+                    let bloquesPDF = []; let totalMovimientos = 0; let statsPorMes = []; 
+
+                    mesesAProcesar.forEach(mes => {
+                        let artsEnMes = 0; let movsEnMes = 0;
+                        articulosOrdenados.forEach(item => {
+                            let txs_mes = []; let last_tx_before = null;
+                            for (let i = 0; i < item.transacciones.length; i++) {
+                                let tx = item.transacciones[i]; let tx_m = getYYYYMM(tx.fecha);
+                                if (tx_m < mes) { last_tx_before = tx; } 
+                                else if (tx_m === mes) {
+                                    if (tx.isSaldoInicialFlag) { last_tx_before = tx; } 
+                                    else if (!tx.isCierreArrastre) { txs_mes.push(tx); }
+                                } else { break; }
+                            }
+                            if (txs_mes.length > 0 || last_tx_before) {
+                                let saldo_inicial = null;
+                                if (last_tx_before) { saldo_inicial = { fC: last_tx_before.fC, fCU: last_tx_before.fCU, fCT: last_tx_before.fCT }; }
+                                if (txs_mes.length === 0 && (!saldo_inicial || saldo_inicial.fC === 0)) return;
+                                artsEnMes++; movsEnMes += txs_mes.length; totalMovimientos += txs_mes.length;
+                                let mappedUm = overrides.mapUM[item.codigo];
+                                let umToUse = (mappedUm && mappedUm !== '') ? mappedUm : overrides.umDefault;
+                                bloquesPDF.push({
+                                    type: 'article', period: mes,
+                                    item: { codigo: item.codigo, tipo: item.tipo, descripcion: item.descripcion, um: formatearUM(umToUse) },
+                                    saldo_inicial: saldo_inicial, txs: txs_mes
+                                });
+                            }
+                        });
+                        if (artsEnMes > 0) statsPorMes.push({ mes: mes, articulos: artsEnMes, movimientos: movsEnMes });
+                    });
+
+                    let saldosFinalesExport = [];
+                    articulosOrdenados.forEach(item => {
+                        if (item.transacciones.length > 0) {
+                            let lastTx = item.transacciones[item.transacciones.length - 1];
+                            saldosFinalesExport.push({ 'CÓDIGO': item.codigo, 'DESCRIPCIÓN': item.descripcion, 'CANTIDAD': lastTx.fC, 'COSTO TOTAL': lastTx.fCT });
+                        }
+                    });
+
+                    dbArticulos = null; const totalBlocks = bloquesPDF.length; 
+                    self.bloquesPDF_global = bloquesPDF;
+                    self.currentChunkIndex = 0; 
+                    
+                    self.postMessage({ 
+                        type: 'meta', total: totalBlocks, totalTxs: totalMovimientos, 
+                        statsMeses: statsPorMes, empData: empDataFinal, 
+                        advertencias: advertenciasGlobales, saldosExport: saldosFinalesExport 
+                    });
+
+                } catch (err) { self.postMessage({ type: 'error', message: err.message }); }
+            }
+        `;
+
+        let worker = null; let cancelledByUser = false; let cola = [];
+        let recibidoUltimoLote = false; let procesandoCola = false;
+        let generateOptions = { pdf: false, excel: false, excelDetallado: false };
+        let totalBloques = 0; let bloquesDibujados = 0; let doc = null; let cursorY = 22; 
+        let empDataGlobal = null; let lastHeaderPage = 0; let currentMonthInPdf = null; 
+        let excelDataRaw = []; let excelDetalladoMesRaw = []; 
+        let opEntradasSeen = new Set(); let opSalidasSeen = new Set();
+
+        const cederHilo = () => new Promise(resolve => setTimeout(resolve, 0));
+        
+        function setProgress(pct, detail) {
+            document.getElementById('progressBar').style.width = `${pct}%`;
+            if (detail) document.getElementById('progressDetail').innerText = detail;
+        }
+
+        function resetUI() {
+            document.getElementById('progressContainer').classList.add('hidden');
+            document.getElementById('summaryContainer').classList.add('hidden');
+            document.getElementById('controls').classList.remove('hidden');
+            document.getElementById('warningMsg').classList.add('hidden');
+            document.getElementById('warningList').innerHTML = '';
+        }
+
+        document.getElementById('btnCancelSummary').addEventListener('click', function() {
+            if (worker) { worker.terminate(); worker = null; }
+            cola = []; doc = null; empDataGlobal = null; excelDataRaw = []; excelDetalladoMesRaw = [];
+            archivoKardexBase = null;
+            document.getElementById('fileInput').value = null;
+            document.getElementById('kardexFileName').textContent = "Selecciona el archivo del sistema";
+            const label = document.getElementById('labelKardexFile');
+            label.classList.replace('border-emerald-400', 'border-indigo-300');
+            label.classList.replace('text-emerald-700', 'text-indigo-700');
+            label.classList.replace('hover:bg-emerald-50', 'hover:bg-indigo-50');
+            const btnEscanear = document.getElementById('btnEscanear');
+            btnEscanear.disabled = true;
+            btnEscanear.classList.replace('bg-gradient-to-r', 'bg-slate-300');
+            btnEscanear.classList.replace('text-white', 'text-slate-100');
+            btnEscanear.classList.remove('from-blue-600', 'to-indigo-600', 'hover:from-blue-700', 'hover:to-indigo-700', 'cursor-pointer', 'shadow-[0_10px_20px_rgba(79,70,229,0.3)]', 'hover:-translate-y-1');
+            btnEscanear.classList.add('cursor-not-allowed');
+            document.getElementById('btnLimpiarKardex').classList.add('hidden');
+            resetUI();
+        });
+
+        document.getElementById('cancelBtn').addEventListener('click', function() {
+            cancelledByUser = true;
+            cola = []; doc = null; excelDataRaw = []; excelDetalladoMesRaw = [];
+            document.getElementById('progressContainer').classList.add('hidden');
+            document.getElementById('summaryContainer').classList.remove('hidden');
+            document.getElementById('cancelMsg').classList.remove('hidden');
+            setTimeout(() => document.getElementById('cancelMsg').classList.add('hidden'), 4000);
+        });
+
+        document.getElementById('btnEscanear').addEventListener('click', function() {
+            if (!archivoKardexBase) return;
+            const valAnio = document.getElementById('inputAnio').value.trim();
+            const valEstablecimiento = document.getElementById('inputEstablecimiento').value.trim();
+            const valUmDefault = document.getElementById('inputUmDefault').value.trim();
+            const valRuc = document.getElementById('inputRuc').value.trim();
+            const valRazonSocial = document.getElementById('inputRazonSocial').value.trim();
+            const valFiltroArt = document.getElementById('inputArticulo').value.trim(); 
+            const checkedMeses = Array.from(document.querySelectorAll('#mesesCheckboxes input:checked')).map(cb => cb.value);
+            
+            if (checkedMeses.length === 0) { alert("Selecciona al menos un mes."); return; }
+
+            cancelledByUser = false;
+            document.getElementById('controls').classList.add('hidden');
+            document.getElementById('successMsg').classList.add('hidden');
+            document.getElementById('cancelMsg').classList.add('hidden');
+            document.getElementById('warningMsg').classList.add('hidden');
+            document.getElementById('warningList').innerHTML = '';
+            document.getElementById('progressContainer').classList.remove('hidden');
+            document.getElementById('statusText').innerText = 'Iniciando Motor Analítico...';
+            setProgress(1, 'Procesando el archivo base...');
+
+            const reader = new FileReader();
+            reader.onload = function(evt) {
+                const arrayBuffer = evt.target.result;
+                const blob = new Blob([workerCode], { type: 'application/javascript' });
+                worker = new Worker(URL.createObjectURL(blob));
+
+                cola = []; recibidoUltimoLote = false; procesandoCola = false; 
+                totalBloques = 0; bloquesDibujados = 0;
+                doc = null; cursorY = 22; lastHeaderPage = 0; currentMonthInPdf = null;
+                excelDataRaw = []; excelDetalladoMesRaw = []; 
+                opEntradasSeen = new Set(); opSalidasSeen = new Set();
+
+                worker.onmessage = function(msg) {
+                    const data = msg.data;
+                    if (data.type === 'progress') { setProgress(data.percent, data.detail); return; }
+                    if (data.type === 'error') { alert("Error: " + data.message); resetUI(); worker.terminate(); worker = null; return; }
+                    
+                    if (data.type === 'meta') {
+                        totalBloques = data.total; empDataGlobal = data.empData;
+                        window.saldosFinalesData = data.saldosExport;
+                        
+                        if (data.advertencias && data.advertencias.length > 0) {
+                            const warningMsgEl = document.getElementById('warningMsg');
+                            const warningListEl = document.getElementById('warningList');
+                            warningMsgEl.classList.remove('hidden');
+                            data.advertencias.slice(0, 50).forEach(adv => { let li = document.createElement('li'); li.textContent = adv; warningListEl.appendChild(li); });
+                            if (data.advertencias.length > 50) {
+                                let li = document.createElement('li'); li.textContent = `...y otras ${data.advertencias.length - 50} advertencias ocultas.`; li.className = "font-bold text-amber-900"; warningListEl.appendChild(li);
+                            }
+                        }
+                        
+                        if(totalBloques === 0) { alert("No se encontraron movimientos válidos. Revisa el filtro."); resetUI(); return; }
+
+                        let alturaEstimadaMM = (totalBloques * 22) + (data.totalTxs * 3.5);
+                        let paginasEstimadas = Math.ceil(alturaEstimadaMM / 263) || 1;
+
+                        document.getElementById('progressContainer').classList.add('hidden');
+                        document.getElementById('summaryContainer').classList.remove('hidden');
+                        document.getElementById('sumArticulos').innerText = totalBloques.toLocaleString('es-PE');
+                        document.getElementById('sumMovimientos').innerText = data.totalTxs.toLocaleString('es-PE');
+                        document.getElementById('sumPaginas').innerText = `~ ${paginasEstimadas.toLocaleString('es-PE')}`;
+
+                        let tableHTML = `<table class="w-full text-sm text-left border-collapse">
+                            <thead><tr class="bg-indigo-50/50 text-indigo-900 sticky top-0 backdrop-blur-md">
+                                <th class="p-3 border-b border-indigo-100 uppercase text-[11px] tracking-wider">Período</th>
+                                <th class="p-3 border-b border-indigo-100 text-center uppercase text-[11px] tracking-wider">Artículos</th>
+                                <th class="p-3 border-b border-indigo-100 text-center uppercase text-[11px] tracking-wider">Movs.</th>
+                                <th class="p-3 border-b border-indigo-100 text-center uppercase text-[11px] tracking-wider">Hojas</th>
+                            </tr></thead><tbody>`;
+                        
+                        data.statsMeses.forEach(stat => {
+                            let partesMes = stat.mes.split('-'); let mesTexto = nombresMeses[parseInt(partesMes[1], 10) - 1] + ' ' + partesMes[0];
+                            let paginasMes = Math.ceil(((stat.articulos * 22) + (stat.movimientos * 3.5)) / 263) || 1;
+                            tableHTML += `<tr class="hover:bg-slate-50 transition border-b border-slate-100">
+                                <td class="p-3 font-semibold text-slate-700">${mesTexto}</td><td class="p-3 text-center text-slate-600">${stat.articulos}</td>
+                                <td class="p-3 text-center text-slate-600">${stat.movimientos}</td><td class="p-3 text-center font-bold text-indigo-600">${paginasMes}</td>
+                            </tr>`;
+                        });
+                        tableHTML += `</tbody></table>`; document.getElementById('monthlyBreakdown').innerHTML = tableHTML; return;
+                    }
+                    if (data.type === 'chunk') { cola.push(...data.items); if (data.isLast) recibidoUltimoLote = true; consumirCola(); }
+                };
+                worker.postMessage({ 
+                    file: arrayBuffer, anio: valAnio, meses: checkedMeses, estab: valEstablecimiento,
+                    umDefault: valUmDefault, ruc: valRuc, razonSocial: valRazonSocial,
+                    mapUM: umMappingGlobal, filtroArticulo: valFiltroArt, saldosImportados: saldosImportadosGlobal
+                }, [arrayBuffer]);
+            };
+            reader.readAsArrayBuffer(archivoKardexBase);
+        });
+
+        document.getElementById('btnExportarSaldos').addEventListener('click', () => {
+            if (!window.saldosFinalesData || window.saldosFinalesData.length === 0) { alert("No hay saldos para exportar."); return; }
+            const ws = XLSX.utils.json_to_sheet(window.saldosFinalesData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Saldos");
+            let anioFiltro = document.getElementById('inputAnio').value.trim();
+            if(!anioFiltro) { anioFiltro = new Date().getFullYear(); } else { anioFiltro = anioFiltro.split(',')[0].trim(); }
+            XLSX.writeFile(wb, `Saldo final año ${anioFiltro}.xlsx`);
+        });
+
+        async function initiateProcessing(pdf, excelResumen, excelDetallado) {
+            generateOptions.pdf = pdf; generateOptions.excel = excelResumen; generateOptions.excelDetallado = excelDetallado;
+            cancelledByUser = false; recibidoUltimoLote = false; procesandoCola = false;
+            cola = []; bloquesDibujados = 0; currentMonthInPdf = null; lastHeaderPage = 0;
+            
+            document.getElementById('summaryContainer').classList.add('hidden'); 
+            document.getElementById('progressContainer').classList.remove('hidden');
+            document.getElementById('statusText').innerText = `Armando Documentos...`;
+            
+            excelDataRaw = []; excelDetalladoMesRaw = []; opEntradasSeen = new Set(); opSalidasSeen = new Set();
+            if (pdf) doc = new jsPDF('p', 'mm', 'a4');
+            
+            worker.postMessage({ cmd: 'reset_chunk' });
+            setTimeout(() => { worker.postMessage({ cmd: 'next_chunk' }); }, 50);
+        }
+
+        document.getElementById('btnProceedExcel').addEventListener('click', () => initiateProcessing(false, true, false));
+        document.getElementById('btnProceedExcelDetallado').addEventListener('click', () => initiateProcessing(false, false, true));
+        document.getElementById('btnProceedPdf').addEventListener('click', () => initiateProcessing(true, false, false));
+        document.getElementById('btnProceedBoth').addEventListener('click', () => initiateProcessing(true, true, true));
+
+        function checkAndDrawPageHeader(period) {
+            const currentPage = doc.internal.getCurrentPageInfo().pageNumber;
+            if (lastHeaderPage !== currentPage) {
+                doc.setFontSize(6); doc.setFont("helvetica", "bold");
+                doc.text('FORMATO 13.1: "REGISTRO DE INVENTARIO PERMANENTE VALORIZADO - DETALLE DEL INVENTARIO VALORIZADO"', 8, 6);
+                doc.text(`PERÍODO: ${period}`, 8, 9);
+                doc.text(`RUC: ${empDataGlobal.ruc}`, 8, 12);
+                doc.text(`APELLIDOS Y NOMBRES, DENOMINACIÓN O RAZÓN SOCIAL: ${empDataGlobal.razonSocial}`, 8, 15);
+                doc.text(`ESTABLECIMIENTO : ${empDataGlobal.establecimiento}`, 8, 18);
+                lastHeaderPage = currentPage;
+            }
+        }
+
+        function procesarBloqueParaExcelDetallado(block) {
+            if (block.saldo_inicial) {
+                let p = block.period.split('-'); let firstDayStr = `01/${p[1]}/${p[0]}`;
+                excelDetalladoMesRaw.push({
+                    'CÓDIGO DE LA EXISTENCIA': block.item.codigo, 'DESCRIPCIÓN': block.item.descripcion, 'TIPO': block.item.tipo, 'CÓD. UNIDAD DE MEDIDA': block.item.um,
+                    'FECHA': firstDayStr, 'TIPO DOC': '', 'SERIE': '', 'NÚMERO': 'SALDO INICIAL', 'TIPO OPERACIÓN': '16',
+                    'ENTRADA CANTIDAD': 0, 'ENTRADA C.U.': 0, 'ENTRADA COSTO TOTAL': 0,
+                    'SALIDA CANTIDAD': 0, 'SALIDA C.U.': 0, 'SALIDA COSTO TOTAL': 0,
+                    'SALDO CANTIDAD': block.saldo_inicial.fC, 'SALDO C.U.': block.saldo_inicial.fCU, 'SALDO COSTO TOTAL': block.saldo_inicial.fCT
+                });
+            }
+            block.txs.forEach(tx => {
+                excelDetalladoMesRaw.push({
+                    'CÓDIGO DE LA EXISTENCIA': block.item.codigo, 'DESCRIPCIÓN': block.item.descripcion, 'TIPO': block.item.tipo, 'CÓD. UNIDAD DE MEDIDA': block.item.um,
+                    'FECHA': formatearFecha(tx.fecha), 'TIPO DOC': tx.t10, 'SERIE': tx.serie, 'NÚMERO': tx.num, 'TIPO OPERACIÓN': tx.t12,
+                    'ENTRADA CANTIDAD': tx.eC, 'ENTRADA C.U.': tx.eCU, 'ENTRADA COSTO TOTAL': tx.eCT,
+                    'SALIDA CANTIDAD': tx.sC, 'SALIDA C.U.': tx.sCU, 'SALIDA COSTO TOTAL': tx.sCT,
+                    'SALDO CANTIDAD': tx.fC, 'SALDO C.U.': tx.fCU, 'SALDO COSTO TOTAL': tx.fCT
+                });
+            });
+            excelDetalladoMesRaw.push({}); // Fila en blanco como separador visual
+        }
+
+        function procesarBloqueParaExcel(block) {
+            let rowRaw = {
+                PERIODO: block.period, CODIGO: block.item.codigo, DESCRIPCION: block.item.descripcion,
+                SALDO_INI_CANT: block.saldo_inicial ? block.saldo_inicial.fC : 0,
+                SALDO_INI_TOTAL: block.saldo_inicial ? block.saldo_inicial.fCT : 0,
+                ENTRADAS: {}, SALIDAS: {}
+            };
+            let tEntC = 0, tEntV = 0, tSalC = 0, tSalV = 0;
+            block.txs.forEach(tx => {
+                let op = tx.t12;
+                if (tx.eC > 0 || tx.eCT > 0) {
+                    if (!rowRaw.ENTRADAS[op]) rowRaw.ENTRADAS[op] = {c:0, v:0};
+                    rowRaw.ENTRADAS[op].c += tx.eC; rowRaw.ENTRADAS[op].v += tx.eCT;
+                    tEntC += tx.eC; tEntV += tx.eCT; opEntradasSeen.add(op);
+                }
+                if (tx.sC > 0 || tx.sCT > 0) {
+                    if (!rowRaw.SALIDAS[op]) rowRaw.SALIDAS[op] = {c:0, v:0};
+                    rowRaw.SALIDAS[op].c += tx.sC; rowRaw.SALIDAS[op].v += tx.sCT;
+                    tSalC += tx.sC; tSalV += tx.sCT; opSalidasSeen.add(op);
+                }
+            });
+            rowRaw.TOTAL_ENT_CANT = tEntC; rowRaw.TOTAL_ENT_TOTAL = tEntV; rowRaw.TOTAL_SAL_CANT = tSalC; rowRaw.TOTAL_SAL_TOTAL = tSalV;
+            let lastTx = block.txs.length > 0 ? block.txs[block.txs.length - 1] : block.saldo_inicial;
+            rowRaw.SALDO_FIN_CANT = lastTx ? lastTx.fC : 0; rowRaw.SALDO_FIN_TOTAL = lastTx ? lastTx.fCT : 0;
+            excelDataRaw.push(rowRaw);
+        }
+
+        function dibujarArticulo(block) {
+            if (cursorY > doc.internal.pageSize.getHeight() - 40) { doc.addPage(); cursorY = 22; }
+            checkAndDrawPageHeader(block.period);
+            doc.setFontSize(5.5); doc.setFont("helvetica", "bold");
+            const addText = (label, value, yPos, xPos = 8) => { doc.setFont("helvetica", "bold"); doc.text(label, xPos, yPos); doc.setFont("helvetica", "normal"); doc.text(value, xPos + doc.getTextWidth(label) + 1, yPos); };
+            addText("CÓDIGO DE LA EXISTENCIA:", block.item.codigo, cursorY); addText("DESCRIPCIÓN:", block.item.descripcion, cursorY + 2.5);
+            addText("MÉTODO DE VALUACIÓN:", "PROMEDIO PONDERADO", cursorY + 5); addText("TIPO:", block.item.tipo, cursorY, 110); addText("CÓD. UNIDAD DE MEDIDA :", block.item.um, cursorY + 2.5, 110);
+            cursorY += 8;
+            let tableBody = []; let runningTotals = []; let cEC = 0, cECT = 0, cSC = 0, cSCT = 0; let sumEntCant = 0, sumEntTotal = 0, sumSalCant = 0, sumSalTotal = 0;
+            if (block.saldo_inicial) {
+                sumEntCant += block.saldo_inicial.fC; sumEntTotal += block.saldo_inicial.fCT;
+                let p = block.period.split('-'); let firstDayStr = `01/${p[1]}/${p[0]}`;
+                tableBody.push([firstDayStr, '', '', 'SALDO INICIAL', '16', formatearNum(block.saldo_inicial.fC), formatearNum(block.saldo_inicial.fCU), formatearNum(block.saldo_inicial.fCT), '', '', '', formatearNum(block.saldo_inicial.fC), formatearNum(block.saldo_inicial.fCU), formatearNum(block.saldo_inicial.fCT)]);
+                runningTotals.push({ eC: cEC, eCT: cECT, sC: cSC, sCT: cSCT });
+            }
+            block.txs.forEach(tx => {
+                cEC += tx.eC; cECT += tx.eCT; cSC += tx.sC; cSCT += tx.sCT; sumEntCant += tx.eC; sumEntTotal += tx.eCT; sumSalCant += tx.sC; sumSalTotal += tx.sCT;
+                tableBody.push([formatearFecha(tx.fecha), tx.t10, tx.serie, tx.num, tx.t12, formatearNum(tx.eC), formatearNum(tx.eCU), formatearNum(tx.eCT), formatearNum(tx.sC), formatearNum(tx.sCU), formatearNum(tx.sCT), formatearNum(tx.fC), formatearNum(tx.fCU), formatearNum(tx.fCT)]);
+                runningTotals.push({ eC: cEC, eCT: cECT, sC: cSC, sCT: cSCT });
+            });
+            tableBody.push([{ content: 'TOTALES', colSpan: 5, styles: { halign: 'center', fontStyle: 'bold' } }, { content: formatearNum(sumEntCant), styles: { fontStyle: 'bold' } }, { content: '' }, { content: formatearNum(sumEntTotal), styles: { fontStyle: 'bold' } }, { content: formatearNum(sumSalCant), styles: { fontStyle: 'bold' } }, { content: '' }, { content: formatearNum(sumSalTotal), styles: { fontStyle: 'bold' } }, { content: '' }, { content: '' }, { content: '' }]);
+            runningTotals.push({ eC: cEC, eCT: cECT, sC: cSC, sCT: cSCT });
+            doc.autoTable({
+                startY: cursorY, theme: 'grid',
+                styles: { fontSize: 4.5, cellPadding: 0.5, textColor: [0, 0, 0], lineColor: [0, 0, 0], lineWidth: 0.1 },
+                headStyles: { fillColor: [240, 240, 240], textColor: [0, 0, 0], fontStyle: 'bold', halign: 'center', valign: 'middle' },
+                head: [[
+                    { content: 'DOCUMENTO / COMPROBANTE', colSpan: 4 }, { content: 'OPER.', rowSpan: 2 }, 
+                    { content: 'ENTRADAS', colSpan: 3 }, { content: 'SALIDAS', colSpan: 3 }, { content: 'SALDO FINAL', colSpan: 3 }
+                ],[
+                    'FECHA', 'TIPO', 'SERIE', 'NÚMERO', 'CANTIDAD', 'COSTO\nUNITARIO', 'COSTO TOTAL', 'CANTIDAD', 'COSTO\nUNITARIO', 'COSTO TOTAL', 'CANTIDAD', 'COSTO\nUNITARIO', 'COSTO TOTAL'
+                ]],
+                body: tableBody,
+                columnStyles: { 0: { halign: 'center', cellWidth: 12 }, 1: { halign: 'center', cellWidth: 8 }, 2: { halign: 'center', cellWidth: 10 }, 3: { cellWidth: 14 }, 4: { halign: 'center', cellWidth: 8 }, 5: { halign: 'right' }, 6: { halign: 'right' }, 7: { halign: 'right' }, 8: { halign: 'right' }, 9: { halign: 'right' }, 10: { halign: 'right' }, 11: { halign: 'right' }, 12: { halign: 'right' }, 13: { halign: 'right' } },
+                margin: { top: 22, right: 8, bottom: 12, left: 8 }, 
+                didDrawPage: function (data) {
+                    checkAndDrawPageHeader(block.period); let allRows = data.table.body; if(allRows.length === 0) return; let lastRowIndex = -1;
+                    for (let i = allRows.length - 1; i >= 0; i--) { if (allRows[i].pageNumber === data.pageNumber) { lastRowIndex = i; break; } }
+                    if (lastRowIndex !== -1 && lastRowIndex !== allRows.length - 1) {
+                        let sums = runningTotals[lastRowIndex];
+                        if (sums) { doc.setFontSize(4.5); doc.setFont("helvetica", "bolditalic"); doc.text(`VAN... Entradas Cant: ${formatearNum(sums.eC)} | Total: ${formatearNum(sums.eCT)}   ---   Salidas Cant: ${formatearNum(sums.sC)} | Total: ${formatearNum(sums.sCT)}`, data.settings.margin.left, data.cursor.y + 2); }
+                    }
+                },
+                willDrawPage: function (data) {
+                    checkAndDrawPageHeader(block.period);
+                    if (data.pageNumber > 1) {
+                        let allRows = data.table.body; let lastRowIndex = -1;
+                        for (let i = allRows.length - 1; i >= 0; i--) { if (allRows[i].pageNumber === data.pageNumber - 1) { lastRowIndex = i; break; } }
+                        if (lastRowIndex !== -1) {
+                            let sums = runningTotals[lastRowIndex];
+                            if (sums) { doc.setFontSize(4.5); doc.setFont("helvetica", "bolditalic"); doc.text(`VIENEN... Entradas Cant: ${formatearNum(sums.eC)} | Total: ${formatearNum(sums.eCT)}   ---   Salidas Cant: ${formatearNum(sums.sC)} | Total: ${formatearNum(sums.sCT)}`, data.settings.margin.left, data.settings.margin.top - 1.5); }
+                        }
+                    }
+                }
+            });
+            cursorY = doc.lastAutoTable.finalY + 8;
+        }
+
+        async function finalizarExcelMasivo() {
+            if (!generateOptions.excel || excelDataRaw.length === 0) return;
+            let opE = Array.from(opEntradasSeen).sort(); let opS = Array.from(opSalidasSeen).sort();
+            let finalData = excelDataRaw.map(r => {
+                let flatRow = { 'PERIODO': r.PERIODO, 'CODIGO ARTICULO': r.CODIGO, 'DESCRIPCION': r.DESCRIPCION, 'SALDO INICIAL CANT': r.SALDO_INI_CANT, 'SALDO INICIAL TOTAL': r.SALDO_INI_TOTAL };
+                opE.forEach(op => { flatRow['ENT_OP_' + op + '_CANT'] = r.ENTRADAS[op] ? r.ENTRADAS[op].c : 0; flatRow['ENT_OP_' + op + '_TOTAL'] = r.ENTRADAS[op] ? r.ENTRADAS[op].v : 0; });
+                flatRow['TOTAL ENTRADAS CANT'] = r.TOTAL_ENT_CANT; flatRow['TOTAL ENTRADAS TOTAL'] = r.TOTAL_ENT_TOTAL;
+                opS.forEach(op => { flatRow['SAL_OP_' + op + '_CANT'] = r.SALIDAS[op] ? r.SALIDAS[op].c : 0; flatRow['SAL_OP_' + op + '_TOTAL'] = r.SALIDAS[op] ? r.SALIDAS[op].v : 0; });
+                flatRow['TOTAL SALIDAS CANT'] = r.TOTAL_SAL_CANT; flatRow['TOTAL SALIDAS TOTAL'] = r.TOTAL_SAL_TOTAL;
+                flatRow['SALDO FINAL CANT'] = r.SALDO_FIN_CANT; flatRow['SALDO FINAL TOTAL'] = r.SALDO_FIN_TOTAL;
+                return flatRow;
+            });
+            const ws = XLSX.utils.json_to_sheet(finalData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Resumen_Kardex");
+            let rucStr = empDataGlobal.ruc || 'SIN_RUC'; XLSX.writeFile(wb, `${rucStr}_Resumen_Kardex.xlsx`);
+        }
+
+        async function consumirCola() {
+            if (procesandoCola) return; procesandoCola = true;
+            try {
+                while (cola.length > 0) {
+                    if (cancelledByUser) { procesandoCola = false; return; }
+                    const block = cola.shift();
+                    
+                    if (currentMonthInPdf !== null && currentMonthInPdf !== block.period) {
+                        let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+                        let anioReal = currentMonthInPdf.split('-')[0]; let mesSplit = currentMonthInPdf.split('-')[1]; 
+                        setProgress(90, `Guardando mes ${mesSplit}... liberando memoria...`);
+                        
+                        if (generateOptions.pdf) {
+                            doc.save(`${rucStr}_${anioReal}_${mesSplit}.PDF`); 
+                            doc = null; 
+                        }
+                        if (generateOptions.excelDetallado && excelDetalladoMesRaw.length > 0) {
+                            const ws = XLSX.utils.json_to_sheet(excelDetalladoMesRaw);
+                            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Detalle");
+                            XLSX.writeFile(wb, `${rucStr}_${anioReal}_${mesSplit}_Detallado.xlsx`);
+                            excelDetalladoMesRaw = [];
+                        }
+
+                        await new Promise(r => setTimeout(r, 1000)); 
+                        
+                        if (generateOptions.pdf) {
+                            doc = new jsPDF('p', 'mm', 'a4'); cursorY = 22; lastHeaderPage = 0;
+                        }
+                    }
+
+                    currentMonthInPdf = block.period; 
+                    if (generateOptions.pdf) dibujarArticulo(block);
+                    if (generateOptions.excel) procesarBloqueParaExcel(block);
+                    if (generateOptions.excelDetallado) procesarBloqueParaExcelDetallado(block);
+
+                    bloquesDibujados++;
+                    if (bloquesDibujados % 15 === 0) {
+                        setProgress(70 + Math.round((bloquesDibujados / totalBloques) * 28), `Ensamblando Documentos... (${bloquesDibujados}/${totalBloques})`);
+                        await cederHilo(); 
+                    }
+                }
+                
+                if (cancelledByUser) { procesandoCola = false; return; }
+                
+                if (recibidoUltimoLote) {
+                    setProgress(99, "Finalizando estructuras..."); await cederHilo();
+                    if (totalBloques > 0) {
+                        if (generateOptions.pdf && currentMonthInPdf !== null) {
+                            let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+                            let anioReal = currentMonthInPdf.split('-')[0]; let mesSplit = currentMonthInPdf.split('-')[1];
+                            doc.save(`${rucStr}_${anioReal}_${mesSplit}.PDF`);
+                        }
+                        if (generateOptions.excelDetallado && currentMonthInPdf !== null && excelDetalladoMesRaw.length > 0) {
+                            let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+                            let anioReal = currentMonthInPdf.split('-')[0]; let mesSplit = currentMonthInPdf.split('-')[1];
+                            const ws = XLSX.utils.json_to_sheet(excelDetalladoMesRaw);
+                            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Detalle");
+                            XLSX.writeFile(wb, `${rucStr}_${anioReal}_${mesSplit}_Detallado.xlsx`);
+                            excelDetalladoMesRaw = [];
+                        }
+                        if (generateOptions.excel) { await finalizarExcelMasivo(); }
+                    }
+                    document.getElementById('progressContainer').classList.add('hidden');
+                    document.getElementById('controls').classList.add('hidden'); 
+                    document.getElementById('successMsg').classList.remove('hidden');
+                    document.getElementById('summaryContainer').classList.remove('hidden'); 
+                    setTimeout(() => document.getElementById('successMsg').classList.add('hidden'), 5000);
+                } else { procesandoCola = false; worker.postMessage({ cmd: 'next_chunk' }); }
+            } catch (err) {
+                console.error(err); alert("Error en el renderizado: " + err.message); resetUI();
+            }
+            procesandoCola = false;
+        }
+    </script>
+</body>
+</html>
