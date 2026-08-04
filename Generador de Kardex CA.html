@@ -121,13 +121,13 @@
         </div>
 
         <!-- Resumen de Proyección -->
-        <div id="summaryContainer" class="hidden w-full mx-auto bg-white border border-blue-200 rounded-2xl p-8 shadow-lg">
+        <div id="summaryContainer" class="hidden w-full mx-auto bg-white border border-blue-200 rounded-2xl p-6 lg:p-8 shadow-lg">
             <div class="text-center mb-6">
                 <h2 class="text-2xl font-bold text-blue-800">Proyección Finalizada</h2>
-                <p class="text-sm text-slate-500 mt-1">Revisa el resumen y elige el tipo de archivo que deseas exportar.</p>
+                <p class="text-sm text-slate-500 mt-1">Revisa el resumen y elige qué archivos deseas generar.</p>
             </div>
             
-            <div id="warningMsg" class="hidden mb-6 p-4 bg-amber-50 text-amber-800 rounded-xl border border-amber-300 text-sm max-w-3xl mx-auto">
+            <div id="warningMsg" class="hidden mb-6 p-4 bg-amber-50 text-amber-800 rounded-xl border border-amber-300 text-sm mx-auto">
                 <div class="flex items-center gap-2 mb-2 font-bold">
                     <svg class="w-5 h-5 text-amber-600" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path></svg>
                     Observaciones en el Excel cargado:
@@ -137,11 +137,11 @@
                 </div>
             </div>
 
-            <div class="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mb-6 max-h-64 overflow-y-auto max-w-3xl mx-auto">
+            <div class="bg-slate-50 rounded-xl border border-slate-200 overflow-hidden mb-6 max-h-64 overflow-y-auto mx-auto">
                 <div id="monthlyBreakdown"></div>
             </div>
 
-            <div class="grid grid-cols-3 gap-4 mb-8 pt-4 border-t border-slate-100 text-center max-w-3xl mx-auto">
+            <div class="grid grid-cols-3 gap-4 mb-8 pt-4 border-t border-slate-100 text-center mx-auto">
                 <div>
                     <p class="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Agrupaciones</p>
                     <p class="text-3xl font-extrabold text-slate-700" id="sumArticulos">0</p>
@@ -156,17 +156,27 @@
                 </div>
             </div>
             
-            <div class="flex flex-col sm:flex-row justify-center gap-4">
-                <button id="btnCancelSummary" class="px-6 py-3 border-2 border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition w-full sm:w-auto">Cancelar</button>
-                <button id="btnProceedExcel" class="px-6 py-3 bg-emerald-600 rounded-xl text-white font-bold hover:bg-emerald-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> Solo Excel (Resumen)
+            <!-- Botones de Generación -->
+            <div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 mb-4">
+                <button id="btnProceedExcel" class="px-3 py-3 bg-emerald-600 rounded-xl text-white font-bold hover:bg-emerald-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg> 
+                    Excel (Resumen)
                 </button>
-                <button id="btnProceedPdf" class="px-6 py-3 bg-red-600 rounded-xl text-white font-bold hover:bg-red-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg> Solo PDF
+                <button id="btnProceedExcelDetailed" class="px-3 py-3 bg-teal-600 rounded-xl text-white font-bold hover:bg-teal-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                    Excel Detallado (Mes)
                 </button>
-                <button id="btnProceedBoth" class="px-6 py-3 bg-blue-600 rounded-xl text-white font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 w-full sm:w-auto">
-                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg> Generar Ambos
+                <button id="btnProceedPdf" class="px-3 py-3 bg-red-600 rounded-xl text-white font-bold hover:bg-red-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 21h10a2 2 0 002-2V9.414a1 1 0 00-.293-.707l-5.414-5.414A1 1 0 0012.586 3H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg> 
+                    PDF (Mes)
                 </button>
+                <button id="btnProceedBoth" class="px-3 py-3 bg-blue-600 rounded-xl text-white font-bold hover:bg-blue-700 transition shadow-md hover:shadow-lg flex justify-center items-center gap-2 text-sm">
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-3m-1 4l-3 3m0 0l-3-3m3 3V4"></path></svg> 
+                    Generar Todos
+                </button>
+            </div>
+            <div class="flex justify-center mt-2">
+                <button id="btnCancelSummary" class="px-12 py-3 border-2 border-slate-200 rounded-xl text-slate-600 font-bold hover:bg-slate-50 transition">Cancelar y Volver</button>
             </div>
         </div>
 
@@ -564,7 +574,7 @@
         let recibidoUltimoLote = false;
         let procesandoCola = false;
         
-        let generateOptions = { pdf: false, excel: false };
+        let generateOptions = { pdf: false, excelSummary: false, excelDetailed: false };
 
         let totalBloques = 0;
         let bloquesDibujados = 0;
@@ -572,9 +582,10 @@
         let cursorY = 22; 
         let empDataGlobal = null;
         let lastHeaderPage = 0;
-        let currentMonthInPdf = null; 
+        let currentMonthProcessing = null; 
 
         let excelDataRaw = [];
+        let excelDetailedRows = [];
         let opEntradasSeen = new Set();
         let opSalidasSeen = new Set();
 
@@ -610,7 +621,7 @@
         document.getElementById('cancelBtn').addEventListener('click', function() {
             cancelledByUser = true;
             if (worker) { worker.terminate(); worker = null; }
-            cola = []; doc = null; empDataGlobal = null; excelDataRaw = [];
+            cola = []; doc = null; empDataGlobal = null; excelDataRaw = []; excelDetailedRows = [];
             resetUI();
             document.getElementById('cancelMsg').classList.remove('hidden');
             setTimeout(() => document.getElementById('cancelMsg').classList.add('hidden'), 4000);
@@ -618,20 +629,24 @@
 
         document.getElementById('btnCancelSummary').addEventListener('click', function() {
             if (worker) { worker.terminate(); worker = null; }
-            cola = []; doc = null; empDataGlobal = null; excelDataRaw = [];
+            cola = []; doc = null; empDataGlobal = null; excelDataRaw = []; excelDetailedRows = [];
             resetUI();
         });
 
-        async function initiateProcessing(pdf, excel) {
+        async function initiateProcessing(pdf, excelSummary, excelDetailed) {
             generateOptions.pdf = pdf;
-            generateOptions.excel = excel;
+            generateOptions.excelSummary = excelSummary;
+            generateOptions.excelDetailed = excelDetailed;
+            
             document.getElementById('summaryContainer').classList.add('hidden');
             document.getElementById('progressContainer').classList.remove('hidden');
-            document.getElementById('statusText').innerText = `Procesando ${pdf && excel ? 'PDF y Excel' : (pdf ? 'PDF' : 'Excel')}...`;
+            document.getElementById('statusText').innerText = `Procesando reportes solicitados...`;
             
             excelDataRaw = [];
+            excelDetailedRows = [];
             opEntradasSeen = new Set();
             opSalidasSeen = new Set();
+            currentMonthProcessing = null;
 
             if (pdf) doc = new jsPDF('p', 'mm', 'a4');
             
@@ -639,9 +654,10 @@
             worker.postMessage({ cmd: 'next_chunk' });
         }
 
-        document.getElementById('btnProceedPdf').addEventListener('click', () => initiateProcessing(true, false));
-        document.getElementById('btnProceedExcel').addEventListener('click', () => initiateProcessing(false, true));
-        document.getElementById('btnProceedBoth').addEventListener('click', () => initiateProcessing(true, true));
+        document.getElementById('btnProceedPdf').addEventListener('click', () => initiateProcessing(true, false, false));
+        document.getElementById('btnProceedExcel').addEventListener('click', () => initiateProcessing(false, true, false));
+        document.getElementById('btnProceedExcelDetailed').addEventListener('click', () => initiateProcessing(false, false, true));
+        document.getElementById('btnProceedBoth').addEventListener('click', () => initiateProcessing(true, true, true));
 
         document.getElementById('fileInput').addEventListener('change', function(e) {
             const files = e.target.files;
@@ -679,8 +695,8 @@
 
                 cola = []; recibidoUltimoLote = false; procesandoCola = false; 
                 totalBloques = 0; bloquesDibujados = 0;
-                doc = null; cursorY = 22; lastHeaderPage = 0; currentMonthInPdf = null;
-                excelDataRaw = [];
+                doc = null; cursorY = 22; lastHeaderPage = 0; currentMonthProcessing = null;
+                excelDataRaw = []; excelDetailedRows = [];
 
                 worker.onmessage = function(msg) {
                     const data = msg.data;
@@ -719,11 +735,13 @@
                             document.getElementById('monthlyBreakdown').innerHTML = '<div class="p-6 text-center text-slate-500 font-bold">Sin datos para procesar.</div>';
                             document.getElementById('btnProceedBoth').classList.add('hidden');
                             document.getElementById('btnProceedExcel').classList.add('hidden');
+                            document.getElementById('btnProceedExcelDetailed').classList.add('hidden');
                             document.getElementById('btnProceedPdf').classList.add('hidden');
                             return;
                         } else {
                             document.getElementById('btnProceedBoth').classList.remove('hidden');
                             document.getElementById('btnProceedExcel').classList.remove('hidden');
+                            document.getElementById('btnProceedExcelDetailed').classList.remove('hidden');
                             document.getElementById('btnProceedPdf').classList.remove('hidden');
                         }
 
@@ -843,6 +861,58 @@
             rowRaw.SALDO_FIN_TOTAL = lastTx ? lastTx.fCT : 0;
             
             excelDataRaw.push(rowRaw);
+        }
+
+        function procesarBloqueParaExcelDetallado(block) {
+            const baseInfo = {
+                'PERIODO': block.period,
+                'CODIGO_ARTICULO': block.item.codigo,
+                'DESCRIPCION': block.item.descripcion,
+                'TIPO_EXISTENCIA': block.item.tipo,
+                'UNIDAD_MEDIDA': block.item.um
+            };
+
+            if (block.saldo_inicial) {
+                let p = block.period.split('-');
+                let firstDayStr = `01/${p[1]}/${p[0]}`;
+                excelDetailedRows.push({
+                    ...baseInfo,
+                    'FECHA': firstDayStr,
+                    'TIPO_DOC': '',
+                    'SERIE': '',
+                    'NUMERO': '',
+                    'TIPO_OPERACION': '16',
+                    'ENTRADAS_CANT': block.saldo_inicial.fC,
+                    'ENTRADAS_CU': block.saldo_inicial.fCU,
+                    'ENTRADAS_CT': block.saldo_inicial.fCT,
+                    'SALIDAS_CANT': 0,
+                    'SALIDAS_CU': 0,
+                    'SALIDAS_CT': 0,
+                    'SALDO_FINAL_CANT': block.saldo_inicial.fC,
+                    'SALDO_FINAL_CU': block.saldo_inicial.fCU,
+                    'SALDO_FINAL_CT': block.saldo_inicial.fCT
+                });
+            }
+
+            block.txs.forEach(tx => {
+                excelDetailedRows.push({
+                    ...baseInfo,
+                    'FECHA': formatearFecha(tx.fecha),
+                    'TIPO_DOC': tx.t10,
+                    'SERIE': tx.serie,
+                    'NUMERO': tx.num,
+                    'TIPO_OPERACION': tx.t12,
+                    'ENTRADAS_CANT': tx.eC,
+                    'ENTRADAS_CU': tx.eCU,
+                    'ENTRADAS_CT': tx.eCT,
+                    'SALIDAS_CANT': tx.sC,
+                    'SALIDAS_CU': tx.sCU,
+                    'SALIDAS_CT': tx.sCT,
+                    'SALDO_FINAL_CANT': tx.fC,
+                    'SALDO_FINAL_CU': tx.fCU,
+                    'SALDO_FINAL_CT': tx.fCT
+                });
+            });
         }
 
         function dibujarArticulo(block) {
@@ -989,7 +1059,7 @@
         }
 
         async function finalizarExcelMasivo() {
-            if (!generateOptions.excel || excelDataRaw.length === 0) return;
+            if (!generateOptions.excelSummary || excelDataRaw.length === 0) return;
 
             let opE = Array.from(opEntradasSeen).sort();
             let opS = Array.from(opSalidasSeen).sort();
@@ -1031,6 +1101,21 @@
             XLSX.writeFile(wb, fileName);
         }
 
+        function guardarExcelDetalladoPorMes(periodo) {
+            if (excelDetailedRows.length === 0) return;
+            const ws = XLSX.utils.json_to_sheet(excelDetailedRows);
+            const wb = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(wb, ws, "Kardex_Detallado");
+
+            let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+            let anioReal = periodo.split('-')[0];
+            let mesSplit = periodo.split('-')[1];
+            let fileName = `${rucStr}_${anioReal}_${mesSplit}_Detallado.xlsx`;
+
+            XLSX.writeFile(wb, fileName);
+            excelDetailedRows = []; 
+        }
+
         async function consumirCola() {
             if (procesandoCola) return; 
             procesandoCola = true;
@@ -1041,20 +1126,19 @@
 
                     const block = cola.shift();
 
-                    if (generateOptions.pdf) {
-                        // Si cambiamos de mes, guardamos el PDF actual y liberamos RAM
-                        if (currentMonthInPdf !== null && currentMonthInPdf !== block.period) {
-                            let rucStr = empDataGlobal.ruc || 'SIN_RUC';
-                            let anioReal = currentMonthInPdf.split('-')[0];
-                            let mesSplit = currentMonthInPdf.split('-')[1]; 
-                            let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
-                            
-                            setProgress(90, `Guardando mes ${mesSplit}... liberando memoria...`);
+                    // Control de cambio de mes para guardar archivos divididos
+                    if (currentMonthProcessing !== null && currentMonthProcessing !== block.period) {
+                        let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+                        let anioReal = currentMonthProcessing.split('-')[0];
+                        let mesSplit = currentMonthProcessing.split('-')[1];
+                        
+                        if (generateOptions.pdf) {
+                            let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.pdf`;
+                            setProgress(90, `Guardando PDF mes ${mesSplit}... liberando memoria...`);
                             doc.save(nombreArchivo); 
                             
-                            // FORZAR LIMPIEZA DE MEMORIA
+                            // FORZAR LIMPIEZA DE MEMORIA PDF
                             doc = null; 
-                            // Dar 1 segundo de respiro al navegador para que el Garbage Collector limpie la RAM
                             await new Promise(r => setTimeout(r, 1000)); 
                             
                             doc = new jsPDF('p', 'mm', 'a4');
@@ -1062,13 +1146,19 @@
                             lastHeaderPage = 0;
                         }
 
-                        currentMonthInPdf = block.period;
-                        dibujarArticulo(block);
+                        if (generateOptions.excelDetailed) {
+                            setProgress(90, `Guardando Excel Detallado mes ${mesSplit}...`);
+                            guardarExcelDetalladoPorMes(currentMonthProcessing);
+                            await new Promise(r => setTimeout(r, 500));
+                        }
                     }
 
-                    if (generateOptions.excel) {
-                        procesarBloqueParaExcel(block);
-                    }
+                    currentMonthProcessing = block.period;
+
+                    // Dibujar y Procesar en Memoria
+                    if (generateOptions.pdf) dibujarArticulo(block);
+                    if (generateOptions.excelSummary) procesarBloqueParaExcel(block);
+                    if (generateOptions.excelDetailed) procesarBloqueParaExcelDetallado(block);
 
                     bloquesDibujados++;
                     
@@ -1088,15 +1178,21 @@
                     await cederHilo();
 
                     if (totalBloques > 0) {
-                        if (generateOptions.pdf && currentMonthInPdf !== null) {
-                            let rucStr = empDataGlobal.ruc || 'SIN_RUC';
-                            let anioReal = currentMonthInPdf.split('-')[0];
-                            let mesSplit = currentMonthInPdf.split('-')[1];
-                            let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.PDF`;
-                            doc.save(nombreArchivo);
+                        if (currentMonthProcessing !== null) {
+                            if (generateOptions.pdf) {
+                                let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+                                let anioReal = currentMonthProcessing.split('-')[0];
+                                let mesSplit = currentMonthProcessing.split('-')[1];
+                                let nombreArchivo = `${rucStr}_${anioReal}_${mesSplit}.pdf`;
+                                doc.save(nombreArchivo);
+                            }
+
+                            if (generateOptions.excelDetailed) {
+                                guardarExcelDetalladoPorMes(currentMonthProcessing);
+                            }
                         }
 
-                        if (generateOptions.excel) {
+                        if (generateOptions.excelSummary) {
                             await finalizarExcelMasivo();
                         }
                     }
