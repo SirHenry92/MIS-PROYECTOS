@@ -246,7 +246,7 @@
                     `;
                     tabsBody.appendChild(content);
 
-                    // Actualización Rápida de Totales (+1 por la columna índice)
+                    // Actualización Rápida de Totales
                     const updateTotalsFast = () => {
                         const rows = content.querySelector('tbody').children;
                         let sumDebe = 0, sumHaber = 0;
@@ -302,7 +302,6 @@
                         let grouped = {};
                         for(let i=0; i<rows.length; i++) {
                             let tr = rows[i];
-                            // El nombre está en la columna 8 (APELLIDOS Y NOMBRES), DEBE en 3, HABER en 4
                             let nombre = tr.children[8].textContent.trim(); 
                             let debe = parseFloat(tr.children[3].textContent) || 0;
                             let haber = parseFloat(tr.children[4].textContent) || 0;
@@ -391,7 +390,7 @@
         headerCols[5] = commentStr; headerCols[10] = ref2Str;
         txtContent += headerCols.join("\t") + "\r\n";
 
-        // LÍNEAS 'L' (Ignorando columna 0 que es el correlativo #)
+        // LÍNEAS 'L'
         for (let i = 0; i < rows.length; i++) {
             let tr = rows[i];
             if(tr.style.display === 'none') continue;
@@ -401,18 +400,18 @@
             
             lineCols[0] = "L";
             
-            let ctaHtml = tds[1].textContent.trim(); // Índice 1 es Cuenta
-            let debeHtml = parseFloat(tds[3].textContent) || 0; // Índice 3 es Debe
-            let haberHtml = parseFloat(tds[4].textContent) || 0; // Índice 4 es Haber
+            let ctaHtml = tds[1].textContent.trim(); 
+            let debeHtml = parseFloat(tds[3].textContent) || 0; 
+            let haberHtml = parseFloat(tds[4].textContent) || 0; 
 
             lineCols[12] = ctaHtml.startsWith("E") ? "BP" : "GL";
             lineCols[13] = ctaHtml;
             lineCols[14] = (debeHtml === 0) ? "" : debeHtml.toFixed(2);
             lineCols[15] = (haberHtml === 0) ? "" : haberHtml.toFixed(2);
             
-            lineCols[16] = tds[5].textContent.trim(); // Naturaleza Costo
-            lineCols[17] = tds[6].textContent.trim(); // Línea Producción
-            lineCols[18] = tds[7].textContent.trim(); // Proceso Area
+            lineCols[16] = tds[5].textContent.trim(); 
+            lineCols[17] = tds[6].textContent.trim(); 
+            lineCols[18] = tds[7].textContent.trim(); 
 
             txtContent += lineCols.join("\t") + "\r\n";
         }
@@ -438,12 +437,15 @@
         let nat = proc.substring(0, 1), prf = proc.substring(0, 2), lin = null;
         if (prf === "11") lin = "A11"; else if (prf === "21") lin = "V21"; 
         else if (["31","32","33"].includes(prf)) lin = "P" + prf; else if (["40","41","42","43"].includes(prf)) lin = "I" + prf;
+        
+        // REGLA: Si la Línea de Producción es nula/vacía, Proceso/Área también debe quedar vacío.
+        if (!lin) proc = null;
+
         return { nat: nat, lin: lin, proc: proc };
     }
 
     function safeNum(val) { let n = parseFloat(val); return isNaN(n) ? 0 : n; }
 
-    // FUNCIÓN ESTRICTA PARA LIQ SEGÚN CÓDIGO M
     function fnCta_LIQ(cta, dni) {
         if (!cta) return null;
         let ctatxt = cta.toString().trim();
@@ -463,7 +465,6 @@
         let currentCC = null;
         
         for (let r of rows) {
-            // Cazador del encabezado de Centro de Costos exacto al M
             let numKey = Object.keys(r).find(k => k.trim().toUpperCase() === "Nº" || k.trim().toUpperCase() === "N°");
             let numVal = numKey && r[numKey] !== null ? r[numKey].toString().trim().toUpperCase() : null;
 
@@ -482,7 +483,6 @@
             let nombreOriginal = r["APELLIDOS Y NOMBRES"];
             let nomStr = nombreOriginal !== null && nombreOriginal !== undefined ? nombreOriginal.toString().trim().toUpperCase() : "";
 
-            // Filtro estricto para evitar duplicaciones y bloquear cuentas E1
             if (numVal === null || numVal === "" || numVal === "Nº" || numVal === "N°" || nomStr === "" || nomStr.startsWith("TOTAL")) {
                 continue;
             }
@@ -502,7 +502,7 @@
                     "HABER": valHaber, 
                     "Naturaleza de Costo/Gasto": dims.nat, 
                     "Línea de Producción Costo/Gasto": dims.lin, 
-                    "Proceso/Area de Costo/Gasto": dims.proc || currentCC, 
+                    "Proceso/Area de Costo/Gasto": dims.proc, 
                     "APELLIDOS Y NOMBRES": nombreOriginal, 
                     "Concepto de Control": concepto 
                 });
@@ -514,8 +514,6 @@
             addLine(isObrero ? 6225201 : 6225101, safeNum(r["HORAS EXTRAS 25%"]) + safeNum(r["HORAS EXTRAS 35%"]) + safeNum(r["H. E. 100%"]), 0, "HORAS EXTRAS");
             addLine(isObrero ? 6223201 : 6223101, safeNum(r["BONIFICACION NOCTURNA"]), 0, "BONIFICACION NOCTURNA");
             addLine(isObrero ? 6224201 : 6224101, safeNum(r["MOVILIDAD"]), 0, "MOVILIDAD");
-            addLine(isObrero ? 6271201 : 6271101, safeNum(r["ESSALUD - IMPORTE"]), 0, "ESSALUD GASTO");
-            addLine(isObrero ? 6277103 : 6277102, safeNum(r["SENATI - IMPORTE"]), 0, "SENATI GASTO");
             addLine(1629101, 0, safeNum(r["DIFERENCIA POR SUBSIDIO"]), "DIFERENCIA POR SUBSIDIO");
             addLine(1629101, safeNum(r["REINTEGRO SUBSIDIO"]), 0, "REINTEGRO SUBSIDIO");
             addLine(4114101, safeNum(r["BON. EXTRA. TEMPORAL"]), 0, "BON. EXTRA. TEMPORAL");
@@ -523,9 +521,10 @@
             addLine(4115101, safeNum(r["VACACION TRUNCA"]), 0, "VACACION TRUNCA");
             addLine(4115101, safeNum(r["VACACIONES PENDIENTES"]), 0, "VACACIONES PENDIENTES");
             addLine(4114101, safeNum(r["GRAT. TRUNCA"]), 0, "GRAT. TRUNCA");
+            addLine(isObrero ? 6271201 : 6271101, safeNum(r["ESSALUD - IMPORTE"]), 0, "ESSALUD GASTO");
+            addLine(isObrero ? 6277103 : 6277102, safeNum(r["SENATI - IMPORTE"]), 0, "SENATI GASTO");
             addLine(4031101, 0, safeNum(r["ESSALUD - IMPORTE"]), "ESSALUD PASIVO");
             addLine(4033101, 0, safeNum(r["SENATI - IMPORTE"]), "SENATI PASIVO");
-            addLine(4032101, 0, safeNum(r["O.N.P."]), "O.N.P.");
             addLine(4699101, 0, safeNum(r["RET.JUD."]), "RET.JUD.");
             addLine(1412101, 0, safeNum(r["ADEL. QUIN."]), "ADEL. QUIN.");
             addLine(1412201, 0, safeNum(r["VACACIONES ADELANTADAS"]), "VACACIONES ADELANTADAS");
@@ -533,6 +532,7 @@
             addLine(1411301, 0, safeNum(r["PRESTAMO ESCOLAR"]) + safeNum(r["PRESTAMO ESCOLAR2"]), "PRESTAMO ESCOLAR");
             addLine(4699204, 0, safeNum(r["PRESTAMO BANCO COMERCIO"]) + safeNum(r["PRESTAMO BANCO COMERCIO2"]), "PRESTAMO BCO COMERCIO");
             addLine(4699802, 0, safeNum(r["DONACIÓN FUNDACIÓN ART AT"]), "DONACIÓN FUNDACIÓN ART AT");
+            addLine(4032101, 0, safeNum(r["O.N.P."]), "O.N.P.");
             addLine(4171101, 0, safeNum(r["A.F.P. (10%)"]), "AFP FONDO");
             addLine(4171201, 0, safeNum(r["A.F.P. (PRM.SEG.)"]), "AFP PRIMA");
             addLine(4171301, 0, safeNum(r["A.F.P. (COM. VAR.)"]), "AFP COMISION");
@@ -567,7 +567,6 @@
         return results;
     }
 
-    // FUNCIÓN ESTRICTA PARA PLANILLAS
     function fnCta_PLL(cta, dni) {
         if (!cta) return null;
         let ctatxt = cta.toString().trim(), pref2 = ctatxt.substring(0, 2), pref4 = ctatxt.substring(0, 4);
@@ -622,7 +621,16 @@
             let nat = null, lin = null, proc = null;
             if (r.CTA && r.CTA.toString().startsWith("6")) {
                 let t3 = (r.A3 && r.A3.length > 1) ? r.A3.substring(1) : null;
-                if (t3) { nat = t3.substring(0, 1); let prf = t3.substring(0, 2); if (prf === "11") lin = "A11"; else if (prf === "21") lin = "V21"; else if (["31","32","33"].includes(prf)) lin = "P" + prf; else if (["40","41","42","43"].includes(prf)) lin = "I" + prf; proc = t3; }
+                if (t3) { 
+                    nat = t3.substring(0, 1); 
+                    let prf = t3.substring(0, 2); 
+                    if (prf === "11") lin = "A11"; 
+                    else if (prf === "21") lin = "V21"; 
+                    else if (["31","32","33"].includes(prf)) lin = "P" + prf; 
+                    else if (["40","41","42","43"].includes(prf)) lin = "I" + prf; 
+                    
+                    proc = lin ? t3 : null; 
+                }
             }
             return { "Cuenta Contable": r["Cuenta Contable"], "CTA": r.CTA, "DEBE": r.DEBE || 0, "HABER": r.HABER || 0, "Naturaleza de Costo/Gasto": nat, "Línea de Producción Costo/Gasto": lin, "Proceso/Area de Costo/Gasto": proc, "APELLIDOS Y NOMBRES": r.A5, "Concepto de Control": null };
         });
