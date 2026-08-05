@@ -1,0 +1,632 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Análisis de Asientos SAP</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <style>
+        :root {
+            --primary: #4F46E5;
+            --primary-hover: #4338CA;
+            --secondary: #F3F4F6;
+            --text-dark: #1F2937;
+            --border: #D1D5DB;
+            --success: #10B981;
+            --success-hover: #059669;
+            --danger: #EF4444;
+            --info: #3B82F6;
+            --info-hover: #2563EB;
+            --surface: #FFFFFF;
+        }
+        body {
+            font-family: 'Inter', sans-serif;
+            background: var(--secondary);
+            color: var(--text-dark);
+            margin: 0;
+            padding: 0;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+        }
+        
+        /* PANTALLA DE CARGA */
+        #uploadScreen {
+            display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;
+        }
+        .upload-card {
+            background: var(--surface); padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
+            max-width: 420px; width: 90%; text-align: center; border: 1px solid var(--border);
+        }
+        .upload-card h2 { margin-top: 0; font-size: 22px; margin-bottom: 25px; }
+        .form-group { margin-bottom: 20px; text-align: left; }
+        label { font-weight: 600; font-size: 13px; color: #4B5563; display: block; margin-bottom: 8px; }
+        input[type="file"] {
+            width: 100%; padding: 10px; border: 2px dashed var(--border); border-radius: 8px; 
+            font-size: 13px; background: #F9FAFB; box-sizing: border-box; cursor: pointer;
+        }
+        
+        /* WORKSPACE (DASHBOARD) */
+        #dashboardScreen {
+            display: none; height: 100vh; flex-direction: column; padding: 10px 15px; box-sizing: border-box;
+        }
+        .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+        .dash-header h3 { margin: 0; font-size: 18px; font-weight: 700; color: var(--primary); }
+        
+        /* BOTONES */
+        .btn {
+            background-color: var(--primary); color: white; border: none; padding: 6px 12px;
+            border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px; transition: 0.2s;
+        }
+        .btn:hover { background-color: var(--primary-hover); }
+        .btn-success { background-color: var(--success); }
+        .btn-success:hover { background-color: var(--success-hover); }
+        .btn-info { background-color: var(--info); }
+        .btn-info:hover { background-color: var(--info-hover); }
+        .btn-outline { background: transparent; border: 1px solid var(--border); color: #4B5563; }
+        .btn-outline:hover { background: #E5E7EB; }
+
+        /* PESTAÑAS (TABS) */
+        .tabs-header { display: flex; gap: 2px; margin-bottom: 0; }
+        .tab-btn {
+            background: #E5E7EB; border: 1px solid var(--border); border-bottom: none;
+            padding: 8px 20px; border-radius: 6px 6px 0 0; cursor: pointer; font-weight: 600;
+            font-size: 12px; color: #6B7280; transition: 0.2s;
+        }
+        .tab-btn.active { background: var(--surface); color: var(--primary); border-bottom-color: var(--surface); position: relative; z-index: 2; }
+        .tab-content {
+            display: none; flex-direction: column; flex-grow: 1; overflow: hidden;
+            background: var(--surface); border: 1px solid var(--border); border-radius: 0 4px 4px 4px; margin-top: -1px;
+        }
+        .tab-content.active { display: flex; }
+
+        /* BARRA DE TOTALES */
+        .totals-bar {
+            display: flex; justify-content: space-between; align-items: center; background: #F9FAFB; 
+            padding: 8px 15px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 13px;
+        }
+        .totals-info { display: flex; gap: 20px; align-items: center; }
+
+        /* TABLA AJUSTADA A PANTALLA */
+        .table-responsive { flex-grow: 1; overflow-y: auto; overflow-x: hidden; }
+        table { width: 100%; border-collapse: collapse; table-layout: auto; white-space: normal; }
+        th, td { padding: 4px 6px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); text-align: left; font-size: 11px; word-wrap: break-word; }
+        th { background-color: #F3F4F6; color: #374151; position: sticky; top: 0; z-index: 10; font-weight: 600; border-bottom: 2px solid var(--border); }
+        .col-index { width: 25px; text-align: center; font-weight: bold; background: #F9FAFB; }
+        tr:hover td { background-color: #EEF2FF; }
+        td[contenteditable="true"]:hover { background-color: #FEF3C7; cursor: text; outline: 1px solid var(--primary); }
+        
+        .col-filter { width: 100%; box-sizing: border-box; font-size: 10px; padding: 2px; margin-top: 4px; border: 1px solid var(--border); border-radius: 2px; }
+        .col-filter:focus { outline: none; border-color: var(--primary); }
+
+        /* MODAL WIDGET TXT */
+        #txtModal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(17, 24, 39, 0.6); z-index: 100; justify-content: center; align-items: center;
+        }
+        .modal-content {
+            background: #fff; padding: 25px; border-radius: 8px; width: 300px; text-align: center;
+        }
+        .modal-content h4 { margin-top: 0; color: var(--primary); font-size: 16px; margin-bottom: 15px;}
+        .modal-content select, .modal-content input { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; box-sizing: border-box;}
+        .modal-actions { display: flex; justify-content: space-between; gap: 10px;}
+        .modal-actions button { flex: 1; }
+    </style>
+</head>
+<body>
+
+<!-- PANTALLA DE CARGA -->
+<div id="uploadScreen">
+    <div class="upload-card">
+        <h2>Análisis completo de asientos Contables</h2>
+        <div class="form-group">
+            <label>Archivo Base (.xlsx):</label>
+            <input type="file" id="excelFile" accept=".xlsx, .xls">
+        </div>
+        <button class="btn" id="btnProcess" style="width: 100%; padding: 10px; font-size: 14px;">Procesar Tablas</button>
+    </div>
+</div>
+
+<!-- WORKSPACE -->
+<div id="dashboardScreen">
+    <div class="dash-header">
+        <h3>Workspace - Análisis de Asientos</h3>
+        <button class="btn btn-outline" id="btnBack">Cargar otro archivo</button>
+    </div>
+    
+    <div id="tabsHeader" class="tabs-header"></div>
+    <div id="tabsBody" style="display: flex; flex-direction: column; flex-grow: 1; overflow: hidden;"></div>
+</div>
+
+<!-- WIDGET MODAL -->
+<div id="txtModal">
+    <div class="modal-content">
+        <h4>Parámetros SAP</h4>
+        <div style="text-align: left;">
+            <label>Mes de Contabilización:</label>
+            <select id="txtMonth">
+                <option value="1">ENERO</option><option value="2">FEBRERO</option><option value="3">MARZO</option>
+                <option value="4">ABRIL</option><option value="5">MAYO</option><option value="6">JUNIO</option>
+                <option value="7">JULIO</option><option value="8">AGOSTO</option><option value="9">SEPTIEMBRE</option>
+                <option value="10">OCTUBRE</option><option value="11">NOVIEMBRE</option><option value="12">DICIEMBRE</option>
+            </select>
+            <label>Año:</label>
+            <input type="number" id="txtYear" value="2026" min="2020" max="2100">
+        </div>
+        
+        <div class="modal-actions">
+            <button class="btn btn-outline" id="btnCancelModal">Cancelar</button>
+            <button class="btn btn-success" id="btnConfirmExport">Generar TXT</button>
+        </div>
+    </div>
+</div>
+
+<script>
+    const uploadScreen = document.getElementById('uploadScreen');
+    const dashboardScreen = document.getElementById('dashboardScreen');
+    const txtModal = document.getElementById('txtModal');
+    let currentExportTitle = "";
+
+    const COLS = ["Cuenta Contable", "CTA", "DEBE", "HABER", "Naturaleza de Costo/Gasto", "Línea de Producción Costo/Gasto", "Proceso/Area de Costo/Gasto", "APELLIDOS Y NOMBRES", "Concepto de Control"];
+
+    document.getElementById('btnBack').addEventListener('click', () => {
+        dashboardScreen.style.display = 'none'; uploadScreen.style.display = 'flex';
+        document.getElementById('excelFile').value = '';
+    });
+
+    document.getElementById('btnCancelModal').addEventListener('click', () => { txtModal.style.display = 'none'; });
+
+    document.getElementById('btnProcess').addEventListener('click', () => {
+        const file = document.getElementById('excelFile').files[0];
+        if (!file) return alert('Por favor selecciona un archivo.');
+
+        const reader = new FileReader();
+        reader.onload = (e) => {
+            try {
+                const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
+                
+                const tabsHeader = document.getElementById('tabsHeader');
+                const tabsBody = document.getElementById('tabsBody');
+                tabsHeader.innerHTML = ''; tabsBody.innerHTML = '';
+                let isFirstTab = true; let validSheets = 0;
+
+                const buildTab = (title, data) => {
+                    if (data.length === 0) return;
+                    validSheets++;
+                    
+                    const btn = document.createElement('button');
+                    btn.className = 'tab-btn' + (isFirstTab ? ' active' : '');
+                    btn.innerText = title;
+                    tabsHeader.appendChild(btn);
+
+                    const content = document.createElement('div');
+                    content.className = 'tab-content' + (isFirstTab ? ' active' : '');
+                    content.id = 'tab-' + title;
+
+                    // Thead con correlativo
+                    let theadHtml = "<tr><th class='col-index'>#</th>";
+                    COLS.forEach((col, idx) => {
+                        theadHtml += `<th>${col}<br><input type="text" class="col-filter" data-col="${idx+1}" placeholder="Filtrar..."></th>`;
+                    });
+                    theadHtml += "</tr>";
+
+                    let tbodyHtml = "";
+                    data.forEach((row, rIndex) => {
+                        tbodyHtml += "<tr>";
+                        tbodyHtml += `<td class="col-index">${rIndex + 1}</td>`;
+                        COLS.forEach(col => {
+                            let val = row[col] !== null && row[col] !== undefined ? row[col] : "";
+                            if (col === "CTA" && val !== "") val = parseInt(val) || val;
+                            else if (typeof val === 'number') val = val.toFixed(2);
+                            tbodyHtml += `<td contenteditable="true" data-colname="${col}">${val}</td>`;
+                        });
+                        tbodyHtml += "</tr>";
+                    });
+
+                    content.innerHTML = `
+                        <div class="totals-bar">
+                            <div class="totals-info">
+                                <div>DEBE: <span class="tot-debe" style="color: var(--primary);">0.00</span></div>
+                                <div>HABER: <span class="tot-haber" style="color: var(--primary);">0.00</span></div>
+                                <div>Dif: <span class="tot-dif">0.00</span></div>
+                                <button class="btn btn-info btn-diagnostic">Diagnóstico de Cuadres</button>
+                            </div>
+                            <button class="btn btn-success btn-export-section">Generar SAP (${title})</button>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="table-${title}">
+                                <thead>${theadHtml}</thead>
+                                <tbody>${tbodyHtml}</tbody>
+                            </table>
+                        </div>
+                    `;
+                    tabsBody.appendChild(content);
+
+                    // Actualización Rápida de Totales (+1 por la columna índice)
+                    const updateTotalsFast = () => {
+                        const rows = content.querySelector('tbody').children;
+                        let sumDebe = 0, sumHaber = 0;
+                        for(let i = 0; i < rows.length; i++) {
+                            let tr = rows[i];
+                            if(tr.style.display !== 'none') {
+                                sumDebe += parseFloat(tr.children[3].textContent) || 0;
+                                sumHaber += parseFloat(tr.children[4].textContent) || 0;
+                            }
+                        }
+                        content.querySelector('.tot-debe').innerText = sumDebe.toFixed(2);
+                        content.querySelector('.tot-haber').innerText = sumHaber.toFixed(2);
+                        let dif = Math.abs(sumDebe - sumHaber);
+                        let difSpan = content.querySelector('.tot-dif');
+                        difSpan.innerText = dif.toFixed(2);
+                        difSpan.style.color = dif < 0.01 ? 'var(--success)' : 'var(--danger)';
+                    };
+                    updateTotalsFast();
+                    content.querySelector('tbody').addEventListener('input', updateTotalsFast);
+
+                    // Filtros dinámicos
+                    const filters = content.querySelectorAll('.col-filter');
+                    let filterTimeout = null;
+                    filters.forEach(filter => {
+                        filter.addEventListener('keyup', () => {
+                            clearTimeout(filterTimeout);
+                            filterTimeout = setTimeout(() => {
+                                const activeFilters = Array.from(filters).map(f => ({
+                                    idx: parseInt(f.getAttribute('data-col')),
+                                    val: f.value.trim().toUpperCase()
+                                })).filter(f => f.val !== "");
+
+                                const rows = content.querySelector('tbody').children;
+                                for(let i = 0; i < rows.length; i++) {
+                                    let tr = rows[i];
+                                    let showRow = true;
+                                    for(let j = 0; j < activeFilters.length; j++) {
+                                        const f = activeFilters[j];
+                                        if(!tr.children[f.idx].textContent.toUpperCase().includes(f.val)) {
+                                            showRow = false; break;
+                                        }
+                                    }
+                                    tr.style.display = showRow ? "" : "none";
+                                }
+                                updateTotalsFast();
+                            }, 250); 
+                        });
+                    });
+
+                    // Botón de Diagnóstico Inteligente
+                    content.querySelector(`.btn-diagnostic`).addEventListener('click', () => {
+                        const rows = content.querySelector('tbody').children;
+                        let grouped = {};
+                        for(let i=0; i<rows.length; i++) {
+                            let tr = rows[i];
+                            // El nombre está en la columna 8 (APELLIDOS Y NOMBRES), DEBE en 3, HABER en 4
+                            let nombre = tr.children[8].textContent.trim(); 
+                            let debe = parseFloat(tr.children[3].textContent) || 0;
+                            let haber = parseFloat(tr.children[4].textContent) || 0;
+                            
+                            if(!nombre) continue;
+                            if(!grouped[nombre]) grouped[nombre] = {debe:0, haber:0};
+                            grouped[nombre].debe += debe;
+                            grouped[nombre].haber += haber;
+                        }
+                        
+                        let errores = [];
+                        for(let nom in grouped) {
+                            let diff = Math.abs(grouped[nom].debe - grouped[nom].haber);
+                            if(diff > 0.01) {
+                                errores.push(`❌ ${nom} | Dif: ${diff.toFixed(2)} (Debe: ${grouped[nom].debe.toFixed(2)} - Haber: ${grouped[nom].haber.toFixed(2)})`);
+                            }
+                        }
+                        
+                        if(errores.length > 0) {
+                            alert(`Se encontraron ${errores.length} descuadres en ${title}:\n\n` + errores.join("\n"));
+                        } else {
+                            alert(`✅ ¡Perfecto! Todos los subtotales por empleado cuadran correctamente en ${title}.`);
+                        }
+                    });
+
+                    // Navegación de Tabs
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                        btn.classList.add('active'); content.classList.add('active');
+                    });
+
+                    // Exportar
+                    content.querySelector(`.btn-export-section`).addEventListener('click', () => {
+                        currentExportTitle = title;
+                        txtModal.style.display = 'flex';
+                    });
+
+                    isFirstTab = false;
+                };
+
+                const readSheet = (sn) => XLSX.utils.sheet_to_json(workbook.Sheets[sn], { defval: null });
+                if (workbook.Sheets['LIQ']) buildTab('LIQUIDACIONES', process_TB_liq(readSheet('LIQ')));
+                if (workbook.Sheets['PRA']) buildTab('PRACTICANTES', process_TB_pra(readSheet('PRA')));
+                if (workbook.Sheets['PLL']) buildTab('PLANILLA', process_TB_pll(readSheet('PLL')));
+
+                if (validSheets > 0) {
+                    uploadScreen.style.display = 'none'; dashboardScreen.style.display = 'flex';
+                } else alert('NO se encontraron las hojas LIQ, PRA o PLL en el archivo.');
+
+            } catch (error) { alert('Error: ' + error.message); }
+        };
+        reader.readAsArrayBuffer(file);
+    });
+
+    // ------------------------------------------------------------------
+    // GENERADOR TXT SAP (LÓGICA H y L SEPARADA)
+    // ------------------------------------------------------------------
+    document.getElementById('btnConfirmExport').addEventListener('click', () => {
+        txtModal.style.display = 'none';
+        const monthVal = parseInt(document.getElementById('txtMonth').value);
+        const monthName = document.getElementById('txtMonth').options[monthVal-1].text;
+        const yearVal = document.getElementById('txtYear').value;
+        const lastDay = new Date(yearVal, monthVal, 0).getDate();
+        const dateStr = `${yearVal}-${String(monthVal).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
+
+        let commentStr = "", ref2Str = "";
+        if(currentExportTitle === "PLANILLA") {
+            commentStr = `PLANILLA MENSUAL Y VAC. EJ,EE Y OO ${monthName} ${yearVal}`;
+            ref2Str = `PLANILLA ${monthName} ${yearVal}`;
+        } else if (currentExportTitle === "PRACTICANTES") {
+            commentStr = `PLANILLA PRACTICANTES ${monthName} ${yearVal}`;
+            ref2Str = `PLANILLA PRACTICANTES ${monthName} ${yearVal}`;
+        } else if (currentExportTitle === "LIQUIDACIONES") {
+            commentStr = `LIQUIDACIONES EE Y OO ${monthName} ${yearVal}`;
+            ref2Str = `LBS ${monthName} ${yearVal}`;
+        }
+
+        const table = document.getElementById(`table-${currentExportTitle}`);
+        const rows = table.querySelector('tbody').children;
+        let txtContent = "";
+
+        // CABECERA 'H'
+        let headerCols = Array(19).fill("");
+        headerCols[0] = "H"; headerCols[2] = dateStr; headerCols[3] = dateStr; headerCols[4] = dateStr;
+        headerCols[5] = commentStr; headerCols[10] = ref2Str;
+        txtContent += headerCols.join("\t") + "\r\n";
+
+        // LÍNEAS 'L' (Ignorando columna 0 que es el correlativo #)
+        for (let i = 0; i < rows.length; i++) {
+            let tr = rows[i];
+            if(tr.style.display === 'none') continue;
+            
+            const tds = tr.children;
+            let lineCols = Array(19).fill("");
+            
+            lineCols[0] = "L";
+            
+            let ctaHtml = tds[1].textContent.trim(); // Índice 1 es Cuenta
+            let debeHtml = parseFloat(tds[3].textContent) || 0; // Índice 3 es Debe
+            let haberHtml = parseFloat(tds[4].textContent) || 0; // Índice 4 es Haber
+
+            lineCols[12] = ctaHtml.startsWith("E") ? "BP" : "GL";
+            lineCols[13] = ctaHtml;
+            lineCols[14] = (debeHtml === 0) ? "" : debeHtml.toFixed(2);
+            lineCols[15] = (haberHtml === 0) ? "" : haberHtml.toFixed(2);
+            
+            lineCols[16] = tds[5].textContent.trim(); // Naturaleza Costo
+            lineCols[17] = tds[6].textContent.trim(); // Línea Producción
+            lineCols[18] = tds[7].textContent.trim(); // Proceso Area
+
+            txtContent += lineCols.join("\t") + "\r\n";
+        }
+
+        if(txtContent.split("\n").length <= 2) return alert("No hay datos visibles para exportar.");
+
+        const blob = new Blob([txtContent], { type: 'text/plain;charset=utf-8;' });
+        const link = document.createElement('a');
+        link.setAttribute('href', URL.createObjectURL(blob));
+        link.setAttribute('download', `Asiento_${currentExportTitle}_${monthName}_${yearVal}.txt`);
+        link.style.visibility = 'hidden'; document.body.appendChild(link);
+        link.click(); document.body.removeChild(link);
+    });
+
+    // ------------------------------------------------------------------
+    // FUNCIONES BASE DE MATEMÁTICA Y LÓGICA (CLON EXACTO M)
+    // ------------------------------------------------------------------
+    function assignDimsClass6(cta, procesoArea) {
+        let ctatxt = cta ? cta.toString() : "";
+        if (!ctatxt.startsWith("6")) return { nat: null, lin: null, proc: null };
+        let proc = procesoArea ? procesoArea.toString() : null;
+        if (!proc) return { nat: null, lin: null, proc: null };
+        let nat = proc.substring(0, 1), prf = proc.substring(0, 2), lin = null;
+        if (prf === "11") lin = "A11"; else if (prf === "21") lin = "V21"; 
+        else if (["31","32","33"].includes(prf)) lin = "P" + prf; else if (["40","41","42","43"].includes(prf)) lin = "I" + prf;
+        return { nat: nat, lin: lin, proc: proc };
+    }
+
+    function safeNum(val) { let n = parseFloat(val); return isNaN(n) ? 0 : n; }
+
+    // FUNCIÓN ESTRICTA PARA LIQ SEGÚN CÓDIGO M
+    function fnCta_LIQ(cta, dni) {
+        if (!cta) return null;
+        let ctatxt = cta.toString().trim();
+        let pref2 = ctatxt.substring(0, 2);
+        let esAsociada = ["12","13","14","16","17","18","19","42","43","44","45","46","47"].includes(pref2);
+        let noLlevaE = ["4017301", "4699101", "1412101", "1412201", "1411301"].includes(ctatxt) || ctatxt.startsWith("6");
+        let dniVal = (dni !== null && dni !== undefined) ? dni.toString().trim() : "";
+        
+        if (esAsociada && !noLlevaE && dniVal !== "") {
+            return "E" + dniVal;
+        }
+        return ctatxt;
+    }
+
+    function process_TB_liq(rows) {
+        let results = [];
+        let currentCC = null;
+        
+        for (let r of rows) {
+            // Cazador del encabezado de Centro de Costos exacto al M
+            let numKey = Object.keys(r).find(k => k.trim().toUpperCase() === "Nº" || k.trim().toUpperCase() === "N°");
+            let numVal = numKey && r[numKey] !== null ? r[numKey].toString().trim().toUpperCase() : null;
+
+            if (numVal !== null && numVal.startsWith("CENTRO DE COSTOS")) {
+                let parts = numVal.split(":");
+                if (parts.length > 1) {
+                    let ccExtraido = parts[1].trim().substring(0, 5);
+                    currentCC = (ccExtraido === "40001") ? "40101" : ccExtraido;
+                } else {
+                    let match = numVal.match(/\d{5}/);
+                    if(match) currentCC = (match[0] === "40001") ? "40101" : match[0];
+                }
+                continue;
+            }
+
+            let nombreOriginal = r["APELLIDOS Y NOMBRES"];
+            let nomStr = nombreOriginal !== null && nombreOriginal !== undefined ? nombreOriginal.toString().trim().toUpperCase() : "";
+
+            // Filtro estricto para evitar duplicaciones y bloquear cuentas E1
+            if (numVal === null || numVal === "" || numVal === "Nº" || numVal === "N°" || nomStr === "" || nomStr.startsWith("TOTAL")) {
+                continue;
+            }
+
+            let catKey = Object.keys(r).find(k => k.toUpperCase().includes("CATEGORIA"));
+            let categoria = catKey && r[catKey] ? r[catKey].toString().toUpperCase().trim() : "EMPLEADO";
+            let doc = r["DOCUMENTO"];
+            let isObrero = categoria === "OBRERO";
+
+            const addLine = (ctaGastos, valDebe, valHaber, concepto) => {
+                if (valDebe === 0 && valHaber === 0) return;
+                let dims = assignDimsClass6(ctaGastos, currentCC);
+                results.push({ 
+                    "Cuenta Contable": fnCta_LIQ(ctaGastos, doc), 
+                    "CTA": ctaGastos, 
+                    "DEBE": valDebe, 
+                    "HABER": valHaber, 
+                    "Naturaleza de Costo/Gasto": dims.nat, 
+                    "Línea de Producción Costo/Gasto": dims.lin, 
+                    "Proceso/Area de Costo/Gasto": dims.proc || currentCC, 
+                    "APELLIDOS Y NOMBRES": nombreOriginal, 
+                    "Concepto de Control": concepto 
+                });
+            };
+
+            addLine(isObrero ? 6211201 : 6211101, safeNum(r["DIAS TRABAJADOS"]), 0, "DIAS TRABAJADOS");
+            addLine(isObrero ? 6211201 : 6211101, safeNum(r["LICENCIA CON GOCE HABER"]), 0, "LICENCIA CON GOCE HABER");
+            addLine(isObrero ? 6221201 : 6221101, safeNum(r["ASIG. FAM."]), 0, "ASIG. FAM.");
+            addLine(isObrero ? 6225201 : 6225101, safeNum(r["HORAS EXTRAS 25%"]) + safeNum(r["HORAS EXTRAS 35%"]) + safeNum(r["H. E. 100%"]), 0, "HORAS EXTRAS");
+            addLine(isObrero ? 6223201 : 6223101, safeNum(r["BONIFICACION NOCTURNA"]), 0, "BONIFICACION NOCTURNA");
+            addLine(isObrero ? 6224201 : 6224101, safeNum(r["MOVILIDAD"]), 0, "MOVILIDAD");
+            addLine(isObrero ? 6271201 : 6271101, safeNum(r["ESSALUD - IMPORTE"]), 0, "ESSALUD GASTO");
+            addLine(isObrero ? 6277103 : 6277102, safeNum(r["SENATI - IMPORTE"]), 0, "SENATI GASTO");
+            addLine(1629101, 0, safeNum(r["DIFERENCIA POR SUBSIDIO"]), "DIFERENCIA POR SUBSIDIO");
+            addLine(1629101, safeNum(r["REINTEGRO SUBSIDIO"]), 0, "REINTEGRO SUBSIDIO");
+            addLine(4114101, safeNum(r["BON. EXTRA. TEMPORAL"]), 0, "BON. EXTRA. TEMPORAL");
+            addLine(4151101, safeNum(r["C.T.S. TRUNCO"]), 0, "C.T.S. TRUNCO");
+            addLine(4115101, safeNum(r["VACACION TRUNCA"]), 0, "VACACION TRUNCA");
+            addLine(4115101, safeNum(r["VACACIONES PENDIENTES"]), 0, "VACACIONES PENDIENTES");
+            addLine(4114101, safeNum(r["GRAT. TRUNCA"]), 0, "GRAT. TRUNCA");
+            addLine(4031101, 0, safeNum(r["ESSALUD - IMPORTE"]), "ESSALUD PASIVO");
+            addLine(4033101, 0, safeNum(r["SENATI - IMPORTE"]), "SENATI PASIVO");
+            addLine(4032101, 0, safeNum(r["O.N.P."]), "O.N.P.");
+            addLine(4699101, 0, safeNum(r["RET.JUD."]), "RET.JUD.");
+            addLine(1412101, 0, safeNum(r["ADEL. QUIN."]), "ADEL. QUIN.");
+            addLine(1412201, 0, safeNum(r["VACACIONES ADELANTADAS"]), "VACACIONES ADELANTADAS");
+            addLine(1412101, 0, safeNum(r["SOBREGIRO BOLETA NEGATIVA"]), "SOBREGIRO BOLETA NEGATIVA");
+            addLine(1411301, 0, safeNum(r["PRESTAMO ESCOLAR"]) + safeNum(r["PRESTAMO ESCOLAR2"]), "PRESTAMO ESCOLAR");
+            addLine(4699204, 0, safeNum(r["PRESTAMO BANCO COMERCIO"]) + safeNum(r["PRESTAMO BANCO COMERCIO2"]), "PRESTAMO BCO COMERCIO");
+            addLine(4699802, 0, safeNum(r["DONACIÓN FUNDACIÓN ART AT"]), "DONACIÓN FUNDACIÓN ART AT");
+            addLine(4171101, 0, safeNum(r["A.F.P. (10%)"]), "AFP FONDO");
+            addLine(4171201, 0, safeNum(r["A.F.P. (PRM.SEG.)"]), "AFP PRIMA");
+            addLine(4171301, 0, safeNum(r["A.F.P. (COM. VAR.)"]), "AFP COMISION");
+            addLine(4159101, 0, safeNum(r["NETO A PAGAR"]), "NETO A PAGAR");
+        }
+        return results;
+    }
+
+    function process_TB_pra(rows) {
+        let results = [];
+        let sumAdelanto = 0, sumNeto = 0;
+        for (let r of rows) {
+            let agrup = r["AGRUPAMIENTO"];
+            if (!agrup || agrup === "TOTAL") continue;
+            let totIngresos = safeNum(r["TOTAL INGRESOS"]), credAnnthara = safeNum(r["CREDITO ANNTHARA"]);
+            sumAdelanto += safeNum(r["ADEL. QUIN."]); sumNeto += safeNum(r["NETO A PAGAR"]);
+            let t3 = null;
+            let idx1 = agrup.indexOf(":"), idx2 = agrup.indexOf("-");
+            if (idx1 !== -1 && idx2 !== -1 && idx2 > idx1) t3 = agrup.substring(idx1 + 1, idx2).trim();
+
+            if (totIngresos !== 0) {
+                let dims = assignDimsClass6(6211301, t3);
+                results.push({ "Cuenta Contable": "6211301", "CTA": 6211301, "DEBE": totIngresos, "HABER": 0, "Naturaleza de Costo/Gasto": dims.nat, "Línea de Producción Costo/Gasto": dims.lin, "Proceso/Area de Costo/Gasto": dims.proc, "APELLIDOS Y NOMBRES": r["AGRUPAMIENTO"], "Concepto de Control": "TOTAL INGRESOS" });
+            }
+            if (credAnnthara !== 0) {
+                let doc = r["DOCUMENTO"] ? r["DOCUMENTO"].toString().trim() : "";
+                results.push({ "Cuenta Contable": (doc !== "" && doc !== "null") ? "4699901E" + doc : null, "CTA": 4699901, "DEBE": 0, "HABER": credAnnthara, "Naturaleza de Costo/Gasto": null, "Línea de Producción Costo/Gasto": null, "Proceso/Area de Costo/Gasto": null, "APELLIDOS Y NOMBRES": r["AGRUPAMIENTO"], "Concepto de Control": "CREDITO ANNTHARA" });
+            }
+        }
+        if (sumAdelanto !== 0) results.push({ "Cuenta Contable": "1412101", "CTA": 1412101, "DEBE": 0, "HABER": sumAdelanto, "Naturaleza de Costo/Gasto": null, "Línea de Producción Costo/Gasto": null, "Proceso/Area de Costo/Gasto": null, "APELLIDOS Y NOMBRES": "TOTAL ADELANTOS QUINCENA", "Concepto de Control": "ADELANTO QUINCENA" });
+        if (sumNeto !== 0) results.push({ "Cuenta Contable": "4191101", "CTA": 4191101, "DEBE": 0, "HABER": sumNeto, "Naturaleza de Costo/Gasto": null, "Línea de Producción Costo/Gasto": null, "Proceso/Area de Costo/Gasto": null, "APELLIDOS Y NOMBRES": "TOTAL NETO A PAGAR", "Concepto de Control": "NETO A PAGAR" });
+        return results;
+    }
+
+    // FUNCIÓN ESTRICTA PARA PLANILLAS
+    function fnCta_PLL(cta, dni) {
+        if (!cta) return null;
+        let ctatxt = cta.toString().trim(), pref2 = ctatxt.substring(0, 2), pref4 = ctatxt.substring(0, 4);
+        let esCategoriaAsociada = ["12","13","14","16","17","19","42","43","44","45","46","47"].includes(pref2) || ["4171", "4031", "4032"].includes(pref4);
+        let noEsAsociadaReal = ["4017301", "1411301", "1412101", "1412201", "4699101"].includes(ctatxt);
+        if (esCategoriaAsociada && !noEsAsociadaReal && dni !== null && dni !== undefined && dni.toString().trim() !== "") return "E" + dni.toString().trim();
+        return ctatxt;
+    }
+
+    function process_TB_pll(rows) {
+        let base = [], index = 0;
+        for (let r of rows) {
+            let debe = safeNum(r["DEBE"]), haber = safeNum(r["HABER"]);
+            if (debe === 0 && haber === 0) { index++; continue; }
+            let a5 = (r["A5"] === undefined || r["A5"] === null) ? r["APELLIDOS Y NOMBRES"] : r["A5"];
+            base.push({ CTA: r["CTA"] ? parseInt(r["CTA"]) : null, A3: (r["A3"] !== null && r["A3"] !== undefined) ? r["A3"].toString() : null, A4: (r["A4"] !== null && r["A4"] !== undefined) ? r["A4"].toString() : null, A5: (a5 !== null && a5 !== undefined) ? a5.toString() : null, DEBE: debe, HABER: haber, Columna8: r["Columna8"] !== undefined && r["Columna8"] !== null ? parseFloat(r["Columna8"]) : null, OrdenOriginal: index });
+            index++;
+        }
+        let CuentasCtrl = [1629101, 4699802, 4699202, 4699204, 1413101, 1419103, 4699803, 4699807, 1412201, 4115101, 4699101, 4017301, 1411301, 4699806, 1419102];
+        const groupBy = (array, keys) => {
+            let map = new Map();
+            array.forEach(item => {
+                let keyStr = keys.map(k => item[k]).join("|");
+                if (!map.has(keyStr)) { let obj = {}; keys.forEach(k => obj[k] = item[k]); obj.DEBE = 0; obj.HABER = 0; obj.OrdenOriginal = item.OrdenOriginal; map.set(keyStr, obj); }
+                let grouped = map.get(keyStr); grouped.DEBE += item.DEBE; grouped.HABER += item.HABER;
+                if (item.OrdenOriginal < grouped.OrdenOriginal) grouped.OrdenOriginal = item.OrdenOriginal;
+            });
+            return Array.from(map.values());
+        };
+        let controlables = base.filter(r => CuentasCtrl.includes(r.CTA));
+        let resCtrl = groupBy(controlables, ["CTA", "A3", "A4", "A5"]).map(r => ({ ...r, "Cuenta Contable": fnCta_PLL(r.CTA, r.A4) }));
+
+        let mix = base.filter(r => r.CTA === 1412101);
+        let resMix = [];
+        if (mix.length > 0) {
+            let lastVal = null;
+            for (let i = mix.length - 1; i >= 0; i--) { if (mix[i].Columna8 !== null) { lastVal = mix[i].Columna8; } else { mix[i].Columna8 = lastVal; } }
+            let maxCol8 = Math.max(...mix.map(r => r.Columna8 === null ? -99999999 : r.Columna8));
+            let agpMix = groupBy(mix.filter(r => r.Columna8 === maxCol8), ["CTA", "A3"]);
+            let agrupadoEst = agpMix.map(r => ({ CTA: r.CTA, A3: r.A3, DEBE: r.DEBE, HABER: r.HABER, OrdenOriginal: r.OrdenOriginal, A4: null, A5: "NETO 1412101" }));
+            let detalleEst = mix.filter(r => r.Columna8 !== maxCol8).map(r => ({ CTA: r.CTA, A3: r.A3, DEBE: r.DEBE, HABER: r.HABER, A4: r.A4, A5: r.A5, OrdenOriginal: r.OrdenOriginal }));
+            resMix = agrupadoEst.concat(detalleEst).map(r => ({ ...r, "Cuenta Contable": fnCta_PLL(r.CTA, r.A4) }));
+        }
+
+        let confidenciales = base.filter(r => !CuentasCtrl.includes(r.CTA) && r.CTA !== 1412101);
+        let resConf = groupBy(confidenciales, ["CTA", "A3"]).map(r => ({ ...r, A4: null, A5: null, "Cuenta Contable": fnCta_PLL(r.CTA, null) }));
+
+        let union = [...resCtrl, ...resMix, ...resConf].filter(r => !( (r.DEBE === null || r.DEBE === 0) && (r.HABER === null || r.HABER === 0) ));
+        union.sort((a, b) => a.OrdenOriginal - b.OrdenOriginal);
+
+        return union.map(r => {
+            let nat = null, lin = null, proc = null;
+            if (r.CTA && r.CTA.toString().startsWith("6")) {
+                let t3 = (r.A3 && r.A3.length > 1) ? r.A3.substring(1) : null;
+                if (t3) { nat = t3.substring(0, 1); let prf = t3.substring(0, 2); if (prf === "11") lin = "A11"; else if (prf === "21") lin = "V21"; else if (["31","32","33"].includes(prf)) lin = "P" + prf; else if (["40","41","42","43"].includes(prf)) lin = "I" + prf; proc = t3; }
+            }
+            return { "Cuenta Contable": r["Cuenta Contable"], "CTA": r.CTA, "DEBE": r.DEBE || 0, "HABER": r.HABER || 0, "Naturaleza de Costo/Gasto": nat, "Línea de Producción Costo/Gasto": lin, "Proceso/Area de Costo/Gasto": proc, "APELLIDOS Y NOMBRES": r.A5, "Concepto de Control": null };
+        });
+    }
+</script>
+</body>
+</html>
