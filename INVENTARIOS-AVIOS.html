@@ -260,6 +260,7 @@
                         
                         <!-- Lado Izquierdo: Tabla y Detalles -->
                         <div class="flex-grow flex flex-col gap-4">
+                            
                             <!-- TABLA GRID COMPACTA DE CONTEO -->
                             <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm inv-grid">
                                 <table class="w-full text-sm">
@@ -276,7 +277,12 @@
                                             <td class="px-3 py-3 font-semibold text-gray-700 text-xs"><i class="fa-solid fa-box-open text-gray-400 mr-1"></i> Reserva</td>
                                             <td class="px-3 py-3 text-right font-mono text-gray-500 bg-gray-50/50" id="modal-reserva-sap">0.00</td>
                                             <td class="px-2 py-2 bg-teal-50/30">
-                                                <input type="number" step="0.01" id="reserva_inv" required oninput="calcularModal()" class="w-full text-right font-mono font-bold text-teal-700 border border-teal-200 rounded px-2 py-1.5 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 bg-white shadow-sm" onfocus="activarCalc(this)" placeholder="0.00">
+                                                <div class="relative w-full">
+                                                    <input type="number" step="0.01" id="reserva_inv" required oninput="calcularModal()" class="w-full text-right font-mono font-bold text-teal-700 border border-teal-200 rounded px-2 py-1.5 pr-8 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 bg-white shadow-sm" onfocus="activarCalc(this)" placeholder="0.00">
+                                                    <button type="button" onclick="toggleCalculadora('reserva_inv')" class="absolute right-1 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-teal-600 p-1.5" title="Usar Calculadora">
+                                                        <i class="fa-solid fa-calculator text-sm"></i>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                         <!-- Fila Sin Reserva -->
@@ -284,7 +290,12 @@
                                             <td class="px-3 py-3 font-semibold text-gray-700 text-xs"><i class="fa-solid fa-box text-gray-400 mr-1"></i> Sin Reserva</td>
                                             <td class="px-3 py-3 text-right font-mono text-gray-500 bg-gray-50/50" id="modal-sinreserva-sap">0.00</td>
                                             <td class="px-2 py-2 bg-teal-50/30">
-                                                <input type="number" step="0.01" id="sin_reserva_inv" required oninput="calcularModal()" class="w-full text-right font-mono font-bold text-teal-700 border border-teal-200 rounded px-2 py-1.5 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 bg-white shadow-sm" onfocus="activarCalc(this)" placeholder="0.00">
+                                                <div class="relative w-full">
+                                                    <input type="number" step="0.01" id="sin_reserva_inv" required oninput="calcularModal()" class="w-full text-right font-mono font-bold text-teal-700 border border-teal-200 rounded px-2 py-1.5 pr-8 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 bg-white shadow-sm" onfocus="activarCalc(this)" placeholder="0.00">
+                                                    <button type="button" onclick="toggleCalculadora('sin_reserva_inv')" class="absolute right-1 top-1/2 transform -translate-y-1/2 text-gray-400 hover:text-teal-600 p-1.5" title="Usar Calculadora">
+                                                        <i class="fa-solid fa-calculator text-sm"></i>
+                                                    </button>
+                                                </div>
                                             </td>
                                         </tr>
                                         <!-- Fila Totales -->
@@ -316,7 +327,7 @@
                         </div>
 
                         <!-- Lado Derecho: Calculadora Lateral Constante -->
-                        <div class="w-full md:w-56 bg-gray-800 p-3 rounded-xl shadow-inner flex flex-col flex-shrink-0 justify-center h-fit">
+                        <div id="panel-calculadora" class="w-full md:w-56 bg-gray-800 p-3 rounded-xl shadow-inner flex flex-col flex-shrink-0 justify-center h-fit hidden-view transition-all duration-300">
                             <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-2 text-center flex items-center justify-center gap-1">
                                 <i class="fa-solid fa-calculator"></i> Calculadora
                             </div>
@@ -768,7 +779,6 @@
 
         async function realizarBusquedaDB(term) {
             try {
-                // MODIFICACIÓN: Buscamos TODOS los artículos (Pendientes y Ya Inventariados)
                 const { data, error } = await _supabase.from(NOMBRE_TABLA)
                     .select('id, "Nro", "Código de Item", "Descripción", "Stock SAP", "Unidad de Medida", "Reserva", "Sin Reserva", "Almacen", "Sub Almacen", "Reserva Inv", "Sin Reserva Inv", "Ubicación", "Observaciones", "Registro", "Inventariador"')
                     .or(`Código de Item.ilike.%${term}%,Descripción.ilike.%${term}%`)
@@ -867,7 +877,7 @@
                 { facingMode: "environment" },
                 config,
                 onEscaneoExitoso,
-                () => {} // callback de error de frame, se ignora (se dispara constantemente mientras no detecta nada)
+                () => {} 
             ).then(() => {
                 escanerActivo = true;
             }).catch((err) => {
@@ -881,11 +891,9 @@
         }
 
         function onEscaneoExitoso(decodedText) {
-            // Evitar múltiples disparos mientras se cierra la cámara
             if (!escanerActivo) return;
             escanerActivo = false;
 
-            // Vibración corta de confirmación si el dispositivo lo soporta
             if (navigator.vibrate) navigator.vibrate(100);
 
             cerrarEscaner();
@@ -908,7 +916,6 @@
                 html5QrCode.stop().then(() => {
                     html5QrCode.clear();
                 }).catch(() => {
-                    // Si ya estaba detenido, no hacer nada
                 });
             }
             escanerActivo = false;
@@ -952,7 +959,7 @@
                 btnModificar.classList.remove('hidden-view');
                 
                 // Mostrar Info
-                const fechaCorta = item.Registro.substring(0,10); // "DD/MM/YYYY" de nuestro string
+                const fechaCorta = item.Registro.substring(0,10); 
                 badgeEstado.innerHTML = `<span class="bg-teal-100 text-teal-700 px-2 py-1 rounded border border-teal-200 text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-check-double mr-1"></i> Por ${item.Inventariador || 'N/A'}</span>`;
             } else {
                 inputs.forEach(id => {
@@ -1026,7 +1033,21 @@
             modal.classList.add('opacity-0');
             content.classList.add('translate-y-full');
             
+            document.getElementById('panel-calculadora').classList.add('hidden-view');
+            
             setTimeout(() => modal.classList.add('hidden-view'), 300);
+        }
+
+        function toggleCalculadora(inputId) {
+            const panel = document.getElementById('panel-calculadora');
+            const inputElement = document.getElementById(inputId);
+            
+            panel.classList.remove('hidden-view');
+            
+            if (inputElement && !inputElement.readOnly) {
+                inputElement.focus();
+                activarCalc(inputElement);
+            }
         }
 
         function activarCalc(element) {
@@ -1094,6 +1115,7 @@
             const sr = parseFloat(document.getElementById('sin_reserva_inv').value) || 0;
             const sap = parseFloat(document.getElementById('modal-stock-sap').innerText) || 0;
             
+            // FORMATO UNIVERSAL (Evita errores de Supabase/Postgres)
             const now = new Date();
             const d = String(now.getDate()).padStart(2, '0');
             const m = String(now.getMonth() + 1).padStart(2, '0');
@@ -1101,12 +1123,12 @@
             const h = String(now.getHours()).padStart(2, '0');
             const min = String(now.getMinutes()).padStart(2, '0');
             const s = String(now.getSeconds()).padStart(2, '0');
-            const fechaLocal = `${d}/${m}/${y} ${h}:${min}:${s}`; 
+            const fechaLocal = `${y}-${m}-${d} ${h}:${min}:${s}`; 
 
             try {
                 const payload = {
-                    "Inventariador": document.getElementById('inventariador').value,
-                    "Grupo de Trabajo": document.getElementById('grupo_trabajo').value,
+                    "Inventariador": document.getElementById('inventariador').value.trim(),
+                    "Grupo de Trabajo": document.getElementById('grupo_trabajo').value.trim(),
                     "Reserva Inv": r,
                     "Sin Reserva Inv": sr,
                     "Total Inventario": r + sr,
@@ -1122,7 +1144,6 @@
                 Swal.fire({ toast: true, position: 'top', icon: 'success', title: '¡Guardado!', showConfirmButton: false, timer: 1200 });
                 cerrarModal();
                 
-                // Actualizar item visualmente si sigue en la barra de búsqueda
                 const index = busquedaActual.findIndex(i => i.id === registroId);
                 if(index > -1) {
                     busquedaActual[index] = { ...busquedaActual[index], ...payload };
@@ -1195,15 +1216,22 @@
             const texto = document.getElementById('filtroReporte').value.toLowerCase();
             const fechaFiltroStr = document.getElementById('filtro-fecha').value; 
             
-            let fechaCortaPE = "";
-            if(fechaFiltroStr) {
-                const partes = fechaFiltroStr.split('-');
-                if(partes.length === 3) fechaCortaPE = `${partes[2]}/${partes[1]}/${partes[0]}`;
-            }
-            
             let filtrados = todosLosDatosReporte;
             
-            if(fechaCortaPE) filtrados = filtrados.filter(i => i.Registro && i.Registro.startsWith(fechaCortaPE));
+            if (fechaFiltroStr) {
+                filtrados = filtrados.filter(i => {
+                    if (!i.Registro) return false;
+                    let dbDate = i.Registro;
+                    let datePart = dbDate.split('T')[0].split(' ')[0]; 
+                    
+                    if (datePart.includes('/')) {
+                        const p = datePart.split('/');
+                        if (p.length === 3) datePart = `${p[2]}-${p[1]}-${p[0]}`;
+                    }
+                    return datePart === fechaFiltroStr;
+                });
+            }
+            
             if (estado === 'completados') filtrados = filtrados.filter(i => i.Registro != null);
             if (estado === 'pendientes') filtrados = filtrados.filter(i => i.Registro == null);
             if (estado === 'diferencias') filtrados = filtrados.filter(i => i.Registro != null && parseFloat(i.Diferencia) !== 0);
@@ -1220,7 +1248,7 @@
             datosFiltradosParaExportar = filtrados;
             
             renderizarReportesAdmin(filtrados);
-            actualizarEstadisticasAdmin(todosLosDatosReporte, fechaCortaPE); 
+            actualizarEstadisticasAdmin(todosLosDatosReporte, fechaFiltroStr); 
         }
 
         function actualizarEstadisticasAdmin(dataGlobal, fechaMatch) {
