@@ -260,7 +260,7 @@
                         
                         <!-- Lado Izquierdo: Tabla y Detalles -->
                         <div class="flex-grow flex flex-col gap-4">
-                            
+
                             <!-- TABLA GRID COMPACTA DE CONTEO -->
                             <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm inv-grid">
                                 <table class="w-full text-sm">
@@ -1042,6 +1042,13 @@
             const panel = document.getElementById('panel-calculadora');
             const inputElement = document.getElementById(inputId);
             
+            // Si la calculadora ya está abierta y hacemos clic en el mismo input, la ocultamos
+            if (!panel.classList.contains('hidden-view') && calcTargetInput === inputElement) {
+                panel.classList.add('hidden-view');
+                return;
+            }
+            
+            // Si no, la mostramos y activamos el input correspondiente
             panel.classList.remove('hidden-view');
             
             if (inputElement && !inputElement.readOnly) {
@@ -1156,6 +1163,8 @@
                 document.getElementById('buscador-articulos').focus();
             } catch (error) {
                 Swal.fire({ icon: 'error', title: 'Error', text: error.message });
+            } finally {
+                // SOLUCIÓN AL BUG: Reactivar el botón de guardar siempre al terminar el proceso
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Guardar Conteo';
             } 
