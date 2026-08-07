@@ -67,6 +67,10 @@
         .calc-btn:active { background: #4b5563; transform: scale(0.95); }
         .calc-btn.op { background: #1f2937; color: #2dd4bf; border-color: #374151; }
         .calc-btn.action { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
+    
+        /* Fix para escáner en móviles */
+        #reader { width: 100%; border: none !important; box-shadow: none !important; }
+        #reader video { width: 100% !important; border-radius: 12px; object-fit: cover; }
     </style>
 </head>
 <body class="flex flex-col h-screen overflow-hidden">
@@ -186,14 +190,18 @@
                 <p class="text-sm text-gray-500">Busca el código o descripción del artículo</p>
             </div>
             
-            <div class="relative mb-6 flex gap-2">
-                <div class="relative flex-grow">
-                    <i class="fa-solid fa-magnifying-glass absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg"></i>
-                    <input type="text" id="buscador-articulos" class="smart-input hero-search w-full bg-white" placeholder="Escanear o teclear código..." autocomplete="off">
-                    <div id="loading-spinner" class="absolute right-5 top-1/2 transform -translate-y-1/2 hidden">
-                        <i class="fa-solid fa-circle-notch fa-spin text-teal-600 text-lg"></i>
-                    </div>
+            <div class="relative mb-6 w-full flex items-center">
+                <i class="fa-solid fa-magnifying-glass absolute left-4 text-gray-400 text-lg"></i>
+                <input type="text" id="buscador-articulos" class="smart-input hero-search w-full bg-white pr-20" placeholder="Escanear o teclear código..." autocomplete="off">
+                
+                <div id="loading-spinner" class="absolute right-[4.5rem] hidden">
+                    <i class="fa-solid fa-circle-notch fa-spin text-teal-600 text-lg"></i>
                 </div>
+
+                <!-- Botón de Escáner QR/Barras -->
+                <button onclick="abrirEscaner()" class="absolute right-2 w-12 h-10 bg-teal-50 hover:bg-teal-100 border border-teal-200 text-teal-600 rounded-xl flex items-center justify-center transition-colors shadow-sm" title="Escanear Código de Barras">
+                    <i class="fa-solid fa-camera text-xl"></i>
+                </button>
             </div>
 
             <!-- Contenedor de Resultados -->
@@ -204,6 +212,24 @@
                     </div>
                     <p class="text-gray-500 text-sm font-medium">Ingresa al menos 3 caracteres.</p>
                 </div>
+            </div>
+        </div>
+    </div>
+
+    
+    <!-- MODAL ESCANER DE CÓDIGOS -->
+    <div id="modal-escaner" class="fixed inset-0 modal-backdrop z-[60] hidden-view flex items-center justify-center p-4">
+        <div class="bg-white w-full max-w-md rounded-2xl shadow-2xl flex flex-col overflow-hidden">
+            <div class="px-5 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50">
+                <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide"><i class="fa-solid fa-qrcode mr-2"></i>Escanear Código</h3>
+                <button onclick="cerrarEscaner()" class="text-gray-400 hover:text-red-500 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-4 bg-black flex justify-center">
+                <!-- Contenedor del Lector -->
+                <div id="reader" style="width: 100%; max-width: 400px; min-height: 300px; border-radius: 8px; overflow: hidden; background: #000; display: flex; align-items: center; justify-content: center;"><span class="text-white text-sm"><i class="fa-solid fa-camera fa-spin mr-2"></i> Iniciando cámara...</span></div>
+            </div>
+            <div class="px-5 py-3 border-t border-gray-100 bg-gray-50 text-center">
+                <p class="text-xs text-gray-500">Apunta la cámara al código de barras o QR del artículo.</p>
             </div>
         </div>
     </div>
@@ -541,6 +567,7 @@
         // Variables Buscador Operador
         let debounceTimer;
         let busquedaActual = [];
+        let html5QrCode;
         let calcTargetInput = null;
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -714,6 +741,47 @@
                     document.getElementById('op-stats').innerHTML = `<i class="fa-solid fa-chart-pie mr-1 text-teal-600"></i> Progreso Global: <b class="text-teal-700">${contados}</b> contados — Faltan: <b>${faltan}</b> (${pct}%)`;
                 }
             } catch(e) {}
+        }
+
+        
+        // --- ESCÁNER DE CÓDIGOS ---
+        function abrirEscaner() {
+            document.getElementById('modal-escaner').classList.remove('hidden-view');
+            
+            if (!html5QrCode) {
+                html5QrCode = new Html5Qrcode("reader");
+            }
+            
+            html5QrCode.start(
+                { facingMode: "environment" }, 
+                { fps: 10, qrbox: { width: 250, height: 250 } },
+                onScanSuccess
+            ).catch((err) => {
+                console.error("Error al iniciar cámara", err);
+                Swal.fire({
+                    icon: 'error',
+                    title: 'Cámara bloqueada',
+                    text: 'Asegúrate de dar permisos a la cámara en tu navegador y de usar https://',
+                    confirmButtonColor: '#0d9488'
+                });
+                cerrarEscaner();
+            });
+        }
+
+        function onScanSuccess(decodedText, decodedResult) {
+            document.getElementById('buscador-articulos').value = decodedText;
+            cerrarEscaner();
+            document.getElementById('loading-spinner').classList.remove('hidden');
+            realizarBusquedaDB(decodedText);
+        }
+
+        function cerrarEscaner() {
+            document.getElementById('modal-escaner').classList.add('hidden-view');
+            if (html5QrCode && html5QrCode.isScanning) {
+                html5QrCode.stop().then(() => {
+                    html5QrCode.clear();
+                }).catch(err => console.error("Error deteniendo cámara", err));
+            }
         }
 
         function setupSearchListener() {
@@ -1435,4 +1503,4 @@
         }
     </script>
 </body>
-</html>    
+</html>
