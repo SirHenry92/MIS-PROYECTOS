@@ -1,0 +1,1438 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Inventario Smart - Portal Especializado</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+    
+    <!-- PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- jsPDF & AutoTable para exportar a PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+    <style>
+        body { background-color: #f4f7f6; color: #2d3748; font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif; }
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+        .hidden-view { display: none !important; }
+        
+        .smart-input {
+            width: 100%; border: 1px solid #e2e8f0; border-radius: 6px; padding: 8px 12px; font-size: 14px; outline: none; transition: all 0.2s; background: #fff;
+        }
+        .smart-input:focus { border-color: #0d9488; box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1); }
+        .smart-label { display: block; font-size: 11px; font-weight: 700; color: #64748b; margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; }
+        
+        .item-card {
+            background: white; border: 1px solid #e2e8f0; border-radius: 8px; padding: 12px 16px; margin-bottom: 8px;
+            transition: all 0.2s; cursor: pointer; display: flex; justify-content: space-between; align-items: center;
+        }
+        .item-card:hover { transform: translateY(-2px); box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05); border-color: #0d9488; }
+        
+        .modal-backdrop { background-color: rgba(15, 23, 42, 0.6); backdrop-filter: blur(4px); }
+
+        .btn-primary { background-color: #0d9488; color: white; border-radius: 6px; padding: 8px 16px; font-weight: 600; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center; }
+        .btn-primary:hover:not(:disabled) { background-color: #0f766e; }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+        
+        .btn-secondary { background-color: #f1f5f9; color: #475569; border-radius: 6px; padding: 8px 16px; font-weight: 600; transition: all 0.2s; display: inline-flex; align-items: center; justify-content: center;}
+        .btn-secondary:hover { background-color: #e2e8f0; }
+
+        .hero-search {
+            font-size: 1.1rem; padding: 14px 20px 14px 48px; border-radius: 12px; border: 2px solid #e2e8f0; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.05);
+        }
+        .hero-search:focus { border-color: #0d9488; box-shadow: 0 10px 15px -3px rgba(13,148,136,0.15); }
+        
+        /* Ocultar flechas en inputs numéricos */
+        .inv-grid input[type="number"] { -moz-appearance: textfield; }
+        .inv-grid input[type="number"]::-webkit-outer-spin-button,
+        .inv-grid input[type="number"]::-webkit-inner-spin-button { -webkit-appearance: none; margin: 0; }
+        
+        /* Estilos Calculadora Lateral */
+        .calc-btn { background: #374151; border: 1px solid #4b5563; border-radius: 6px; font-size: 1.1rem; font-weight: 600; color: #f3f4f6; padding: 6px 0; transition: all 0.1s; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+        .calc-btn:active { background: #4b5563; transform: scale(0.95); }
+        .calc-btn.op { background: #1f2937; color: #2dd4bf; border-color: #374151; }
+        .calc-btn.action { background: #7f1d1d; color: #fecaca; border-color: #991b1b; }
+    </style>
+</head>
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <!-- NAVBAR -->
+    <nav class="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center z-40 flex-shrink-0 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="bg-teal-600 text-white p-2 rounded-lg">
+                <i class="fa-solid fa-boxes-stacked text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-gray-800 leading-none">Inventario Smart</h1>
+                <p class="text-[10px] text-gray-500 font-medium tracking-wide uppercase" id="nav-role-text">Portal Operativo</p>
+            </div>
+        </div>
+        
+        <div id="nav-user-info" class="hidden items-center gap-4">
+            <div class="text-right hidden sm:block">
+                <div id="lbl-username" class="font-bold text-sm text-gray-800 leading-none">Usuario</div>
+                <div id="lbl-group" class="text-[11px] text-teal-600 font-bold uppercase mt-1">Grupo</div>
+            </div>
+            <img src="" id="user-avatar" class="rounded-full w-9 h-9 border border-gray-200">
+            <button onclick="logout()" class="text-gray-400 hover:text-red-500 transition-colors bg-gray-50 hover:bg-red-50 w-9 h-9 rounded-full flex items-center justify-center border border-gray-200" title="Cerrar Sesión">
+                <i class="fa-solid fa-power-off"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- ADMIN TABS -->
+    <div id="admin-tabs" class="bg-white border-b border-gray-200 px-6 py-2.5 hidden-view flex gap-2 overflow-x-auto flex-shrink-0 justify-between items-center">
+        <div class="flex gap-2">
+            <button onclick="switchAdminTab('reportes')" id="tab-reportes" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-teal-600 text-white transition-colors">Monitor & Reportes</button>
+            <button onclick="switchAdminTab('carga')" id="tab-carga" class="px-4 py-1.5 text-sm font-semibold rounded-lg text-gray-600 hover:bg-gray-100 transition-colors">Carga CSV</button>
+            <button onclick="switchAdminTab('personal')" id="tab-personal" class="px-4 py-1.5 text-sm font-semibold rounded-lg text-gray-600 hover:bg-gray-100 transition-colors">Personal</button>
+        </div>
+        
+        <!-- Botón Reset Alejado para evitar clics accidentales -->
+        <div>
+            <button onclick="vaciarTodaLaTabla()" class="text-gray-400 hover:text-white hover:bg-red-600 border border-transparent rounded-lg px-3 py-1.5 text-xs font-bold transition-colors">
+                <i class="fa-solid fa-triangle-exclamation mr-1"></i> Borrar BD
+            </button>
+        </div>
+    </div>
+
+    <!-- PANTALLA DE LOGIN -->
+    <div id="view-login" class="flex-grow flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-gray-100 relative">
+            <button onclick="toggleLoginMode('admin')" id="btn-show-admin" class="absolute top-4 right-4 text-gray-300 hover:text-teal-600 transition-colors" title="Acceso Admin">
+                <i class="fa-solid fa-gear text-lg"></i>
+            </button>
+
+            <!-- Vista Operador -->
+            <div id="login-operador-container">
+                <div class="text-center mb-8">
+                    <div class="inline-block p-4 bg-teal-50 rounded-full mb-3 text-teal-600">
+                        <i class="fa-solid fa-scanner-gun text-3xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-800">Bienvenido</h2>
+                    <p class="text-sm text-gray-500 mt-1">Seleccione su perfil operativo</p>
+                </div>
+                <form id="form-login-op" onsubmit="loginOperador(event)">
+                    <div class="mb-6">
+                        <select id="login-op-user" required class="smart-input cursor-pointer bg-gray-50 py-3 font-semibold text-gray-700">
+                            <option value="" disabled selected>Cargando personal...</option>
+                        </select>
+                    </div>
+                    <button type="submit" id="btn-login-op" disabled class="w-full btn-primary text-base py-3 shadow-md hover:shadow-lg">
+                        Entrar a Toma Física <i class="fa-solid fa-arrow-right ml-2"></i>
+                    </button>
+                </form>
+            </div>
+
+            <!-- Vista Admin -->
+            <div id="login-admin-container" class="hidden-view">
+                <div class="text-center mb-8">
+                    <div class="inline-block p-4 bg-gray-800 rounded-full mb-3 text-white">
+                        <i class="fa-solid fa-shield-halved text-3xl"></i>
+                    </div>
+                    <h2 class="text-2xl font-bold text-gray-800">Administración</h2>
+                </div>
+                <form id="form-login-adm" onsubmit="loginAdmin(event)">
+                    <div class="mb-4">
+                        <label class="smart-label text-left">Usuario</label>
+                        <input type="text" id="login-adm-user" required class="smart-input" placeholder="admin">
+                    </div>
+                    <div class="mb-8">
+                        <label class="smart-label text-left">Contraseña</label>
+                        <input type="password" id="login-adm-pass" required class="smart-input" placeholder="••••••••">
+                    </div>
+                    <button type="submit" class="w-full btn-primary bg-gray-800 hover:bg-gray-900 text-base py-3 mb-4 shadow-md hover:shadow-lg">
+                        Acceder Panel <i class="fa-solid fa-lock-open ml-1"></i>
+                    </button>
+                    <div class="text-center">
+                        <button type="button" onclick="toggleLoginMode('operador')" class="text-sm text-gray-500 hover:text-teal-600 font-medium">
+                            <i class="fa-solid fa-arrow-left mr-1"></i> Volver a Portal Operativo
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA PRINCIPAL: OPERADOR -->
+    <div id="view-operador" class="hidden-view flex-grow flex flex-col items-center bg-gray-50 p-4 sm:p-8 overflow-y-auto">
+        <div class="w-full max-w-3xl mt-2 sm:mt-6">
+            
+            <!-- KPI / Progreso Operador -->
+            <div class="text-center mb-6" id="op-stats-container">
+                <span class="bg-white border border-gray-200 text-gray-600 text-xs px-4 py-1.5 rounded-full shadow-sm" id="op-stats">
+                    <i class="fa-solid fa-circle-notch fa-spin mr-1 text-teal-600"></i> Cargando avance...
+                </span>
+            </div>
+
+            <!-- Título y Buscador -->
+            <div class="text-center mb-6">
+                <h2 class="text-2xl font-extrabold text-gray-800 mb-1">¿Qué vas a contar?</h2>
+                <p class="text-sm text-gray-500">Busca el código o descripción del artículo</p>
+            </div>
+            
+            <div class="relative mb-6 flex gap-2">
+                <div class="relative flex-grow">
+                    <i class="fa-solid fa-magnifying-glass absolute left-5 top-1/2 transform -translate-y-1/2 text-gray-400 text-lg"></i>
+                    <input type="text" id="buscador-articulos" class="smart-input hero-search w-full bg-white" placeholder="Escanear o teclear código..." autocomplete="off">
+                    <div id="loading-spinner" class="absolute right-5 top-1/2 transform -translate-y-1/2 hidden">
+                        <i class="fa-solid fa-circle-notch fa-spin text-teal-600 text-lg"></i>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Contenedor de Resultados -->
+            <div id="resultados-busqueda" class="space-y-2">
+                <div class="text-center py-10 px-4 bg-white rounded-xl border border-gray-200 border-dashed">
+                    <div class="bg-gray-50 w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-3">
+                        <i class="fa-solid fa-barcode text-2xl text-gray-400"></i>
+                    </div>
+                    <p class="text-gray-500 text-sm font-medium">Ingresa al menos 3 caracteres.</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL WIDGET: INGRESO/CONSULTA DE INVENTARIO -->
+    <div id="modal-conteo" class="fixed inset-0 modal-backdrop z-50 hidden-view flex items-end sm:items-center justify-center p-0 sm:p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white w-full max-w-4xl rounded-t-2xl sm:rounded-2xl shadow-2xl transform translate-y-full sm:translate-y-0 transition-transform duration-300 flex flex-col max-h-[95vh]" id="modal-content">
+            
+            <!-- Modal Header -->
+            <div class="px-5 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-clipboard-list text-teal-600"></i>
+                    <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Ficha de Artículo</h3>
+                </div>
+                <div class="flex items-center gap-3">
+                    <div id="modal-estado-badge"></div> <!-- Etiqueta dinámica de estado -->
+                    <span class="text-xs text-gray-500 font-mono font-bold bg-white px-2 py-0.5 rounded border border-gray-200" id="modal-nro">Nro: -</span>
+                    <button onclick="cerrarModal()" class="text-gray-400 hover:text-gray-700 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+                </div>
+            </div>
+
+            <!-- Modal Body -->
+            <div class="p-5 overflow-y-auto bg-white flex-grow">
+                
+                <!-- Info del Artículo -->
+                <div class="mb-5 border-b border-gray-100 pb-4">
+                    <div class="font-mono font-extrabold text-teal-700 text-2xl leading-none mb-1" id="modal-codigo">CÓDIGO</div>
+                    <div class="text-gray-600 text-sm leading-tight mb-2 font-medium" id="modal-descripcion">Descripción del artículo</div>
+                    <div class="flex gap-2">
+                        <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold border border-gray-200 inline-block uppercase tracking-wider" id="modal-um">UM: UND</span>
+                    </div>
+                </div>
+
+                <form id="formInventario">
+                    <input type="hidden" id="registro_id">
+                    <input type="hidden" id="inventariador">
+                    <input type="hidden" id="grupo_trabajo">
+
+                    <div class="flex flex-col md:flex-row gap-5">
+                        
+                        <!-- Lado Izquierdo: Tabla y Detalles -->
+                        <div class="flex-grow flex flex-col gap-4">
+                            <!-- TABLA GRID COMPACTA DE CONTEO -->
+                            <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm inv-grid">
+                                <table class="w-full text-sm">
+                                    <thead class="bg-gray-50 text-gray-500 text-[10px] uppercase tracking-wider border-b border-gray-200">
+                                        <tr>
+                                            <th class="px-3 py-2 text-left font-bold w-1/3">Almacén</th>
+                                            <th class="px-3 py-2 text-right font-bold w-1/4">Teórico (SAP)</th>
+                                            <th class="px-3 py-2 text-right font-bold bg-teal-50 text-teal-700">Físico (Conteo)</th>
+                                        </tr>
+                                    </thead>
+                                    <tbody class="divide-y divide-gray-100">
+                                        <!-- Fila Reserva -->
+                                        <tr>
+                                            <td class="px-3 py-3 font-semibold text-gray-700 text-xs"><i class="fa-solid fa-box-open text-gray-400 mr-1"></i> Reserva</td>
+                                            <td class="px-3 py-3 text-right font-mono text-gray-500 bg-gray-50/50" id="modal-reserva-sap">0.00</td>
+                                            <td class="px-2 py-2 bg-teal-50/30">
+                                                <input type="number" step="0.01" id="reserva_inv" required oninput="calcularModal()" class="w-full text-right font-mono font-bold text-teal-700 border border-teal-200 rounded px-2 py-1.5 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 bg-white shadow-sm" onfocus="activarCalc(this)" placeholder="0.00">
+                                            </td>
+                                        </tr>
+                                        <!-- Fila Sin Reserva -->
+                                        <tr>
+                                            <td class="px-3 py-3 font-semibold text-gray-700 text-xs"><i class="fa-solid fa-box text-gray-400 mr-1"></i> Sin Reserva</td>
+                                            <td class="px-3 py-3 text-right font-mono text-gray-500 bg-gray-50/50" id="modal-sinreserva-sap">0.00</td>
+                                            <td class="px-2 py-2 bg-teal-50/30">
+                                                <input type="number" step="0.01" id="sin_reserva_inv" required oninput="calcularModal()" class="w-full text-right font-mono font-bold text-teal-700 border border-teal-200 rounded px-2 py-1.5 focus:border-teal-600 focus:ring-1 focus:ring-teal-600 bg-white shadow-sm" onfocus="activarCalc(this)" placeholder="0.00">
+                                            </td>
+                                        </tr>
+                                        <!-- Fila Totales -->
+                                        <tr class="bg-gray-50 border-t-2 border-gray-200">
+                                            <td class="px-3 py-4 font-extrabold text-gray-800 text-xs uppercase tracking-wider">TOTAL</td>
+                                            <td class="px-3 py-4 text-right font-mono font-bold text-gray-800" id="modal-stock-sap">0.00</td>
+                                            <td class="px-3 py-4 text-right font-mono font-extrabold text-teal-700 text-xl bg-teal-100/50" id="modal-total-fisico">0.00</td>
+                                        </tr>
+                                        <!-- Fila Diferencia -->
+                                        <tr class="bg-gray-800 text-white">
+                                            <td class="px-3 py-3 font-bold text-xs uppercase tracking-wider text-gray-300">DIFERENCIA</td>
+                                            <td colspan="2" class="px-3 py-3 text-right font-mono font-bold text-xl" id="modal-diferencia">0.00</td>
+                                        </tr>
+                                    </tbody>
+                                </table>
+                            </div>
+
+                            <!-- Detalles Adicionales Compactos -->
+                            <div class="flex flex-col sm:flex-row gap-3 bg-gray-50 p-3 rounded-lg border border-gray-100 mt-auto">
+                                <div class="flex-1">
+                                    <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-location-dot mr-1"></i> Ubicación Fija</label>
+                                    <input type="text" id="ubicacion" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Estante A">
+                                </div>
+                                <div class="flex-1">
+                                    <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i> Observaciones</label>
+                                    <input type="text" id="observaciones" class="smart-input py-1.5 px-2 text-sm" placeholder="Opcional">
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Lado Derecho: Calculadora Lateral Constante -->
+                        <div class="w-full md:w-56 bg-gray-800 p-3 rounded-xl shadow-inner flex flex-col flex-shrink-0 justify-center h-fit">
+                            <div class="text-[10px] text-gray-400 font-bold uppercase tracking-wider mb-2 text-center flex items-center justify-center gap-1">
+                                <i class="fa-solid fa-calculator"></i> Calculadora
+                            </div>
+                            <!-- Pantalla Calc -->
+                            <div class="bg-gray-900 rounded p-2 mb-3 text-right font-mono text-xl text-teal-400 h-10 flex items-center justify-end overflow-hidden" id="calc-display"></div>
+                            
+                            <!-- Botones Calc -->
+                            <div class="grid grid-cols-4 gap-1.5">
+                                <button type="button" class="calc-btn action" onclick="calcAction('C')">C</button>
+                                <button type="button" class="calc-btn action" onclick="calcAction('CE')"><i class="fa-solid fa-delete-left"></i></button>
+                                <button type="button" class="calc-btn op" onclick="calcAction('/')">÷</button>
+                                <button type="button" class="calc-btn op" onclick="calcAction('*')">×</button>
+                                
+                                <button type="button" class="calc-btn" onclick="calcAction('7')">7</button>
+                                <button type="button" class="calc-btn" onclick="calcAction('8')">8</button>
+                                <button type="button" class="calc-btn" onclick="calcAction('9')">9</button>
+                                <button type="button" class="calc-btn op" onclick="calcAction('-')">-</button>
+                                
+                                <button type="button" class="calc-btn" onclick="calcAction('4')">4</button>
+                                <button type="button" class="calc-btn" onclick="calcAction('5')">5</button>
+                                <button type="button" class="calc-btn" onclick="calcAction('6')">6</button>
+                                <button type="button" class="calc-btn op" onclick="calcAction('+')">+</button>
+                                
+                                <button type="button" class="calc-btn" onclick="calcAction('1')">1</button>
+                                <button type="button" class="calc-btn" onclick="calcAction('2')">2</button>
+                                <button type="button" class="calc-btn" onclick="calcAction('3')">3</button>
+                                <button type="button" class="calc-btn op col-span-2 bg-teal-600 text-white border-teal-700 hover:bg-teal-500" style="grid-row: span 2" onclick="calcAction('=')">=</button>
+                                
+                                <button type="button" class="calc-btn col-span-2" onclick="calcAction('0')">0</button>
+                                <button type="button" class="calc-btn" onclick="calcAction('.')">.</button>
+                            </div>
+                            <div class="text-[9px] text-gray-500 text-center mt-2 leading-tight">Haz clic en un campo físico y usa la calculadora para sumas rápidas.</div>
+                        </div>
+
+                    </div>
+                </form>
+            </div>
+
+            <!-- Modal Footer -->
+            <div class="px-5 py-4 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex gap-3 flex-shrink-0">
+                <button type="button" onclick="cerrarModal()" class="w-1/3 btn-secondary text-sm py-2.5 bg-white border border-gray-300 shadow-sm">Cerrar</button>
+                <button type="button" onclick="guardarConteo()" id="btnGuardar" class="w-2/3 btn-primary text-base py-2.5 shadow-md">
+                    <i class="fa-solid fa-check mr-2"></i> Guardar Conteo
+                </button>
+                <button type="button" onclick="solicitarClaveModificacion()" id="btnModificar" class="w-2/3 btn-primary text-base py-2.5 shadow-md hidden-view bg-amber-500 hover:bg-amber-600">
+                    <i class="fa-solid fa-lock-open mr-2"></i> Modificar Registro
+                </button>
+            </div>
+        </div>
+    </div>
+
+
+    <!-- VISTAS DEL ADMINISTRADOR -->
+    <div id="view-admin" class="hidden-view flex-grow flex flex-col w-full h-full overflow-hidden bg-gray-50">
+        
+        <!-- SECCIÓN: REPORTES Y AVANCE -->
+        <div id="section-reportes" class="flex-col h-full overflow-hidden p-4 sm:p-6">
+            <div class="max-w-7xl mx-auto flex flex-col h-full">
+                
+                <!-- KPI Dashboard General -->
+                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 flex-shrink-0">
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-blue-500">
+                        <p class="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Total Maestro SAP</p>
+                        <p class="text-2xl font-bold text-gray-800 font-mono" id="stat-total">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-teal-500">
+                        <p class="text-[10px] text-teal-600 uppercase font-bold tracking-wider mb-1">Inventariados</p>
+                        <p class="text-2xl font-bold text-teal-700 font-mono" id="stat-completados">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-400">
+                        <p class="text-[10px] text-red-500 uppercase font-bold tracking-wider mb-1">Faltantes</p>
+                        <p class="text-2xl font-bold text-red-600 font-mono" id="stat-faltantes">0</p>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-purple-500 relative overflow-hidden">
+                        <div class="absolute right-[-10px] bottom-[-10px] opacity-10"><i class="fa-solid fa-chart-pie text-6xl text-purple-600"></i></div>
+                        <p class="text-[10px] text-purple-600 uppercase font-bold tracking-wider mb-1">Avance Global</p>
+                        <p class="text-2xl font-bold text-purple-700 font-mono" id="stat-porcentaje">0.0%</p>
+                    </div>
+                </div>
+
+                <!-- Dashboard de Avance por Grupos -->
+                <div class="mb-4 flex-shrink-0">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1"><i class="fa-solid fa-people-group mr-1"></i> Avance Operativo por Grupo</h3>
+                    <div id="dashboard-grupos" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
+                        <!-- Se llena dinámicamente -->
+                    </div>
+                </div>
+
+                <!-- Tabla de Reportes -->
+                <div class="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col flex-grow overflow-hidden">
+                    <div class="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 flex-wrap gap-3">
+                        <div class="flex gap-2 w-full md:w-auto flex-grow items-center flex-wrap">
+                            <select id="filtro-estado" onchange="filtrarReportesTabla()" class="smart-input py-1.5 text-xs w-auto font-semibold text-gray-600 bg-white">
+                                <option value="todos">Todos (Maestro)</option>
+                                <option value="completados">Completados</option>
+                                <option value="pendientes">Pendientes</option>
+                                <option value="diferencias">Con Diferencias</option>
+                            </select>
+                            
+                            <select id="filtro-grupo" onchange="filtrarReportesTabla()" class="smart-input py-1.5 text-xs w-auto font-semibold text-gray-600 bg-white">
+                                <option value="todos">Todos los Grupos</option>
+                            </select>
+
+                            <input type="date" id="filtro-fecha" onchange="filtrarReportesTabla()" class="smart-input py-1.5 text-xs w-auto text-gray-600 bg-white shadow-sm" title="Filtrar por fecha">
+                            
+                            <div class="relative flex-grow max-w-xs min-w-[150px]">
+                                <i class="fa-solid fa-search absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
+                                <input type="text" id="filtroReporte" placeholder="Buscar texto..." class="smart-input pl-8 py-1.5 text-xs w-full bg-white">
+                            </div>
+                        </div>
+                        <div class="flex gap-2 w-full md:w-auto justify-end">
+                            <button onclick="cargarReportesAdmin()" class="btn-secondary py-1.5 px-3 text-xs bg-white border border-gray-300 shadow-sm" title="Sincronizar DB"><i class="fa-solid fa-rotate mr-1"></i> Sync</button>
+                            <button onclick="exportarPDF()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-red-600 hover:bg-red-700 border border-red-700"><i class="fa-solid fa-file-pdf mr-1"></i> Imprimir PDF</button>
+                        </div>
+                    </div>
+                    
+                    <div class="flex-grow overflow-auto relative">
+                        <div id="loading-reports" class="absolute inset-0 bg-white/80 z-20 flex items-center justify-center hidden-view">
+                            <div class="text-center">
+                                <i class="fa-solid fa-circle-notch fa-spin text-3xl text-teal-600 mb-2"></i>
+                                <p class="text-gray-600 font-medium text-sm">Descargando base completa...</p>
+                            </div>
+                        </div>
+                        <table class="w-full text-left text-[11px] text-gray-600 whitespace-nowrap">
+                            <thead class="bg-white sticky top-0 border-b border-gray-200 z-10 shadow-sm">
+                                <tr>
+                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Estado</th>
+                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Fecha Reg.</th>
+                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Inventariador</th>
+                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Código</th>
+                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Descripción</th>
+                                    <th class="py-2 px-3 font-bold text-gray-400 uppercase text-right">SAP</th>
+                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase text-right">Físico</th>
+                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase text-right">Dif</th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpoReportes" class="divide-y divide-gray-100">
+                                <tr><td colspan="8" class="text-center py-10 text-gray-400">Cargando data...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN: CARGA MASIVA -->
+        <div id="section-carga" class="hidden-view h-full overflow-y-auto bg-gray-50 p-6">
+            <div class="max-w-3xl mx-auto bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden">
+                <div class="p-6 border-b border-gray-100 bg-gray-50/50">
+                    <h2 class="text-xl font-bold text-gray-800">Importar Maestro SAP</h2>
+                    <p class="text-sm text-gray-500 mt-1">Sube el archivo CSV para cargar la base de artículos pendientes a contar.</p>
+                </div>
+                <div class="p-6">
+                    <div id="drop-area" class="border-2 border-dashed border-teal-300 p-8 flex flex-col items-center justify-center text-center cursor-pointer mb-4 h-48 bg-teal-50/30 hover:bg-teal-50 rounded-xl transition-colors">
+                        <i class="fa-solid fa-cloud-arrow-up text-4xl text-teal-600 mb-3"></i>
+                        <p class="text-sm font-semibold text-teal-800">Selecciona o arrastra el archivo CSV</p>
+                        <input type="file" id="file-sap" accept=".csv" class="hidden">
+                    </div>
+                    <div id="file-info" class="hidden mb-4 p-4 bg-gray-800 border border-gray-700 rounded-xl flex justify-between items-center text-white">
+                        <div class="flex items-center gap-3">
+                            <i class="fa-solid fa-file-csv text-2xl text-teal-400"></i>
+                            <div>
+                                <p id="file-name" class="font-bold text-sm">archivo.csv</p>
+                                <p id="file-rows" class="text-xs text-gray-400">0 filas detectadas</p>
+                            </div>
+                        </div>
+                        <button onclick="limpiarArchivo()" class="text-gray-400 hover:text-white p-2 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+                    </div>
+                    <button id="btn-procesar-csv" onclick="subirASupabase()" disabled class="w-full btn-primary text-base py-3">
+                        <i class="fa-solid fa-database mr-2"></i> Importar a Base de Datos
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- SECCIÓN: PERSONAL -->
+        <div id="section-personal" class="hidden-view h-full overflow-y-auto bg-gray-50 p-6">
+            <div class="max-w-4xl mx-auto flex flex-col md:flex-row gap-6">
+                <div class="w-full md:w-1/3">
+                    <div class="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+                        <h2 class="text-lg font-bold text-gray-800 mb-4">Nuevo Operador</h2>
+                        <form id="form-personal" onsubmit="guardarPersonal(event)">
+                            <div class="mb-4">
+                                <label class="smart-label">Apellidos y Nombres</label>
+                                <input type="text" id="nuevo_nombre" required class="smart-input text-sm">
+                            </div>
+                            <div class="mb-6">
+                                <label class="smart-label">Grupo Asignado</label>
+                                <input type="text" id="nuevo_grupo" required class="smart-input text-sm" placeholder="Ej. Grupo 1">
+                            </div>
+                            <button type="submit" id="btn-guardar-personal" class="w-full btn-primary py-2 text-sm">Registrar</button>
+                        </form>
+                    </div>
+                </div>
+                <div class="w-full md:w-2/3">
+                    <div class="bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden">
+                        <div class="p-4 border-b border-gray-100 bg-gray-50/50">
+                            <h2 class="text-lg font-bold text-gray-800">Personal Registrado</h2>
+                        </div>
+                        <table class="w-full text-left text-sm text-gray-600">
+                            <thead class="bg-white border-b border-gray-100">
+                                <tr>
+                                    <th class="py-3 px-4 font-bold text-gray-500 uppercase tracking-wider text-xs">Nombre</th>
+                                    <th class="py-3 px-4 font-bold text-gray-500 uppercase tracking-wider text-xs">Grupo</th>
+                                    <th class="py-3 px-4 text-center w-16"><i class="fa-solid fa-cog"></i></th>
+                                </tr>
+                            </thead>
+                            <tbody id="cuerpoPersonal" class="divide-y divide-gray-50">
+                                <tr><td colspan="3" class="text-center py-8 text-gray-400">Cargando...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CÓDIGO JS PRINCIPAL -->
+    <script>
+        // --- 1. CONFIGURACIÓN SUPABASE ---
+        const NOMBRE_TABLA = 'avios'; 
+        const TABLA_PERSONAL = 'inventariadores1'; 
+        
+        const SUPABASE_URL = 'https://ozyefhongybussdaxtex.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_m7D5FrIs7rqufPO0T-GA3g_gcZDVrRe'; 
+        
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        let todosLosDatosReporte = []; 
+        let datosFiltradosParaExportar = [];
+        let datosPersonal = [];
+        let currentUser = null;
+        let csvDataToUpload = [];
+        
+        // Variables Buscador Operador
+        let debounceTimer;
+        let busquedaActual = [];
+        let calcTargetInput = null;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            obtenerPersonalBaseDatos();
+            setupSearchListener();
+            
+            // Prevenir Enter submiteo del form
+            window.addEventListener('keydown',function(e){if(e.keyIdentifier=='U+000A'||e.keyIdentifier=='Enter'||e.keyCode==13){if(e.target.nodeName=='INPUT'&&e.target.type=='text'){e.preventDefault();return false;}}},true);
+            
+            // Establecer fecha de hoy en el filtro de reportes
+            const hoyStr = new Date().toISOString().split('T')[0];
+            document.getElementById('filtro-fecha').value = hoyStr;
+        });
+
+        // UTILIDAD: Fetch sin límite de 1000 de Supabase (Paginación interna)
+        async function fetchAllSupabase(tableName, selectStr = '*') {
+            let allData = [];
+            let step = 1000;
+            let from = 0;
+            let to = step - 1;
+            let hasMore = true;
+
+            while (hasMore) {
+                const { data, error } = await _supabase.from(tableName).select(selectStr).range(from, to);
+                if (error) throw error;
+                if (data && data.length > 0) {
+                    allData = allData.concat(data);
+                    from += step;
+                    to += step;
+                }
+                if (!data || data.length < step) {
+                    hasMore = false;
+                }
+            }
+            return allData;
+        }
+
+        // --- 2. GESTIÓN DE PERSONAL ---
+        async function obtenerPersonalBaseDatos() {
+            try {
+                const data = await fetchAllSupabase(TABLA_PERSONAL);
+                datosPersonal = data.sort((a, b) => {
+                    const nombreA = (a.nombre || a.Nombre || '').toLowerCase();
+                    const nombreB = (b.nombre || b.Nombre || '').toLowerCase();
+                    return nombreA.localeCompare(nombreB);
+                });
+                renderizarSelectPersonal();
+                renderizarTablaPersonal();
+            } catch (err) {
+                const select = document.getElementById('login-op-user');
+                if(select) select.innerHTML = `<option value="" disabled selected>Error de conexión</option>`;
+            }
+        }
+
+        function renderizarSelectPersonal() {
+            const select = document.getElementById('login-op-user');
+            select.innerHTML = '<option value="" disabled selected>Seleccione su perfil...</option>';
+            if(datosPersonal.length === 0) {
+                select.innerHTML = '<option value="" disabled selected>No hay personal registrado...</option>';
+                return;
+            }
+            datosPersonal.forEach(p => {
+                const opt = document.createElement('option');
+                const n = p.nombre || p.Nombre || 'Desconocido';
+                const g = p.grupo || p.Grupo || 'Sin Grupo';
+                opt.value = JSON.stringify({ nombre: n, grupo: g });
+                opt.textContent = `${n} (${g})`;
+                select.appendChild(opt);
+            });
+            document.getElementById('btn-login-op').disabled = false;
+        }
+
+        // --- 3. LOGIN Y VISTAS ---
+        function toggleLoginMode(mode) {
+            const contOp = document.getElementById('login-operador-container');
+            const contAdm = document.getElementById('login-admin-container');
+            const btnGear = document.getElementById('btn-show-admin');
+
+            if(mode === 'operador') {
+                contOp.classList.remove('hidden-view');
+                contAdm.classList.add('hidden-view');
+                btnGear.classList.remove('hidden-view');
+            } else {
+                contAdm.classList.remove('hidden-view');
+                contOp.classList.add('hidden-view');
+                btnGear.classList.add('hidden-view');
+            }
+        }
+
+        function loginOperador(e) {
+            e.preventDefault();
+            const val = document.getElementById('login-op-user').value;
+            if(!val) { Swal.fire('Atención', 'Seleccione su nombre de la lista.', 'warning'); return; }
+            
+            const dataParsed = JSON.parse(val);
+            currentUser = { role: 'operador', name: dataParsed.nombre, group: dataParsed.grupo };
+            iniciarSesion();
+        }
+
+        function loginAdmin(e) {
+            e.preventDefault();
+            const user = document.getElementById('login-adm-user').value.trim().toLowerCase();
+            const pass = document.getElementById('login-adm-pass').value;
+            
+            if (user === 'admin' && pass === 'admin123') {
+                currentUser = { role: 'admin', name: 'Administrador', group: 'Control' };
+                iniciarSesion();
+            } else {
+                Swal.fire({ icon: 'error', title: 'Error', text: 'Credenciales incorrectas.' });
+            }
+        }
+
+        function iniciarSesion() {
+            document.getElementById('view-login').classList.add('hidden-view');
+            document.getElementById('nav-user-info').classList.remove('hidden');
+            document.getElementById('nav-user-info').style.display = 'flex';
+            
+            document.getElementById('lbl-username').innerText = currentUser.name;
+            document.getElementById('lbl-group').innerText = currentUser.group;
+            
+            const initials = currentUser.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
+            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${initials}&background=0d9488&color=fff&size=36`;
+
+            if (currentUser.role === 'admin') {
+                document.getElementById('view-admin').classList.remove('hidden-view');
+                document.getElementById('admin-tabs').classList.remove('hidden-view');
+                document.getElementById('nav-role-text').innerText = "Panel de Control";
+                switchAdminTab('reportes'); 
+            } else {
+                document.getElementById('view-operador').classList.remove('hidden-view');
+                document.getElementById('inventariador').value = currentUser.name;
+                document.getElementById('grupo_trabajo').value = currentUser.group;
+                document.getElementById('nav-role-text').innerText = "Portal Operativo";
+                actualizarAvanceOperador();
+                setTimeout(() => document.getElementById('buscador-articulos').focus(), 100);
+            }
+        }
+
+        function logout() {
+            currentUser = null;
+            document.getElementById('view-admin').classList.add('hidden-view');
+            document.getElementById('view-operador').classList.add('hidden-view');
+            document.getElementById('admin-tabs').classList.add('hidden-view');
+            document.getElementById('nav-user-info').style.display = 'none';
+            
+            document.getElementById('form-login-op').reset();
+            document.getElementById('form-login-adm').reset();
+            document.getElementById('buscador-articulos').value = '';
+            document.getElementById('resultados-busqueda').innerHTML = `
+                <div class="text-center py-10 px-4 bg-white rounded-2xl border border-gray-200 border-dashed">
+                    <div class="bg-gray-50 w-12 h-12 rounded-full flex items-center justify-center mx-auto mb-2">
+                        <i class="fa-solid fa-barcode text-xl text-gray-400"></i>
+                    </div>
+                    <p class="text-gray-500 text-sm font-medium">Ingresa al menos 3 caracteres para buscar.</p>
+                </div>`;
+            
+            document.getElementById('view-login').classList.remove('hidden-view');
+            toggleLoginMode('operador'); 
+            cerrarModal();
+        }
+
+        // --- 4. TOMA DE INVENTARIO: BUSCADOR OPERADOR ---
+        async function actualizarAvanceOperador() {
+            try {
+                const data = await fetchAllSupabase(NOMBRE_TABLA, 'Registro');
+                if(data) {
+                    const total = data.length;
+                    const contados = data.filter(i => i.Registro != null).length;
+                    const faltan = total - contados;
+                    const pct = total === 0 ? 0 : Math.round((contados/total)*100);
+                    document.getElementById('op-stats').innerHTML = `<i class="fa-solid fa-chart-pie mr-1 text-teal-600"></i> Progreso Global: <b class="text-teal-700">${contados}</b> contados — Faltan: <b>${faltan}</b> (${pct}%)`;
+                }
+            } catch(e) {}
+        }
+
+        function setupSearchListener() {
+            const input = document.getElementById('buscador-articulos');
+            input.addEventListener('input', (e) => {
+                clearTimeout(debounceTimer);
+                const term = e.target.value.trim();
+                
+                if (term.length < 3) {
+                    document.getElementById('resultados-busqueda').innerHTML = `
+                        <div class="text-center py-10 px-4 bg-white rounded-2xl border border-gray-200 border-dashed">
+                            <p class="text-gray-500 font-medium"><i class="fa-solid fa-keyboard mr-2"></i>Escribe al menos 3 caracteres...</p>
+                        </div>`;
+                    return;
+                }
+                
+                document.getElementById('loading-spinner').classList.remove('hidden');
+                debounceTimer = setTimeout(() => realizarBusquedaDB(term), 600);
+            });
+        }
+
+        async function realizarBusquedaDB(term) {
+            try {
+                // MODIFICACIÓN: Buscamos TODOS los artículos (Pendientes y Ya Inventariados)
+                const { data, error } = await _supabase.from(NOMBRE_TABLA)
+                    .select('id, "Nro", "Código de Item", "Descripción", "Stock SAP", "Unidad de Medida", "Reserva", "Sin Reserva", "Almacen", "Sub Almacen", "Reserva Inv", "Sin Reserva Inv", "Ubicación", "Observaciones", "Registro", "Inventariador"')
+                    .or(`Código de Item.ilike.%${term}%,Descripción.ilike.%${term}%`)
+                    .limit(50);
+                    
+                if (error) throw error;
+                busquedaActual = data;
+                renderizarResultadosBusqueda();
+            } catch (err) {
+                Swal.fire({ toast: true, position: 'top', icon: 'error', title: 'Error buscando', showConfirmButton: false, timer: 1500 });
+            } finally {
+                document.getElementById('loading-spinner').classList.add('hidden');
+            }
+        }
+
+        function renderizarResultadosBusqueda() {
+            const container = document.getElementById('resultados-busqueda');
+            container.innerHTML = '';
+            
+            if (busquedaActual.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 px-4 bg-red-50 rounded-xl border border-red-100">
+                        <i class="fa-solid fa-ghost text-3xl text-red-300 mb-2"></i>
+                        <p class="text-red-600 font-bold">No encontrado</p>
+                        <p class="text-red-400 text-xs mt-1">El artículo no se encuentra en el Maestro SAP.</p>
+                    </div>`;
+                return;
+            }
+
+            busquedaActual.forEach((item, index) => {
+                const completado = item.Registro != null;
+                const card = document.createElement('div');
+                card.className = `item-card ${completado ? 'border-teal-300 bg-teal-50/30' : ''}`;
+                card.onclick = () => abrirModalConteo(index);
+                
+                let badgeHTML = completado 
+                    ? `<span class="bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded text-[10px] font-bold border border-teal-200 ml-auto flex-shrink-0 uppercase"><i class="fa-solid fa-check-double mr-1"></i>Inventariado</span>`
+                    : `<span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-200 ml-auto flex-shrink-0 font-mono">SAP: ${parseFloat(item['Stock SAP']||0).toFixed(2)}</span>`;
+
+                card.innerHTML = `
+                    <div class="flex-1 min-w-0 pr-4">
+                        <div class="flex items-center gap-2 mb-1">
+                            <span class="text-xs font-bold ${completado ? 'text-teal-800' : 'text-teal-700'} truncate">${item['Código de Item']}</span>
+                            ${badgeHTML}
+                        </div>
+                        <p class="text-[11px] font-medium ${completado ? 'text-teal-700/80' : 'text-gray-500'} truncate leading-snug">${item['Descripción']}</p>
+                    </div>
+                    <div class="w-8 h-8 ${completado ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-600'} rounded-full flex items-center justify-center flex-shrink-0 transition-colors">
+                        <i class="fa-solid fa-chevron-right text-xs"></i>
+                    </div>
+                `;
+                container.appendChild(card);
+            });
+        }
+
+        // --- 5. MODAL WIDGET GRID Y CALCULADORA (OPERADOR) ---
+        function abrirModalConteo(index) {
+            const item = busquedaActual[index];
+            const completado = item.Registro != null;
+            
+            document.getElementById('registro_id').value = item.id;
+            document.getElementById('modal-nro').innerText = `Nro: ${item['Nro'] || '-'}`;
+            document.getElementById('modal-codigo').innerText = item['Código de Item'] || 'Sin Código';
+            document.getElementById('modal-descripcion').innerText = item['Descripción'] || '';
+            document.getElementById('modal-um').innerText = `UM: ${item['Unidad de Medida'] || 'UND'} | ALM: ${item['Almacen'] || '-'} / ${item['Sub Almacen'] || '-'}`;
+            
+            document.getElementById('modal-reserva-sap').innerText = parseFloat(item['Reserva'] || 0).toFixed(2);
+            document.getElementById('modal-sinreserva-sap').innerText = parseFloat(item['Sin Reserva'] || 0).toFixed(2);
+            document.getElementById('modal-stock-sap').innerText = parseFloat(item['Stock SAP'] || 0).toFixed(2);
+            
+            // Setup Fields depending on State
+            document.getElementById('reserva_inv').value = completado ? (item['Reserva Inv'] || 0) : '';
+            document.getElementById('sin_reserva_inv').value = completado ? (item['Sin Reserva Inv'] || 0) : '';
+            document.getElementById('ubicacion').value = completado ? (item['Ubicación'] || '') : '';
+            document.getElementById('observaciones').value = completado ? (item['Observaciones'] || '') : '';
+            
+            const inputs = ['reserva_inv', 'sin_reserva_inv', 'ubicacion', 'observaciones'];
+            const btnGuardar = document.getElementById('btnGuardar');
+            const btnModificar = document.getElementById('btnModificar');
+            const badgeEstado = document.getElementById('modal-estado-badge');
+            
+            if (completado) {
+                inputs.forEach(id => {
+                    document.getElementById(id).readOnly = true;
+                    document.getElementById(id).classList.add('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
+                    document.getElementById(id).classList.remove('text-teal-700', 'bg-white');
+                });
+                btnGuardar.classList.add('hidden-view');
+                btnModificar.classList.remove('hidden-view');
+                
+                // Mostrar Info
+                const fechaCorta = item.Registro.substring(0,10); // "DD/MM/YYYY" de nuestro string
+                badgeEstado.innerHTML = `<span class="bg-teal-100 text-teal-700 px-2 py-1 rounded border border-teal-200 text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-check-double mr-1"></i> Por ${item.Inventariador || 'N/A'}</span>`;
+            } else {
+                inputs.forEach(id => {
+                    document.getElementById(id).readOnly = false;
+                    document.getElementById(id).classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
+                    if(id.includes('inv')) document.getElementById(id).classList.add('text-teal-700', 'bg-white');
+                });
+                btnGuardar.classList.remove('hidden-view');
+                btnGuardar.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Guardar Conteo';
+                btnModificar.classList.add('hidden-view');
+                badgeEstado.innerHTML = `<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded border border-amber-200 text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-clock mr-1"></i> PENDIENTE</span>`;
+            }
+
+            calcTargetInput = completado ? null : document.getElementById('reserva_inv'); 
+            document.getElementById('calc-display').innerText = '';
+            calcularModal();
+
+            const modal = document.getElementById('modal-conteo');
+            const content = document.getElementById('modal-content');
+            modal.classList.remove('hidden-view');
+            void modal.offsetWidth; 
+            modal.classList.remove('opacity-0');
+            modal.classList.add('opacity-100');
+            content.classList.remove('translate-y-full');
+            
+            if(!completado) {
+                setTimeout(() => { document.getElementById('reserva_inv').focus(); }, 300);
+            }
+        }
+
+        async function solicitarClaveModificacion() {
+            const { value: password } = await Swal.fire({
+                title: 'Desbloquear Registro',
+                input: 'password',
+                inputLabel: 'Ingrese la contraseña de autorización',
+                inputPlaceholder: 'Contraseña',
+                showCancelButton: true,
+                confirmButtonText: 'Desbloquear',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0d9488'
+            });
+
+            if (password) {
+                if (password === '20091846') {
+                    const inputs = ['reserva_inv', 'sin_reserva_inv', 'ubicacion', 'observaciones'];
+                    inputs.forEach(id => {
+                        document.getElementById(id).readOnly = false;
+                        document.getElementById(id).classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
+                        if(id.includes('inv')) document.getElementById(id).classList.add('text-teal-700', 'bg-white');
+                    });
+                    
+                    document.getElementById('btnGuardar').classList.remove('hidden-view');
+                    document.getElementById('btnGuardar').innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Actualizar Conteo';
+                    document.getElementById('btnModificar').classList.add('hidden-view');
+                    
+                    // Activate Calc default
+                    calcTargetInput = document.getElementById('reserva_inv');
+                    
+                    Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Registro Desbloqueado', showConfirmButton: false, timer: 1500 });
+                } else {
+                    Swal.fire({ icon: 'error', title: 'Acceso Denegado', text: 'Contraseña incorrecta' });
+                }
+            }
+        }
+
+        function cerrarModal() {
+            const modal = document.getElementById('modal-conteo');
+            const content = document.getElementById('modal-content');
+            
+            modal.classList.remove('opacity-100');
+            modal.classList.add('opacity-0');
+            content.classList.add('translate-y-full');
+            
+            setTimeout(() => modal.classList.add('hidden-view'), 300);
+        }
+
+        function activarCalc(element) {
+            if(element.readOnly) return;
+            calcTargetInput = element;
+            document.getElementById('calc-display').innerText = element.value || '';
+        }
+
+        window.calcAction = function(val) {
+            if(!calcTargetInput || calcTargetInput.readOnly) return;
+            const disp = document.getElementById('calc-display');
+            let current = disp.innerText;
+            
+            if(val === 'C') { disp.innerText = ''; calcTargetInput.value = ''; }
+            else if(val === 'CE') { disp.innerText = current.slice(0, -1); calcTargetInput.value = disp.innerText; }
+            else if(val === '=') {
+                try { 
+                    let toEval = current.replace(/×/g, '*').replace(/÷/g, '/');
+                    toEval = toEval.replace(/[^0-9+\-*/.]/g, "");
+                    if(!toEval) return;
+                    const res = Function("return " + toEval)();
+                    const finalVal = res === undefined ? '' : parseFloat(res).toFixed(2);
+                    disp.innerText = finalVal;
+                    calcTargetInput.value = finalVal;
+                } catch(e) { disp.innerText = 'Err'; setTimeout(()=>disp.innerText='', 1000); }
+            }
+            else {
+                if(current === 'Err') current = '';
+                disp.innerText = current + val;
+                if(!isNaN(val) || val === '.') calcTargetInput.value = disp.innerText;
+            }
+            calcularModal();
+        }
+
+        function calcularModal() {
+            const r = parseFloat(document.getElementById('reserva_inv').value) || 0;
+            const sr = parseFloat(document.getElementById('sin_reserva_inv').value) || 0;
+            const sap = parseFloat(document.getElementById('modal-stock-sap').innerText) || 0;
+
+            const total = r + sr;
+            const diff = total - sap;
+
+            document.getElementById('modal-total-fisico').innerText = total.toFixed(2);
+            
+            const txtDiff = document.getElementById('modal-diferencia');
+            txtDiff.innerText = diff > 0 ? "+" + diff.toFixed(2) : diff.toFixed(2);
+            
+            if(diff === 0) txtDiff.className = "px-4 py-3 text-right font-mono font-bold text-xl text-gray-300";
+            else if(diff < 0) txtDiff.className = "px-4 py-3 text-right font-mono font-bold text-xl text-red-400";
+            else txtDiff.className = "px-4 py-3 text-right font-mono font-bold text-xl text-teal-400";
+        }
+
+        async function guardarConteo() {
+            const registroId = document.getElementById('registro_id').value;
+            if(!registroId) return;
+
+            if(calcTargetInput && !calcTargetInput.readOnly) calcAction('=');
+            calcularModal(); 
+
+            const btn = document.getElementById('btnGuardar');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> ...';
+            
+            const r = parseFloat(document.getElementById('reserva_inv').value) || 0;
+            const sr = parseFloat(document.getElementById('sin_reserva_inv').value) || 0;
+            const sap = parseFloat(document.getElementById('modal-stock-sap').innerText) || 0;
+            
+            const now = new Date();
+            const d = String(now.getDate()).padStart(2, '0');
+            const m = String(now.getMonth() + 1).padStart(2, '0');
+            const y = now.getFullYear();
+            const h = String(now.getHours()).padStart(2, '0');
+            const min = String(now.getMinutes()).padStart(2, '0');
+            const s = String(now.getSeconds()).padStart(2, '0');
+            const fechaLocal = `${d}/${m}/${y} ${h}:${min}:${s}`; 
+
+            try {
+                const payload = {
+                    "Inventariador": document.getElementById('inventariador').value,
+                    "Grupo de Trabajo": document.getElementById('grupo_trabajo').value,
+                    "Reserva Inv": r,
+                    "Sin Reserva Inv": sr,
+                    "Total Inventario": r + sr,
+                    "Diferencia": (r+sr) - sap,
+                    "Ubicación": document.getElementById('ubicacion').value,
+                    "Observaciones": document.getElementById('observaciones').value,
+                    "Registro": fechaLocal
+                };
+
+                const { error } = await _supabase.from(NOMBRE_TABLA).update(payload).eq('id', registroId);
+                if (error) throw error; 
+
+                Swal.fire({ toast: true, position: 'top', icon: 'success', title: '¡Guardado!', showConfirmButton: false, timer: 1200 });
+                cerrarModal();
+                
+                // Actualizar item visualmente si sigue en la barra de búsqueda
+                const index = busquedaActual.findIndex(i => i.id === registroId);
+                if(index > -1) {
+                    busquedaActual[index] = { ...busquedaActual[index], ...payload };
+                    renderizarResultadosBusqueda();
+                }
+                
+                actualizarAvanceOperador();
+                
+                document.getElementById('buscador-articulos').value = '';
+                document.getElementById('buscador-articulos').focus();
+            } catch (error) {
+                Swal.fire({ icon: 'error', title: 'Error', text: error.message });
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Guardar Conteo';
+            } 
+        }
+
+        // --- 6. VISTAS Y LÓGICA ADMINISTRADOR (Dashboard Reportes) ---
+        function switchAdminTab(tab) {
+            const btns = ['tab-reportes', 'tab-carga', 'tab-personal'];
+            const secs = ['section-reportes', 'section-carga', 'section-personal'];
+
+            btns.forEach(id => {
+                const b = document.getElementById(id);
+                if(b) {
+                    b.classList.remove('bg-teal-600', 'text-white');
+                    b.classList.add('text-gray-600');
+                }
+            });
+            const activeBtn = document.getElementById('tab-' + tab);
+            if(activeBtn) {
+                activeBtn.classList.remove('text-gray-600');
+                activeBtn.classList.add('bg-teal-600', 'text-white');
+            }
+
+            secs.forEach(id => document.getElementById(id).classList.add('hidden-view'));
+
+            if (tab === 'reportes') {
+                document.getElementById('section-reportes').classList.remove('hidden-view');
+                cargarReportesAdmin();
+            } else if (tab === 'carga') {
+                document.getElementById('section-carga').classList.remove('hidden-view');
+            } else if (tab === 'personal') {
+                document.getElementById('section-personal').classList.remove('hidden-view');
+            }
+        }
+
+        async function cargarReportesAdmin() {
+            try {
+                document.getElementById('loading-reports').classList.remove('hidden-view');
+                
+                const allData = await fetchAllSupabase(NOMBRE_TABLA);
+                todosLosDatosReporte = allData;
+                
+                const gruposUnicos = [...new Set(todosLosDatosReporte.filter(i=>i['Grupo de Trabajo']).map(i => i['Grupo de Trabajo']))].sort();
+                const selGrupo = document.getElementById('filtro-grupo');
+                selGrupo.innerHTML = '<option value="todos">Todos los Grupos</option>' + gruposUnicos.map(g => `<option value="${g}">${g}</option>`).join('');
+
+                filtrarReportesTabla(); 
+            } catch (error) {
+                Swal.fire({ icon: 'error', title: 'Error', text: error.message });
+            } finally {
+                document.getElementById('loading-reports').classList.add('hidden-view');
+            }
+        }
+
+        function filtrarReportesTabla() {
+            const estado = document.getElementById('filtro-estado').value;
+            const grupoFil = document.getElementById('filtro-grupo').value;
+            const texto = document.getElementById('filtroReporte').value.toLowerCase();
+            const fechaFiltroStr = document.getElementById('filtro-fecha').value; 
+            
+            let fechaCortaPE = "";
+            if(fechaFiltroStr) {
+                const partes = fechaFiltroStr.split('-');
+                if(partes.length === 3) fechaCortaPE = `${partes[2]}/${partes[1]}/${partes[0]}`;
+            }
+            
+            let filtrados = todosLosDatosReporte;
+            
+            if(fechaCortaPE) filtrados = filtrados.filter(i => i.Registro && i.Registro.startsWith(fechaCortaPE));
+            if (estado === 'completados') filtrados = filtrados.filter(i => i.Registro != null);
+            if (estado === 'pendientes') filtrados = filtrados.filter(i => i.Registro == null);
+            if (estado === 'diferencias') filtrados = filtrados.filter(i => i.Registro != null && parseFloat(i.Diferencia) !== 0);
+            if (grupoFil !== 'todos') filtrados = filtrados.filter(i => i['Grupo de Trabajo'] === grupoFil);
+
+            if (texto) {
+                filtrados = filtrados.filter(item => 
+                    (item['Código de Item'] && item['Código de Item'].toLowerCase().includes(texto)) || 
+                    (item['Descripción'] && item['Descripción'].toLowerCase().includes(texto)) ||
+                    (item['Inventariador'] && item['Inventariador'].toLowerCase().includes(texto))
+                );
+            }
+            
+            datosFiltradosParaExportar = filtrados;
+            
+            renderizarReportesAdmin(filtrados);
+            actualizarEstadisticasAdmin(todosLosDatosReporte, fechaCortaPE); 
+        }
+
+        function actualizarEstadisticasAdmin(dataGlobal, fechaMatch) {
+            const total = dataGlobal.length;
+            const completados = dataGlobal.filter(i => i.Registro != null).length;
+            const faltantes = total - completados;
+            const pct = total === 0 ? 0 : ((completados / total) * 100).toFixed(1);
+            
+            document.getElementById('stat-total').innerText = total;
+            document.getElementById('stat-completados').innerText = completados;
+            document.getElementById('stat-faltantes').innerText = faltantes;
+            document.getElementById('stat-porcentaje').innerText = pct + '%';
+            
+            const gruposContainer = document.getElementById('dashboard-grupos');
+            gruposContainer.innerHTML = '';
+            
+            const gruposData = {};
+            dataGlobal.filter(i => i.Registro != null).forEach(item => {
+                const g = item['Grupo de Trabajo'] || 'Sin Grupo';
+                if(!gruposData[g]) gruposData[g] = { hoy: 0, total: 0 };
+                
+                gruposData[g].total++;
+                if(fechaMatch && item.Registro.startsWith(fechaMatch)) gruposData[g].hoy++;
+            });
+            
+            const sortedKeys = Object.keys(gruposData).sort();
+            if(sortedKeys.length === 0) {
+                gruposContainer.innerHTML = '<div class="text-xs text-gray-400 italic">No hay avances registrados.</div>';
+                return;
+            }
+
+            for(const g of sortedKeys) {
+                const stats = gruposData[g];
+                gruposContainer.innerHTML += `
+                    <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center justify-between">
+                        <div>
+                            <p class="text-[11px] font-bold text-gray-700 uppercase">${g}</p>
+                            <p class="text-[10px] text-gray-500">Filtrados (${fechaMatch || 'Todo'}): <span class="text-teal-600 font-bold">${stats.hoy}</span></p>
+                        </div>
+                        <div class="text-right">
+                            <p class="text-lg font-bold text-gray-800 leading-none">${stats.total}</p>
+                            <p class="text-[9px] text-gray-400 uppercase">Acumulado</p>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        function renderizarReportesAdmin(datos) {
+            const tbody = document.getElementById('cuerpoReportes');
+            tbody.innerHTML = ''; 
+
+            if(datos.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-10 text-gray-500 font-medium">No hay registros que coincidan con los filtros.</td></tr>';
+                return;
+            }
+
+            const datosVisuales = datos.slice(0, 500);
+
+            datosVisuales.forEach((item) => {
+                const completado = item.Registro != null;
+                let estadoBadge = completado ? `<span class="bg-teal-100 text-teal-700 px-2 py-0.5 rounded text-[10px] font-bold">Hecho</span>` : `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold">Pendiente</span>`;
+                
+                const fechaStr = item.Registro || '-'; 
+                const dif = parseFloat(item['Diferencia'] || 0);
+                
+                let diffColor = "text-gray-400";
+                if(completado) {
+                    if(dif > 0) diffColor = "text-teal-600 font-bold";
+                    if(dif < 0) diffColor = "text-red-500 font-bold";
+                }
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 border-b border-gray-100 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-2 px-3">${estadoBadge}</td>
+                    <td class="py-2 px-3 text-gray-500 font-mono text-[10px]">${fechaStr}</td>
+                    <td class="py-2 px-3 font-semibold text-gray-700 text-[10px] truncate max-w-[100px]">${item['Inventariador'] || '-'}</td>
+                    <td class="py-2 px-3 text-teal-700 font-bold">${item['Código de Item'] || ''}</td>
+                    <td class="py-2 px-3 truncate max-w-[200px]" title="${item['Descripción'] || ''}">${item['Descripción'] || ''}</td>
+                    <td class="py-2 px-3 text-right text-gray-400 font-mono">${parseFloat(item['Stock SAP']||0).toFixed(2)}</td>
+                    <td class="py-2 px-3 text-right font-mono font-bold text-gray-800">${completado ? parseFloat(item['Total Inventario']||0).toFixed(2) : '-'}</td>
+                    <td class="py-2 px-3 text-right font-mono ${diffColor}">${completado ? (dif > 0 ? '+'+dif.toFixed(2) : dif.toFixed(2)) : '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+            
+            if(datos.length > 500) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="8" class="text-center py-4 text-xs text-gray-400">Mostrando 500 de ${datos.length} registros filtrados. Exporta a PDF para ver todos.</td>`;
+                tbody.appendChild(tr);
+            }
+        }
+
+        // --- EXPORTACIÓN PDF ---
+        function exportarPDF() {
+            if(datosFiltradosParaExportar.length === 0) return Swal.fire('Vacío', 'No hay datos para exportar con los filtros actuales', 'info');
+            
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape');
+            
+            doc.setFont("helvetica", "bold");
+            doc.setFontSize(14);
+            doc.text("ART ATLAS SRL", 14, 15);
+            doc.setFontSize(10);
+            doc.text("RUC: 20413770204", 14, 21);
+            doc.setFontSize(16);
+            doc.text("TOMA DE INVENTARIO", doc.internal.pageSize.width / 2, 30, { align: "center" });
+
+            const columns = ["Fecha Reg.", "Inventariador", "Grupo", "Nro", "Cod Item", "Descripción", "UM", "Alm", "Sub Alm", "Rsv SAP", "S/Rsv SAP", "Stock SAP", "Rsv Inv", "S/Rsv Inv", "Total Fís", "Dif", "Ubic.", "Obs."];
+            
+            const rows = datosFiltradosParaExportar.map(e => [
+                e['Registro'] || '-', 
+                e['Inventariador'] || '-', 
+                e['Grupo de Trabajo'] || '-',
+                e['Nro'] || '-', 
+                e['Código de Item'] || '', 
+                e['Descripción'] || '',
+                e['Unidad de Medida'] || '', 
+                e['Almacen'] || '', 
+                e['Sub Almacen'] || '',
+                parseFloat(e['Reserva']||0).toFixed(2), 
+                parseFloat(e['Sin Reserva']||0).toFixed(2), 
+                parseFloat(e['Stock SAP']||0).toFixed(2),
+                parseFloat(e['Reserva Inv']||0).toFixed(2), 
+                parseFloat(e['Sin Reserva Inv']||0).toFixed(2), 
+                parseFloat(e['Total Inventario']||0).toFixed(2),
+                parseFloat(e['Diferencia']||0).toFixed(2), 
+                e['Ubicación'] || '-', 
+                e['Observaciones'] || '-'
+            ]);
+
+            doc.autoTable({
+                startY: 38,
+                head: [columns],
+                body: rows,
+                theme: 'grid',
+                styles: { fontSize: 6, cellPadding: 1, overflow: 'linebreak' },
+                headStyles: { fillColor: [13, 148, 136], textColor: 255 }, 
+                columnStyles: {
+                    5: { cellWidth: 35 }, 
+                    17: { cellWidth: 20 } 
+                }
+            });
+
+            const finalY = doc.lastAutoTable.finalY || 40;
+            const pageHeight = doc.internal.pageSize.height;
+            let sigY = finalY + 40;
+            
+            if (sigY > pageHeight - 20) {
+                doc.addPage();
+                sigY = 40;
+            }
+            
+            doc.setLineWidth(0.5);
+            doc.setFontSize(9);
+            doc.setFont("helvetica", "bold");
+
+            doc.line(30, sigY, 90, sigY);
+            doc.text("INVENTARIADOR", 60, sigY + 5, { align: "center" });
+            
+            doc.line(115, sigY, 180, sigY);
+            doc.text("SUPERVISOR DE ALMACEN", 147.5, sigY + 5, { align: "center" });
+            
+            doc.line(205, sigY, 270, sigY);
+            doc.text("SUPERVISOR DE INVENTARIO", 237.5, sigY + 5, { align: "center" });
+
+            doc.save(`Inventario_${new Date().toISOString().split('T')[0]}.pdf`);
+        }
+
+        // --- 7. CARGA MASIVA CSV Y RESET DB (ADMIN) ---
+        const dropArea = document.getElementById('drop-area');
+        const fileInput = document.getElementById('file-sap');
+
+        dropArea.addEventListener('click', () => fileInput.click());
+        dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
+        dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+        dropArea.addEventListener('drop', (e) => {
+            e.preventDefault(); dropArea.classList.remove('dragover');
+            if(e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; procesarArchivoCSV(); }
+        });
+        fileInput.addEventListener('change', procesarArchivoCSV);
+
+        function procesarArchivoCSV() {
+            const file = fileInput.files[0];
+            if(!file) return;
+
+            Papa.parse(file, {
+                header: true, skipEmptyLines: true,
+                complete: function(results) {
+                    if(results.errors.length && results.data.length === 0) {
+                        Swal.fire('Error', 'Archivo no válido.', 'error'); return;
+                    }
+                    csvDataToUpload = results.data;
+                    document.getElementById('drop-area').classList.add('hidden');
+                    document.getElementById('file-info').classList.remove('hidden');
+                    document.getElementById('file-name').innerText = file.name;
+                    document.getElementById('file-rows').innerText = `${csvDataToUpload.length} artículos detectados`;
+                    document.getElementById('btn-procesar-csv').disabled = false;
+                }
+            });
+        }
+
+        function limpiarArchivo() {
+            fileInput.value = ''; csvDataToUpload = [];
+            document.getElementById('drop-area').classList.remove('hidden');
+            document.getElementById('file-info').classList.add('hidden');
+            document.getElementById('btn-procesar-csv').disabled = true;
+        }
+
+        async function subirASupabase() {
+            if(csvDataToUpload.length === 0) return;
+            const btn = document.getElementById('btn-procesar-csv');
+            btn.disabled = true; btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Procesando...';
+
+            try {
+                const payload = csvDataToUpload.map(row => ({
+                    "id": crypto.randomUUID(),
+                    "Nro": row["Nro"] || '',
+                    "Código de Item": row["Código de Item"] || row["Codigo"] || '',
+                    "Descripción": row["Descripción"] || row["Descripcion"] || '',
+                    "Grupo de Articulos": row["Grupo de Articulos"] || '',
+                    "Unidad de Medida": row["Unidad de Medida"] || row["UM"] || '',
+                    "Almacen": row["Almacen"] || '',
+                    "Sub Almacen": row["Sub Almacen"] || '',
+                    "Reserva": parseFloat(row["Reserva"]) || 0,
+                    "Sin Reserva": parseFloat(row["Sin Reserva"]) || 0,
+                    "Stock SAP": parseFloat(row["Stock SAP"] || row["Stock"]) || 0,
+                    "Inventariador": null,
+                    "Grupo de Trabajo": null,
+                    "Reserva Inv": null,
+                    "Sin Reserva Inv": null,
+                    "Total Inventario": null,
+                    "Diferencia": null,
+                    "Ubicación": null,
+                    "Observaciones": null,
+                    "Registro": null
+                }));
+
+                const payloadValido = payload.filter(item => item["Código de Item"].trim() !== '');
+                const CHUNK_SIZE = 500;
+                let insertados = 0;
+
+                for (let i = 0; i < payloadValido.length; i += CHUNK_SIZE) {
+                    const chunk = payloadValido.slice(i, i + CHUNK_SIZE);
+                    const { error } = await _supabase.from(NOMBRE_TABLA).insert(chunk);
+                    if (error) throw error;
+                    insertados += chunk.length;
+                }
+
+                Swal.fire('¡Base Actualizada!', `Se han cargado ${insertados} artículos listos para la toma física.`, 'success');
+                limpiarArchivo();
+            } catch (error) {
+                Swal.fire({ icon: 'error', title: 'Error de carga', text: error.message });
+            } finally {
+                btn.disabled = false; btn.innerHTML = '<i class="fa-solid fa-database mr-2"></i> Importar a Base de Datos';
+            }
+        }
+
+        async function vaciarTodaLaTabla() {
+            Swal.fire({
+                title: '¿Limpiar Toda la Base de Datos?',
+                text: "ESTA ACCIÓN ES IRREVERSIBLE. Se borrarán absolutamente todos los registros.",
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Sí, borrar todo permanentemente'
+            }).then(async (result) => {
+                if (result.isConfirmed) {
+                    try {
+                        Swal.fire({title: 'Borrando...', allowOutsideClick:false, didOpen: () => Swal.showLoading()});
+                        const { error } = await _supabase.from(NOMBRE_TABLA).delete().not('id', 'is', null);
+                        if(error) throw error;
+                        Swal.fire('¡Borrado!', 'La base de datos está completamente limpia.', 'success');
+                        cargarReportesAdmin(); 
+                    } catch (err) {
+                        Swal.fire('Error', err.message, 'error');
+                    }
+                }
+            })
+        }
+
+        // --- 8. GESTIÓN DEL PERSONAL (ADMIN) ---
+        function renderizarTablaPersonal() {
+            const tbody = document.getElementById('cuerpoPersonal');
+            tbody.innerHTML = '';
+            
+            if(datosPersonal.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center py-6 text-gray-500">Agrega personal usando el formulario.</td></tr>';
+                return;
+            }
+            
+            datosPersonal.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 transition-colors";
+                const n = p.nombre || p.Nombre || 'Desconocido';
+                const g = p.grupo || p.Grupo || 'Sin Grupo';
+                tr.innerHTML = `
+                    <td class="py-3 px-4 font-bold text-gray-700">${n}</td>
+                    <td class="py-3 px-4 text-gray-500">${g}</td>
+                    <td class="py-3 px-4 text-center">
+                        <button onclick="eliminarPersonal(${p.id})" class="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 w-8 h-8 rounded-full transition-colors" title="Borrar">
+                            <i class="fa-solid fa-trash-can"></i>
+                        </button>
+                    </td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function guardarPersonal(e) {
+            e.preventDefault();
+            const btn = document.getElementById('btn-guardar-personal');
+            btn.disabled = true;
+            try {
+                const { error } = await _supabase.from(TABLA_PERSONAL).insert([{ 
+                    nombre: document.getElementById('nuevo_nombre').value.trim(), 
+                    grupo: document.getElementById('nuevo_grupo').value.trim() 
+                }]);
+                if (error) throw error;
+                document.getElementById('form-personal').reset();
+                obtenerPersonalBaseDatos();
+            } catch (error) {
+                Swal.fire('Error', error.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function eliminarPersonal(id) {
+            if(!confirm("¿Retirar este operador del sistema?")) return;
+            const { error } = await _supabase.from(TABLA_PERSONAL).delete().eq('id', id);
+            if(!error) obtenerPersonalBaseDatos();
+        }
+    </script>
+</body>
+</html>
