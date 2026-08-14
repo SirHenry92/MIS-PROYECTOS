@@ -221,7 +221,7 @@
             white-space: nowrap;
         }
 
-        /* ===== Table (List Report pattern) ===== */
+        /* ===== Table & Categories ===== */
         .table-wrap {
             margin: 0 24px;
             background: var(--tile);
@@ -243,6 +243,18 @@
             text-transform: uppercase;
             letter-spacing: 0.05em;
             color: var(--text-muted);
+        }
+
+        /* Título de las agrupaciones */
+        .category-title {
+            padding: 10px 14px;
+            background: #eef2f6;
+            color: var(--shell-2);
+            font-weight: 700;
+            font-size: 0.85rem;
+            border-bottom: 1px solid var(--border);
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
         }
 
         .row {
@@ -366,8 +378,6 @@
                 <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke-width="2"/><path d="M21 21l-4.3-4.3" stroke-width="2" stroke-linecap="round"/></svg>
                 <input type="text" id="buscador" class="search-input" placeholder="Buscar herramienta por nombre…">
             </div>
-            <button class="toolbar-btn" type="button">Ordenar</button>
-            <button class="toolbar-btn" type="button">Filtrar</button>
         </div>
 
         <div class="table-wrap">
@@ -406,44 +416,71 @@
                 estado.style.display = "none";
                 shellStatusText.textContent = "Conectado";
 
-                let hayArchivos = false;
-                let contadorIndice = 0;
+                // Objeto para clasificar
+                const categorias = {
+                    'Art Atlas SRL': [],
+                    'Clínica SAC': [],
+                    'Otros Proyectos': []
+                };
+
+                let contadorTotal = 0;
 
                 for (let archivo of archivos) {
-                    // Solo filtramos los archivos .html que no sean el index
                     if (archivo.name.endsWith('.html') && archivo.name !== 'index.html') {
-                        hayArchivos = true;
-                        contadorIndice++;
+                        contadorTotal++;
+                        let nombreLimpio = archivo.name.replace('.html', '');
+                        let grupo = 'Otros Proyectos';
 
-                        // Quitamos el .html del nombre
-                        const nombreLimpio = archivo.name.replace('.html', '');
+                        // Clasificación y limpieza del prefijo
+                        if (nombreLimpio.startsWith('AA-')) {
+                            grupo = 'Art Atlas SRL';
+                            nombreLimpio = nombreLimpio.replace(/^AA-/, '').trim();
+                        } else if (nombreLimpio.startsWith('CA-')) {
+                            grupo = 'Clínica SAC';
+                            nombreLimpio = nombreLimpio.replace(/^CA-/, '').trim();
+                        }
 
-                        // Protegemos la URL por si tiene espacios
-                        const enlaceSeguro = encodeURI(archivo.name);
-
-                        const indiceFormateado = String(contadorIndice).padStart(2, '0');
-
-                        // Dibujamos la fila con índice, nombre, estado y acción
-                        contenedor.innerHTML += `
-                            <a href="${enlaceSeguro}" class="row">
-                                <span class="row-index mono">${indiceFormateado}</span>
-                                <span class="row-main">
-                                    <h2>${nombreLimpio}</h2>
-                                    <span class="filename">${archivo.name}</span>
-                                </span>
-                                <span class="row-status"><span class="status-chip">Activo</span></span>
-                                <span class="row-open">Abrir</span>
-                            </a>
-                        `;
+                        categorias[grupo].push({
+                            nombreMostrar: nombreLimpio,
+                            nombreOriginal: archivo.name,
+                            url: encodeURI(archivo.name)
+                        });
                     }
                 }
 
-                countPill.textContent = contadorIndice;
+                countPill.textContent = contadorTotal;
 
-                if (!hayArchivos) {
+                if (contadorTotal === 0) {
                     estado.style.display = "block";
                     estado.style.marginTop = "16px";
                     estado.innerText = "No se encontraron otras herramientas en el repositorio.";
+                    return;
+                }
+
+                // Renderizar las categorías y sus archivos
+                contenedor.innerHTML = "";
+                for (const [nombreCategoria, listaArchivos] of Object.entries(categorias)) {
+                    if (listaArchivos.length > 0) {
+                        
+                        // Añadir título de la categoría
+                        contenedor.innerHTML += `<div class="category-title">${nombreCategoria}</div>`;
+
+                        // Añadir los archivos de esta categoría
+                        listaArchivos.forEach((item, index) => {
+                            const indiceFormateado = String(index + 1).padStart(2, '0');
+                            contenedor.innerHTML += `
+                                <a href="${item.url}" class="row" data-busqueda="${item.nombreMostrar.toLowerCase()} ${item.nombreOriginal.toLowerCase()}">
+                                    <span class="row-index mono">${indiceFormateado}</span>
+                                    <span class="row-main">
+                                        <h2>${item.nombreMostrar}</h2>
+                                        <span class="filename">${item.nombreOriginal}</span>
+                                    </span>
+                                    <span class="row-status"><span class="status-chip">Activo</span></span>
+                                    <span class="row-open">Abrir</span>
+                                </a>
+                            `;
+                        });
+                    }
                 }
 
             } catch (error) {
@@ -457,14 +494,16 @@
             }
         }
 
-        // Buscador en tiempo real
+        // Buscador actualizado
         buscador.addEventListener('input', function(e) {
             const textoBusqueda = e.target.value.toLowerCase();
             const filas = document.querySelectorAll('.row');
+            const titulosCategoria = document.querySelectorAll('.category-title');
             let visibles = 0;
 
+            // Filtra las filas (archivos)
             filas.forEach(fila => {
-                const contenidoFila = fila.innerText.toLowerCase();
+                const contenidoFila = fila.getAttribute('data-busqueda');
                 if (contenidoFila.includes(textoBusqueda)) {
                     fila.style.display = "grid";
                     visibles++;
@@ -473,11 +512,15 @@
                 }
             });
 
+            // Opcional: Oculta los encabezados si estás buscando algo (para que no estorben visualmente)
+            titulosCategoria.forEach(titulo => {
+                titulo.style.display = textoBusqueda.length > 0 ? "none" : "block";
+            });
+
             countPill.textContent = visibles;
         });
 
         cargarArchivos();
     </script>
-
 </body>
 </html>
