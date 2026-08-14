@@ -29,6 +29,7 @@
 
         * { box-sizing: border-box; }
 
+        /* Ajustamos el body para que ocupe el 100% de la pantalla y no tenga scroll global */
         html, body {
             margin: 0;
             padding: 0;
@@ -36,6 +37,10 @@
             color: var(--text);
             font-family: "72", "Segoe UI", Arial, sans-serif;
             font-size: 14px;
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden; 
         }
 
         .mono { font-family: "SAP Mono", "Consolas", monospace; }
@@ -43,16 +48,17 @@
         /* ===== Shell Bar ===== */
         .shellbar {
             height: 48px;
+            flex-shrink: 0; /* Para que nunca cambie su altura */
             background: var(--shell);
             display: flex;
             align-items: center;
             padding: 0 8px 0 4px;
             gap: 4px;
-            position: sticky;
-            top: 0;
             z-index: 20;
             border-bottom: 1px solid #1c232b;
         }
+        
+        /* Botones de la barra superior */
         .shellbar-icon-btn {
             width: 44px;
             height: 44px;
@@ -61,8 +67,17 @@
             justify-content: center;
             border-radius: 50%;
             flex-shrink: 0;
+            background: transparent;
+            border: none;
+            color: white;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+        .shellbar-icon-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
         }
         .shellbar-icon-btn svg { width: 18px; height: 18px; }
+
         .grid-icon {
             display: grid;
             grid-template-columns: repeat(3, 3px);
@@ -131,207 +146,101 @@
             flex-shrink: 0;
         }
 
-        /* ===== Page ===== */
+        /* ===== Contenedores Principales (Vistas) ===== */
+        
+        /* Vista 1: La lista del Menú */
+        #vista-lista {
+            flex: 1;
+            overflow-y: auto; /* Permite hacer scroll solo en la lista */
+            width: 100%;
+        }
+
+        /* Vista 2: El espacio donde se abrirán las herramientas */
+        #vista-herramienta {
+            display: none; /* Oculto al inicio */
+            flex: 1;
+            width: 100%;
+            background: #fff;
+        }
+        
+        #marco-herramienta {
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }
+
+        /* ===== Page (Diseño interno de la lista) ===== */
         .page {
             max-width: 1140px;
             margin: 0 auto;
             padding: 0 0 48px;
         }
 
-        .page-header {
-            padding: 20px 24px 16px;
-        }
+        .page-header { padding: 20px 24px 16px; }
         .page-header .kicker {
-            font-size: 0.72rem;
-            text-transform: uppercase;
-            letter-spacing: 0.09em;
-            color: var(--text-muted);
-            margin: 0 0 4px;
-            font-weight: 600;
+            font-size: 0.72rem; text-transform: uppercase; letter-spacing: 0.09em; color: var(--text-muted); margin: 0 0 4px; font-weight: 600;
         }
         .page-header h1 {
-            margin: 0;
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: var(--text);
-            display: flex;
-            align-items: baseline;
-            gap: 10px;
+            margin: 0; font-size: 1.5rem; font-weight: 700; color: var(--text); display: flex; align-items: baseline; gap: 10px;
         }
         .page-header h1 .count-pill {
-            font-size: 0.8rem;
-            font-weight: 700;
-            color: var(--sap-blue-dark);
-            background: var(--sap-blue-tint);
-            border: 1px solid #b8d9ff;
-            border-radius: 10px;
-            padding: 2px 10px;
+            font-size: 0.8rem; font-weight: 700; color: var(--sap-blue-dark); background: var(--sap-blue-tint); border: 1px solid #b8d9ff; border-radius: 10px; padding: 2px 10px;
         }
-        .page-header p {
-            margin: 6px 0 0;
-            color: var(--text-soft);
-            font-size: 0.86rem;
-        }
+        .page-header p { margin: 6px 0 0; color: var(--text-soft); font-size: 0.86rem; }
 
         /* ===== Toolbar ===== */
         .toolbar {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            padding: 0 24px 14px;
-            flex-wrap: wrap;
+            display: flex; align-items: center; gap: 10px; padding: 0 24px 14px; flex-wrap: wrap;
         }
         .search-container { position: relative; flex: 1; min-width: 220px; }
         .search-container svg {
-            position: absolute;
-            left: 11px; top: 50%;
-            transform: translateY(-50%);
-            width: 15px; height: 15px;
-            stroke: var(--text-muted);
+            position: absolute; left: 11px; top: 50%; transform: translateY(-50%); width: 15px; height: 15px; stroke: var(--text-muted);
         }
         .search-input {
-            width: 100%;
-            padding: 8px 12px 8px 34px;
-            font-size: 0.86rem;
-            font-family: inherit;
-            border: 1px solid var(--border-strong);
-            border-radius: var(--radius);
-            background: var(--tile);
-            outline: none;
-            color: var(--text);
-            height: 36px;
+            width: 100%; padding: 8px 12px 8px 34px; font-size: 0.86rem; font-family: inherit; border: 1px solid var(--border-strong); border-radius: var(--radius); background: var(--tile); outline: none; color: var(--text); height: 36px;
         }
-        .search-input::placeholder { color: #99a1ab; }
-        .search-input:focus {
-            border-color: var(--sap-blue);
-            box-shadow: 0 0 0 2px rgba(0,112,242,0.18);
-        }
+        .search-input:focus { border-color: var(--sap-blue); box-shadow: 0 0 0 2px rgba(0,112,242,0.18); }
 
         /* ===== Table & Categories ===== */
         .table-wrap {
-            margin: 0 24px;
-            background: var(--tile);
-            border: 1px solid var(--border);
-            border-radius: var(--radius);
-            overflow: hidden;
+            margin: 0 24px; background: var(--tile); border: 1px solid var(--border); border-radius: var(--radius); overflow: hidden;
         }
-
         .col-headers {
-            display: grid;
-            grid-template-columns: 56px 1fr 140px 100px;
-            background: #f2f3f5;
-            border-bottom: 1px solid var(--border);
+            display: grid; grid-template-columns: 56px 1fr 140px 100px; background: #f2f3f5; border-bottom: 1px solid var(--border);
         }
         .col-headers span {
-            padding: 9px 14px;
-            font-size: 0.7rem;
-            font-weight: 700;
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
-            color: var(--text-muted);
+            padding: 9px 14px; font-size: 0.7rem; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted);
         }
-
-        /* Título de las agrupaciones */
         .category-title {
-            padding: 10px 14px;
-            background: #eef2f6;
-            color: var(--shell-2);
-            font-weight: 700;
-            font-size: 0.85rem;
-            border-bottom: 1px solid var(--border);
-            text-transform: uppercase;
-            letter-spacing: 0.05em;
+            padding: 10px 14px; background: #eef2f6; color: var(--shell-2); font-weight: 700; font-size: 0.85rem; border-bottom: 1px solid var(--border); text-transform: uppercase; letter-spacing: 0.05em;
         }
-
         .row {
-            display: grid;
-            grid-template-columns: 56px 1fr 140px 100px;
-            align-items: center;
-            text-decoration: none;
-            border-bottom: 1px solid var(--border);
-            transition: background 0.1s ease;
+            display: grid; grid-template-columns: 56px 1fr 140px 100px; align-items: center; text-decoration: none; border-bottom: 1px solid var(--border); transition: background 0.1s ease; cursor: pointer;
         }
         .row:last-child { border-bottom: none; }
         .row:hover { background: var(--sap-blue-tint); }
         .row:hover .row-open { color: var(--sap-blue-dark); text-decoration: underline; }
 
-        .row-index {
-            padding: 12px 14px;
-            font-size: 0.78rem;
-            color: var(--text-muted);
-            font-variant-numeric: tabular-nums;
-        }
+        .row-index { padding: 12px 14px; font-size: 0.78rem; color: var(--text-muted); font-variant-numeric: tabular-nums; }
         .row-main { padding: 12px 14px; min-width: 0; }
-        .row-main h2 {
-            margin: 0 0 2px;
-            font-size: 0.9rem;
-            font-weight: 600;
-            color: var(--sap-blue-dark);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-        .row-main .filename {
-            font-size: 0.74rem;
-            color: var(--text-muted);
-            white-space: nowrap;
-            overflow: hidden;
-            text-overflow: ellipsis;
-        }
-
+        .row-main h2 { margin: 0 0 2px; font-size: 0.9rem; font-weight: 600; color: var(--sap-blue-dark); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        .row-main .filename { font-size: 0.74rem; color: var(--text-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+        
         .row-status { padding: 12px 14px; }
-        .status-chip {
-            display: inline-flex;
-            align-items: center;
-            gap: 5px;
-            font-size: 0.72rem;
-            font-weight: 600;
-            color: var(--positive);
-            background: var(--positive-bg);
-            border-radius: 3px;
-            padding: 3px 8px;
-        }
-        .status-chip::before {
-            content: "";
-            width: 6px; height: 6px;
-            border-radius: 50%;
-            background: var(--positive);
-        }
-
-        .row-open {
-            padding: 12px 14px;
-            text-align: right;
-            font-size: 0.8rem;
-            font-weight: 600;
-            color: var(--text-soft);
-        }
+        .status-chip { display: inline-flex; align-items: center; gap: 5px; font-size: 0.72rem; font-weight: 600; color: var(--positive); background: var(--positive-bg); border-radius: 3px; padding: 3px 8px; }
+        .status-chip::before { content: ""; width: 6px; height: 6px; border-radius: 50%; background: var(--positive); }
+        
+        .row-open { padding: 12px 14px; text-align: right; font-size: 0.8rem; font-weight: 600; color: var(--text-soft); }
         .row-open::after { content: " ›"; }
 
         /* ===== Estado ===== */
         .estado {
-            margin: 0 24px;
-            text-align: center;
-            color: var(--text-muted);
-            font-size: 0.88rem;
-            padding: 40px 20px;
-            border: 1px dashed var(--border-strong);
-            border-radius: var(--radius);
-            background: var(--tile);
+            margin: 0 24px; text-align: center; color: var(--text-muted); font-size: 0.88rem; padding: 40px 20px; border: 1px dashed var(--border-strong); border-radius: var(--radius); background: var(--tile);
         }
-        .estado.error-box {
-            color: var(--negative);
-            border-color: #f0b3b3;
-            background: var(--negative-bg);
-        }
+        .estado.error-box { color: var(--negative); border-color: #f0b3b3; background: var(--negative-bg); }
 
-        footer {
-            max-width: 1140px;
-            margin: 0 auto;
-            padding: 22px 24px 0;
-            font-size: 0.72rem;
-            color: var(--text-muted);
-            text-align: center;
-        }
+        footer { max-width: 1140px; margin: 0 auto; padding: 22px 24px 22px; font-size: 0.72rem; color: var(--text-muted); text-align: center; }
 
         @media (max-width: 640px) {
             .shellbar-title { display: none; }
@@ -342,44 +251,64 @@
 </head>
 <body>
 
+    <!-- BARRA SUPERIOR FIJA -->
     <div class="shellbar">
-        <div class="shellbar-icon-btn"><div class="grid-icon"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div></div>
+        
+        <!-- Icono de Menú (Puntos) -->
+        <button id="btn-menu" class="shellbar-icon-btn">
+            <div class="grid-icon"><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span></div>
+        </button>
+
+        <!-- Botón de Volver (Oculto al inicio) -->
+        <button id="btn-volver" class="shellbar-icon-btn" style="display: none;" onclick="cerrarHerramienta()" title="Regresar al menú principal">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M15 18l-6-6 6-6"/>
+            </svg>
+        </button>
+
         <div class="shellbar-divider"></div>
         <span class="shellbar-title">Portal de Herramientas</span>
-        <span class="shellbar-crumb">Henry &nbsp;›&nbsp; <b>Panel interno</b></span>
+        <span class="shellbar-crumb" id="breadcrumb">Henry &nbsp;›&nbsp; <b>Panel interno</b></span>
         <div class="shellbar-spacer"></div>
         <div class="shellbar-status" id="shellStatus"><span class="dot"></span><span id="shellStatusText">Conectando…</span></div>
         <div class="avatar">SH</div>
     </div>
 
-    <div class="page">
-        <div class="page-header">
-            <p class="kicker">Panel interno · acceso directo</p>
-            <h1>Herramientas disponibles <span class="count-pill" id="countPill">—</span></h1>
-            <p>Índice de utilidades y sistemas de gestión, sincronizado con SirHenry92/MIS-PROYECTOS.</p>
-        </div>
-
-        <div class="toolbar">
-            <div class="search-container">
-                <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke-width="2"/><path d="M21 21l-4.3-4.3" stroke-width="2" stroke-linecap="round"/></svg>
-                <input type="text" id="buscador" class="search-input" placeholder="Buscar herramienta por nombre…">
+    <!-- VISTA 1: EL MENÚ PRINCIPAL -->
+    <div id="vista-lista">
+        <div class="page">
+            <div class="page-header">
+                <p class="kicker">Panel interno · acceso directo</p>
+                <h1>Herramientas disponibles <span class="count-pill" id="countPill">—</span></h1>
+                <p>Índice de utilidades y sistemas de gestión, sincronizado con SirHenry92/MIS-PROYECTOS.</p>
             </div>
-        </div>
 
-        <div class="table-wrap">
-            <div class="col-headers">
-                <span>#</span>
-                <span>Herramienta</span>
-                <span>Estado</span>
-                <span style="text-align:right;">Abrir</span>
+            <div class="toolbar">
+                <div class="search-container">
+                    <svg viewBox="0 0 24 24" fill="none"><circle cx="11" cy="11" r="7" stroke-width="2"/><path d="M21 21l-4.3-4.3" stroke-width="2" stroke-linecap="round"/></svg>
+                    <input type="text" id="buscador" class="search-input" placeholder="Buscar herramienta por nombre…">
+                </div>
             </div>
-            <div id="lista-archivos"></div>
-        </div>
 
-        <div id="mensaje-estado" class="estado" style="margin-top:16px;">Conectando con el servidor…</div>
+            <div class="table-wrap">
+                <div class="col-headers">
+                    <span>#</span>
+                    <span>Herramienta</span>
+                    <span>Estado</span>
+                    <span style="text-align:right;">Abrir</span>
+                </div>
+                <div id="lista-archivos"></div>
+            </div>
+
+            <div id="mensaje-estado" class="estado" style="margin-top:16px;">Conectando con el servidor…</div>
+        </div>
+        <footer>Portal de Herramientas · Sincronizado con el repositorio en tiempo real</footer>
     </div>
 
-    <footer>Portal de Herramientas · Sincronizado con el repositorio en tiempo real</footer>
+    <!-- VISTA 2: EL CONTENEDOR DE LA HERRAMIENTA (IFRAME) -->
+    <div id="vista-herramienta">
+        <iframe id="marco-herramienta" src="" title="Herramienta en ejecución"></iframe>
+    </div>
 
     <script>
         const usuarioGitHub = "SirHenry92";
@@ -392,6 +321,51 @@
         const countPill = document.getElementById('countPill');
         const shellStatus = document.getElementById('shellStatus');
         const shellStatusText = document.getElementById('shellStatusText');
+
+        // Referencias a las vistas y botones
+        const vistaLista = document.getElementById('vista-lista');
+        const vistaHerramienta = document.getElementById('vista-herramienta');
+        const marcoHerramienta = document.getElementById('marco-herramienta');
+        const btnMenu = document.getElementById('btn-menu');
+        const btnVolver = document.getElementById('btn-volver');
+        const breadcrumb = document.getElementById('breadcrumb');
+
+        // Función para cambiar de la lista al Iframe
+        window.abrirHerramienta = function(event, url, nombreHerramienta) {
+            event.preventDefault(); // Evita que la página salte
+            
+            // Ocultar lista, mostrar iframe
+            vistaLista.style.display = 'none';
+            vistaHerramienta.style.display = 'flex';
+            
+            // Cargar la herramienta en el iframe
+            marcoHerramienta.src = url;
+
+            // Cambiar botones en la barra superior
+            btnMenu.style.display = 'none';
+            btnVolver.style.display = 'flex';
+
+            // Actualizar el texto superior (Breadcrumb)
+            breadcrumb.innerHTML = `Henry &nbsp;›&nbsp; Panel interno &nbsp;›&nbsp; <b style="color:#66b2ff;">${nombreHerramienta}</b>`;
+        }
+
+        // Función para regresar del Iframe a la lista
+        window.cerrarHerramienta = function() {
+            // Ocultar iframe, mostrar lista
+            vistaHerramienta.style.display = 'none';
+            vistaLista.style.display = 'block';
+
+            // Limpiar iframe para que no consuma recursos
+            marcoHerramienta.src = '';
+
+            // Restaurar botones
+            btnVolver.style.display = 'none';
+            btnMenu.style.display = 'flex';
+
+            // Restaurar texto
+            breadcrumb.innerHTML = `Henry &nbsp;›&nbsp; <b>Panel interno</b>`;
+        }
+
 
         async function cargarArchivos() {
             try {
@@ -448,14 +422,14 @@
                 for (const [nombreCategoria, listaArchivos] of Object.entries(categorias)) {
                     if (listaArchivos.length > 0) {
                         
-                        // Añadir título de la categoría
                         contenedor.innerHTML += `<div class="category-title">${nombreCategoria}</div>`;
 
-                        // Añadir los archivos de esta categoría
                         listaArchivos.forEach((item, index) => {
                             const indiceFormateado = String(index + 1).padStart(2, '0');
+                            
+                            // AQUI CAMBIA LA MAGIA: Al hacer clic llama a abrirHerramienta()
                             contenedor.innerHTML += `
-                                <a href="${item.url}" class="row" data-busqueda="${item.nombreMostrar.toLowerCase()} ${item.nombreOriginal.toLowerCase()}">
+                                <a href="${item.url}" onclick="abrirHerramienta(event, '${item.url}', '${item.nombreMostrar}')" class="row" data-busqueda="${item.nombreMostrar.toLowerCase()} ${item.nombreOriginal.toLowerCase()}">
                                     <span class="row-index mono">${indiceFormateado}</span>
                                     <span class="row-main">
                                         <h2>${item.nombreMostrar}</h2>
@@ -480,14 +454,12 @@
             }
         }
 
-        // Buscador actualizado
         buscador.addEventListener('input', function(e) {
             const textoBusqueda = e.target.value.toLowerCase();
             const filas = document.querySelectorAll('.row');
             const titulosCategoria = document.querySelectorAll('.category-title');
             let visibles = 0;
 
-            // Filtra las filas (archivos)
             filas.forEach(fila => {
                 const contenidoFila = fila.getAttribute('data-busqueda');
                 if (contenidoFila.includes(textoBusqueda)) {
@@ -498,7 +470,6 @@
                 }
             });
 
-            // Oculta los encabezados si estás buscando algo
             titulosCategoria.forEach(titulo => {
                 titulo.style.display = textoBusqueda.length > 0 ? "none" : "block";
             });
