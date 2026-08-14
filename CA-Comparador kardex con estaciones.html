@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Conciliación de Inventarios - Master Edition v7</title>
+    <title>Conciliación de Inventarios - Master Edition v9</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
     <style>
@@ -214,7 +214,7 @@
                                         um: '', 
                                         saldoCant: 0, 
                                         saldoValor: 0,
-                                        origen: archivo.name // Guardamos el nombre del archivo Kardex
+                                        origen: archivo.name
                                     };
                                 }
                                 itemActual = dbKardexGlobal[codigoStr];
@@ -285,7 +285,7 @@
                     descripcion: descFinal,
                     um: k_agrup ? k_agrup.um : '-',
                     detalles: arrayDetalles,
-                    k_origen: k_origen, // Agregado Origen Kardex al resultado
+                    k_origen: k_origen,
                     f_cant: f_cant,
                     k_cant: k_cant,
                     dif_cant: f_cant - k_cant,
@@ -301,7 +301,7 @@
             renderTable();
         });
 
-        /* --- 4. RENDERIZADO WEB --- */
+        /* --- 4. RENDERIZADO WEB (Mantiene el detalle para previsualización) --- */
         function renderTable() {
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
@@ -310,7 +310,6 @@
             dataResultante.forEach(item => {
                 if (filtroSoloFisico && !item.existeFisico) return;
                 const origenesTxt = item.detalles.map(d => d.origen).join(' ');
-                // Concatenamos el origen Kardex también por si se busca
                 const textoFila = `${item.codigo} ${item.descripcion} ${origenesTxt} ${item.k_origen}`.toLowerCase();
                 if (searchTerm && !textoFila.includes(searchTerm)) return;
 
@@ -320,7 +319,7 @@
                     return 'text-slate-400';
                 };
 
-                // Detalle Físico
+                // Detalle Físico en la vista Web
                 if (item.detalles.length > 0) {
                     item.detalles.forEach(det => {
                         let trDet = document.createElement('tr');
@@ -378,23 +377,24 @@
             renderTable();
         });
 
-        /* --- 5. DESCARGA EXCEL (Una sola hoja sin Pivot Base) --- */
+        /* --- 5. DESCARGA EXCEL (Lógica actualizada para resumen y orden) --- */
         document.getElementById('btnExportarExcel').addEventListener('click', () => {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
             
-            const wsVisualData = [];
-
-            // Estilos para la Hoja Visual
+            const wb = XLSX.utils.book_new();
             const styleHeader = { fill: { fgColor: { rgb: "1E293B" } }, font: { color: { rgb: "FFFFFF" }, bold: true }, alignment: { horizontal: "center" } };
-            const styleSubtotal = { fill: { fgColor: { rgb: "E2E8F0" } }, font: { bold: true } };
-            const styleDifPos = { fill: { fgColor: { rgb: "E2E8F0" } }, font: { bold: true, color: { rgb: "2563EB" } } };
-            const styleDifNeg = { fill: { fgColor: { rgb: "E2E8F0" } }, font: { bold: true, color: { rgb: "DC2626" } } };
-            const styleDetalle = { font: { color: { rgb: "64748B" } } };
 
-            // Encabezados
+            // ---------------------------------------------------------
+            // HOJA 1: RESUMEN COMPARATIVO (Sin detalle de origen)
+            // ---------------------------------------------------------
+            const wsVisualData = [];
+            const styleItem = { font: { color: { rgb: "334155" } } };
+            const styleDifPos = { font: { bold: true, color: { rgb: "2563EB" } } };
+            const styleDifNeg = { font: { bold: true, color: { rgb: "DC2626" } } };
+
+            // Nuevas cabeceras sin los orígenes
             wsVisualData.push([
                 {v: "Código", s: styleHeader}, {v: "Descripción", s: styleHeader}, {v: "U.M.", s: styleHeader}, 
-                {v: "Origen Estación", s: styleHeader}, {v: "Origen Kardex", s: styleHeader},
                 {v: "Cant. Física", s: styleHeader}, {v: "Cant. Kardex", s: styleHeader}, {v: "Diferencia Cant.", s: styleHeader},
                 {v: "Valor Físico", s: styleHeader}, {v: "Valor Kardex", s: styleHeader}, {v: "Diferencia Valor", s: styleHeader}
             ]);
@@ -404,43 +404,85 @@
                 const origenesTxt = item.detalles.map(d => d.origen).join(' ');
                 if (searchTerm && !`${item.codigo} ${item.descripcion} ${origenesTxt} ${item.k_origen}`.toLowerCase().includes(searchTerm)) return;
 
-                // Llenar detalles
-                item.detalles.forEach(det => {
-                    wsVisualData.push([
-                        {v: item.codigo, s: styleDetalle}, {v: item.descripcion, s: styleDetalle}, {v: item.um, s: styleDetalle}, 
-                        {v: "↳ " + det.origen, s: styleDetalle}, {v: "-", s: styleDetalle}, 
-                        {v: det.cant, t: 'n', s: styleDetalle}, {v: "", s: styleDetalle}, 
-                        {v: "", s: styleDetalle}, {v: det.val, t: 'n', s: styleDetalle}, {v: "", s: styleDetalle}, {v: "", s: styleDetalle}
-                    ]);
-                });
-
                 // Lógica de color para diferencia
-                let sCantDif = styleSubtotal;
-                if (item.dif_cant > 0) sCantDif = styleDifPos;
-                if (item.dif_cant < 0) sCantDif = styleDifNeg;
+                let sCantDif = styleItem;
+                if (item.dif_cant > 0.01) sCantDif = styleDifPos;
+                else if (item.dif_cant < -0.01) sCantDif = styleDifNeg;
 
-                let sValDif = styleSubtotal;
-                if (item.dif_val > 0) sValDif = styleDifPos;
-                if (item.dif_val < 0) sValDif = styleDifNeg;
+                let sValDif = styleItem;
+                if (item.dif_val > 0.01) sValDif = styleDifPos;
+                else if (item.dif_val < -0.01) sValDif = styleDifNeg;
 
-                // Llenar Subtotal (Incluyendo el Origen Kardex)
+                // Insertamos solo el consolidado del artículo (1 línea por código)
                 wsVisualData.push([
-                    {v: item.codigo, s: styleSubtotal}, {v: item.descripcion, s: styleSubtotal}, {v: item.um, s: styleSubtotal}, 
-                    {v: "∑ SUBTOTAL VS KARDEX", s: styleSubtotal}, {v: item.k_origen, s: styleSubtotal}, 
-                    {v: item.f_cant, t: 'n', s: styleSubtotal}, {v: item.k_cant, t: 'n', s: styleSubtotal}, {v: item.dif_cant, t: 'n', s: sCantDif}, 
-                    {v: item.f_val, t: 'n', s: styleSubtotal}, {v: item.k_val, t: 'n', s: styleSubtotal}, {v: item.dif_val, t: 'n', s: sValDif}
+                    {v: item.codigo, s: styleItem}, {v: item.descripcion, s: styleItem}, {v: item.um, s: styleItem}, 
+                    {v: item.f_cant, t: 'n', s: styleItem}, {v: item.k_cant, t: 'n', s: styleItem}, {v: item.dif_cant, t: 'n', s: sCantDif}, 
+                    {v: item.f_val, t: 'n', s: styleItem}, {v: item.k_val, t: 'n', s: styleItem}, {v: item.dif_val, t: 'n', s: sValDif}
                 ]);
             });
 
             if (wsVisualData.length <= 1) return alert("No hay datos para exportar.");
 
-            const wb = XLSX.utils.book_new();
             const ws1 = XLSX.utils.aoa_to_sheet(wsVisualData);
+            // Ajustamos las columnas a 9 (quitando las 2 de origen)
+            ws1['!cols'] = [{wch: 15}, {wch: 45}, {wch: 8}, {wch: 12}, {wch: 12}, {wch: 15}, {wch: 12}, {wch: 12}, {wch: 15}];
+            XLSX.utils.book_append_sheet(wb, ws1, "Resumen_Comparativo");
+
+
+            // ---------------------------------------------------------
+            // HOJA 2: DETALLE DEL KARDEX (Ordenado por Código)
+            // ---------------------------------------------------------
+            const wsKardexData = [];
+            wsKardexData.push([
+                {v: "Código", s: styleHeader}, 
+                {v: "Descripción", s: styleHeader}, 
+                {v: "U.M.", s: styleHeader}, 
+                {v: "Saldo Cantidad", s: styleHeader}, 
+                {v: "Saldo Valor", s: styleHeader}, 
+                {v: "Archivo Origen", s: styleHeader}
+            ]);
             
-            // Ajustar ancho de columnas (Ahora son 11 columnas)
-            ws1['!cols'] = [{wch: 15}, {wch: 45}, {wch: 8}, {wch: 25}, {wch: 25}, {wch: 12}, {wch: 12}, {wch: 15}, {wch: 12}, {wch: 12}, {wch: 15}];
+            // Extraer y ordenar el objeto Kardex
+            let kardexArray = Object.values(dbKardexGlobal);
+            kardexArray.sort((a, b) => a.codigo.localeCompare(b.codigo));
             
-            XLSX.utils.book_append_sheet(wb, ws1, "Reporte_Visual");
+            kardexArray.forEach(row => {
+                wsKardexData.push([row.codigo, row.desc, row.um, row.saldoCant, row.saldoValor, row.origen]);
+            });
+            
+            const ws2 = XLSX.utils.aoa_to_sheet(wsKardexData);
+            ws2['!cols'] = [{wch: 15}, {wch: 50}, {wch: 8}, {wch: 15}, {wch: 15}, {wch: 30}];
+            XLSX.utils.book_append_sheet(wb, ws2, "Detalle_Kardex");
+
+
+            // ---------------------------------------------------------
+            // HOJA 3: DETALLE DE ESTACIONES (Ordenado por Código)
+            // ---------------------------------------------------------
+            const wsFisicoData = [];
+            wsFisicoData.push([
+                {v: "Código", s: styleHeader}, 
+                {v: "Descripción", s: styleHeader}, 
+                {v: "Cantidad", s: styleHeader}, 
+                {v: "Valor", s: styleHeader}, 
+                {v: "Estación Origen", s: styleHeader}
+            ]);
+            
+            // Clonar y ordenar la data física cruda
+            let fisicoArray = [...dbFisicoCrudo];
+            fisicoArray.sort((a, b) => a.codigo.localeCompare(b.codigo));
+            
+            fisicoArray.forEach(row => {
+                wsFisicoData.push([row.codigo, row.descripcion, row.cantidad, row.valor, row.origen]);
+            });
+            
+            const ws3 = XLSX.utils.aoa_to_sheet(wsFisicoData);
+            ws3['!cols'] = [{wch: 15}, {wch: 50}, {wch: 12}, {wch: 12}, {wch: 30}];
+            XLSX.utils.book_append_sheet(wb, ws3, "Detalle_Estaciones");
+
+
+            // ---------------------------------------------------------
+            // DESCARGAR ARCHIVO FINAL
+            // ---------------------------------------------------------
             XLSX.writeFile(wb, "Reporte_Conciliacion_Master.xlsx");
         });
     </script>
