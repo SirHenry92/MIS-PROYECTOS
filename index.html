@@ -395,6 +395,16 @@
 
     <footer>Portal de Herramientas · Sincronizado con el repositorio en tiempo real</footer>
 
+    <!-- ========================================================== -->
+    <!-- BOTÓN FLOTANTE PARA REGRESAR AL MENÚ PRINCIPAL             -->
+    <!-- ========================================================== -->
+    <a href="index.html" style="position: fixed; bottom: 24px; right: 24px; background-color: #0070f2; color: #fff; padding: 12px 20px; border-radius: 50px; font-family: 'Segoe UI', Arial, sans-serif; font-size: 14px; font-weight: 600; text-decoration: none; box-shadow: 0 4px 12px rgba(0, 112, 242, 0.3); display: flex; align-items: center; gap: 8px; z-index: 9999; transition: background 0.2s;">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+        Volver al Portal
+    </a>
+
     <script>
         const usuarioGitHub = "SirHenry92";
         const nombreRepositorio = "MIS-PROYECTOS";
@@ -512,7 +522,7 @@
                 }
             });
 
-            // Opcional: Oculta los encabezados si estás buscando algo (para que no estorben visualmente)
+            // Oculta los encabezados si estás buscando algo
             titulosCategoria.forEach(titulo => {
                 titulo.style.display = textoBusqueda.length > 0 ? "none" : "block";
             });
