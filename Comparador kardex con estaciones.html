@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conciliación de Inventarios - Master Edition v7</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js"></script>
+    <style>
+        ::-webkit-scrollbar { width: 8px; height: 8px; }
+        ::-webkit-scrollbar-track { background: #f8fafc; border-radius: 8px; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid #f8fafc; }
+        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
+        
+        .table-container { max-height: 600px; overflow-y: auto; overflow-x: auto; }
+        
+        th { 
+            position: sticky; 
+            top: 0; 
+            z-index: 10; 
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); 
+            background-color: #f8fafc; 
+            color: #475569;
+        }
+        
+        table { border-spacing: 0; }
+        td, th { border-bottom: 1px solid #f1f5f9; }
+        
+        .row-detail:hover td { background-color: #f8fafc; }
+        .row-summary { border-bottom: 3px solid #cbd5e1; }
+        .row-summary:hover td { background-color: #f1f5f9; }
+    </style>
+</head>
+<body class="p-4 md:p-8 min-h-screen bg-slate-50 font-sans text-slate-800">
+
+    <div class="max-w-[1600px] w-full mx-auto space-y-6">
+        
+        <!-- Encabezado -->
+        <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center relative overflow-hidden gap-4">
+            <div class="absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>
+            <div>
+                <h1 class="text-2xl font-extrabold text-slate-800 tracking-tight">Conciliación de Inventarios Valuados</h1>
+                <p class="text-sm text-slate-500 mt-1 font-medium">Detalle consolidado por Estación Física vs Saldo Kardex (Sistema)</p>
+            </div>
+            <button id="btnCruzar" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-xl transition shadow-md flex items-center gap-2 w-full md:w-auto justify-center">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                Procesar y Comparar
+            </button>
+        </div>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            
+            <!-- CARGA FÍSICA -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <div class="mb-4 flex justify-between items-center">
+                    <h2 class="text-md font-bold text-slate-800 flex items-center gap-2">
+                        <span class="bg-blue-100 text-blue-700 p-1.5 rounded-lg"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg></span>
+                        1. Data Física (Estaciones)
+                    </h2>
+                    <label class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded-lg cursor-pointer transition text-xs border border-slate-300">
+                        Subir Excel Múltiples
+                        <input type="file" id="fileInputFisico" multiple accept=".xlsx, .xls" class="hidden">
+                    </label>
+                </div>
+                <div class="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100" id="statusFisico">
+                    Esperando archivos... 
+                </div>
+            </div>
+
+            <!-- CARGA KARDEX -->
+            <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
+                <div class="mb-4 flex justify-between items-center">
+                    <h2 class="text-md font-bold text-slate-800 flex items-center gap-2">
+                        <span class="bg-emerald-100 text-emerald-700 p-1.5 rounded-lg"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg></span>
+                        2. Data Sistema (Kardex)
+                    </h2>
+                    <label class="bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold py-2 px-4 rounded-lg cursor-pointer transition text-xs border border-slate-300">
+                        Subir Kardex
+                        <input type="file" id="fileInputKardex" multiple accept=".xlsx, .xls" class="hidden">
+                    </label>
+                </div>
+                <div class="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100" id="statusKardex">
+                    Esperando archivos...
+                </div>
+            </div>
+        </div>
+
+        <!-- RESULTADOS Y FILTROS -->
+        <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
+            
+            <div class="bg-white border-b border-slate-200 p-4 flex flex-col md:flex-row justify-between items-center gap-4">
+                
+                <div class="relative w-full md:w-96">
+                    <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
+                        <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                    </div>
+                    <input type="text" id="searchInput" class="block w-full pl-10 pr-3 py-2.5 border border-slate-300 rounded-xl leading-5 bg-slate-50 placeholder-slate-400 focus:outline-none focus:bg-white focus:ring-2 focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition" placeholder="Buscar por código, descripción o estación...">
+                </div>
+
+                <div class="flex gap-2 w-full md:w-auto">
+                    <button id="btnToggleFisico" class="flex-1 md:flex-none bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold py-2.5 px-4 rounded-xl text-sm transition border border-slate-300">
+                        Ver solo códigos de estaciones
+                    </button>
+                    <button id="btnExportarExcel" class="flex-1 md:flex-none bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2.5 px-5 rounded-xl text-sm transition shadow-sm flex items-center justify-center gap-2 hidden">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
+                        Descargar Excel
+                    </button>
+                </div>
+            </div>
+
+            <div class="table-container">
+                <table class="w-full text-[11px] xl:text-xs text-left whitespace-nowrap" id="mainTable">
+                    <thead>
+                        <tr>
+                            <th class="p-3 font-bold w-24">Código</th>
+                            <th class="p-3 font-bold max-w-[200px]">Descripción</th>
+                            <th class="p-3 font-bold text-center w-12">U.M.</th>
+                            <th class="p-3 font-bold w-40">Origen Estación</th>
+                            <th class="p-3 font-bold w-40">Origen Kardex</th>
+                            <th class="p-3 font-bold text-right bg-blue-50/50 w-20">Cant. Física</th>
+                            <th class="p-3 font-bold text-right bg-emerald-50/50 w-20">Cant. Kardex</th>
+                            <th class="p-3 font-bold text-right w-20">Dif. Cant.</th>
+                            <th class="p-3 font-bold text-right bg-blue-50/50 w-24">Valor Físico</th>
+                            <th class="p-3 font-bold text-right bg-emerald-50/50 w-24">Valor Kardex</th>
+                            <th class="p-3 font-bold text-right w-24">Dif. Valor</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody" class="text-slate-600">
+                        <tr><td colspan="11" class="p-8 text-center text-slate-400 font-medium text-sm">Sube los archivos y presiona "Procesar y Comparar"</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const formatNum = new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        
+        let dbFisicoCrudo = [];
+        let dbKardexGlobal = {};
+        let dataResultante = [];
+        let filtroSoloFisico = false;
+
+        /* --- 1. LECTURA FÍSICA --- */
+        document.getElementById('fileInputFisico').addEventListener('change', function(e) {
+            const archivos = e.target.files;
+            if (archivos.length === 0) return;
+            
+            dbFisicoCrudo = [];
+            let procesados = 0;
+            document.getElementById('statusFisico').innerHTML = `<span class="text-blue-600 font-bold">Procesando estaciones...</span>`;
+
+            Array.from(archivos).forEach(archivo => {
+                const lector = new FileReader();
+                lector.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    const hoja = workbook.Sheets[workbook.SheetNames[0]];
+                    const datosJson = XLSX.utils.sheet_to_json(hoja, { raw: false, defval: "" });
+                    
+                    datosJson.forEach(fila => {
+                        let cod = fila['Item'] !== undefined ? String(fila['Item']).trim() : '';
+                        if(cod) {
+                            dbFisicoCrudo.push({
+                                codigo: cod,
+                                descripcion: fila['DescripcionLocal'] || '',
+                                cantidad: parseFloat(fila['Cantidad']) || 0,
+                                valor: parseFloat(fila['MontoLocal']) || 0,
+                                origen: archivo.name
+                            });
+                        }
+                    });
+
+                    procesados++;
+                    if (procesados === archivos.length) {
+                        document.getElementById('statusFisico').innerHTML = `<span class="text-emerald-600 font-bold">¡Listo!</span> ${archivos.length} archivos | ${dbFisicoCrudo.length} registros físicos.`;
+                    }
+                };
+                lector.readAsArrayBuffer(archivo);
+            });
+        });
+
+        /* --- 2. LECTURA KARDEX --- */
+        document.getElementById('fileInputKardex').addEventListener('change', function(e) {
+            const archivos = e.target.files;
+            if (archivos.length === 0) return;
+            
+            dbKardexGlobal = {};
+            let procesados = 0;
+            document.getElementById('statusKardex').innerHTML = `<span class="text-blue-600 font-bold">Procesando Kardex...</span>`;
+
+            Array.from(archivos).forEach(archivo => {
+                const lector = new FileReader();
+                lector.onload = function(e) {
+                    const data = new Uint8Array(e.target.result);
+                    const workbook = XLSX.read(data, { type: 'array' });
+                    
+                    workbook.SheetNames.forEach(nombreHoja => {
+                        const hoja = workbook.Sheets[nombreHoja];
+                        const filas = XLSX.utils.sheet_to_json(hoja, { header: 1, raw: true, defval: null });
+                        
+                        let itemActual = null;
+                        for (let i = 0; i < filas.length; i++) {
+                            const row = filas[i];
+                            if (!row || row.length === 0) continue;
+                            const val0 = (row[0] != null) ? String(row[0]).trim().toUpperCase() : '';
+                            
+                            if (val0.startsWith('ITEM:')) {
+                                const codigoStr = val0.substring(5).trim();
+                                if (!dbKardexGlobal[codigoStr]) {
+                                    dbKardexGlobal[codigoStr] = { 
+                                        codigo: codigoStr, 
+                                        desc: '', 
+                                        um: '', 
+                                        saldoCant: 0, 
+                                        saldoValor: 0,
+                                        origen: archivo.name // Guardamos el nombre del archivo Kardex
+                                    };
+                                }
+                                itemActual = dbKardexGlobal[codigoStr];
+                                continue;
+                            }
+                            if (!itemActual) continue;
+                            if (val0 === 'DESCRIPCIÓN:' && !itemActual.desc) itemActual.desc = (row[1] != null) ? String(row[1]).trim() : '';
+                            if (val0 === 'U.M. (TABLA 6):' && !itemActual.um) itemActual.um = (row[1] != null) ? String(row[1]).trim() : '';
+                            if (val0 === 'FECHA' || val0.includes('FECHA') || val0.includes('TOTALES')) continue;
+
+                            if (typeof row[11] === 'number') itemActual.saldoCant = row[11];
+                            if (typeof row[13] === 'number') itemActual.saldoValor = row[13];
+                        }
+                    });
+
+                    procesados++;
+                    if (procesados === archivos.length) {
+                        document.getElementById('statusKardex').innerHTML = `<span class="text-emerald-600 font-bold">¡Listo!</span> ${Object.keys(dbKardexGlobal).length} artículos en Kardex.`;
+                    }
+                };
+                lector.readAsArrayBuffer(archivo);
+            });
+        });
+
+        /* --- 3. PROCESAR Y CRUZAR --- */
+        document.getElementById('btnCruzar').addEventListener('click', function() {
+            if(dbFisicoCrudo.length === 0 && Object.keys(dbKardexGlobal).length === 0) return alert("Faltan datos por cargar.");
+
+            let físicosAgrupados = {};
+            dbFisicoCrudo.forEach(row => {
+                if(!físicosAgrupados[row.codigo]) {
+                    físicosAgrupados[row.codigo] = { desc: row.descripcion, cantTotal: 0, valorTotal: 0, detallesPorEstacion: {} };
+                }
+                físicosAgrupados[row.codigo].cantTotal += row.cantidad;
+                físicosAgrupados[row.codigo].valorTotal += row.valor;
+                
+                let detObj = físicosAgrupados[row.codigo].detallesPorEstacion;
+                if(!detObj[row.origen]) {
+                    detObj[row.origen] = { cant: 0, val: 0 };
+                }
+                detObj[row.origen].cant += row.cantidad;
+                detObj[row.origen].val += row.valor;
+            });
+
+            dataResultante = [];
+            let todosLosCodigos = new Set([...Object.keys(físicosAgrupados), ...Object.keys(dbKardexGlobal)]);
+
+            todosLosCodigos.forEach(cod => {
+                let f_agrup = físicosAgrupados[cod];
+                let k_agrup = dbKardexGlobal[cod];
+
+                let descFinal = (k_agrup && k_agrup.desc) ? k_agrup.desc : (f_agrup ? f_agrup.desc : 'SIN DESC.');
+                let f_cant = f_agrup ? f_agrup.cantTotal : 0;
+                let f_val = f_agrup ? f_agrup.valorTotal : 0;
+                let k_cant = k_agrup ? k_agrup.saldoCant : 0;
+                let k_val = k_agrup ? k_agrup.saldoValor : 0;
+                let k_origen = k_agrup ? k_agrup.origen : '-';
+
+                let arrayDetalles = [];
+                if (f_agrup) {
+                    for (const [origen, totales] of Object.entries(f_agrup.detallesPorEstacion)) {
+                        arrayDetalles.push({ origen: origen, cant: totales.cant, val: totales.val });
+                    }
+                }
+
+                dataResultante.push({
+                    codigo: cod,
+                    descripcion: descFinal,
+                    um: k_agrup ? k_agrup.um : '-',
+                    detalles: arrayDetalles,
+                    k_origen: k_origen, // Agregado Origen Kardex al resultado
+                    f_cant: f_cant,
+                    k_cant: k_cant,
+                    dif_cant: f_cant - k_cant,
+                    f_val: f_val,
+                    k_val: k_val,
+                    dif_val: f_val - k_val,
+                    existeFisico: f_agrup !== undefined
+                });
+            });
+
+            dataResultante.sort((a, b) => a.codigo.localeCompare(b.codigo));
+            document.getElementById('btnExportarExcel').classList.remove('hidden');
+            renderTable();
+        });
+
+        /* --- 4. RENDERIZADO WEB --- */
+        function renderTable() {
+            const tbody = document.getElementById('tableBody');
+            tbody.innerHTML = '';
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+
+            dataResultante.forEach(item => {
+                if (filtroSoloFisico && !item.existeFisico) return;
+                const origenesTxt = item.detalles.map(d => d.origen).join(' ');
+                // Concatenamos el origen Kardex también por si se busca
+                const textoFila = `${item.codigo} ${item.descripcion} ${origenesTxt} ${item.k_origen}`.toLowerCase();
+                if (searchTerm && !textoFila.includes(searchTerm)) return;
+
+                const stylingDif = (val) => {
+                    if (val > 0.01) return 'text-blue-600 font-bold';
+                    if (val < -0.01) return 'text-red-600 font-bold';
+                    return 'text-slate-400';
+                };
+
+                // Detalle Físico
+                if (item.detalles.length > 0) {
+                    item.detalles.forEach(det => {
+                        let trDet = document.createElement('tr');
+                        trDet.className = "row-detail bg-white text-slate-500 text-[10px] xl:text-[11px]";
+                        trDet.innerHTML = `
+                            <td class="p-2 px-3 text-slate-400">${item.codigo}</td>
+                            <td class="p-2 px-3 truncate max-w-[200px]" title="${item.descripcion}">${item.descripcion}</td>
+                            <td class="p-2 px-3 text-center text-slate-400">${item.um}</td>
+                            <td class="p-2 px-3 text-indigo-500 flex items-center gap-1 font-medium truncate max-w-[150px]" title="${det.origen}">↳ ${det.origen}</td>
+                            <td class="p-2 px-3 text-slate-300 text-center">-</td>
+                            <td class="p-2 px-3 text-right bg-blue-50/10">${formatNum.format(det.cant)}</td>
+                            <td class="p-2 px-3 text-right text-slate-200">-</td>
+                            <td class="p-2 px-3 text-right text-slate-200">-</td>
+                            <td class="p-2 px-3 text-right bg-blue-50/10">${formatNum.format(det.val)}</td>
+                            <td class="p-2 px-3 text-right text-slate-200">-</td>
+                            <td class="p-2 px-3 text-right text-slate-200">-</td>
+                        `;
+                        tbody.appendChild(trDet);
+                    });
+                }
+
+                // Subtotal / Kardex
+                let trSum = document.createElement('tr');
+                trSum.className = "row-summary bg-slate-100 font-bold";
+                trSum.innerHTML = `
+                    <td class="p-3 text-slate-800">${item.codigo}</td>
+                    <td class="p-3 truncate max-w-[200px]" title="${item.descripcion}">${item.descripcion}</td>
+                    <td class="p-3 text-center text-slate-600">${item.um}</td>
+                    <td class="p-3 text-slate-700">∑ SUBTOTAL VS KARDEX</td>
+                    <td class="p-3 text-emerald-600 font-medium truncate max-w-[150px]" title="${item.k_origen}">${item.k_origen}</td>
+                    <td class="p-3 text-right text-blue-700 bg-blue-200/40">${formatNum.format(item.f_cant)}</td>
+                    <td class="p-3 text-right text-emerald-700 bg-emerald-200/40">${formatNum.format(item.k_cant)}</td>
+                    <td class="p-3 text-right ${stylingDif(item.dif_cant)}">${formatNum.format(item.dif_cant)}</td>
+                    <td class="p-3 text-right text-blue-700 bg-blue-200/40">${formatNum.format(item.f_val)}</td>
+                    <td class="p-3 text-right text-emerald-700 bg-emerald-200/40">${formatNum.format(item.k_val)}</td>
+                    <td class="p-3 text-right ${stylingDif(item.dif_val)}">${formatNum.format(item.dif_val)}</td>
+                `;
+                tbody.appendChild(trSum);
+            });
+        }
+
+        document.getElementById('searchInput').addEventListener('input', renderTable);
+
+        document.getElementById('btnToggleFisico').addEventListener('click', function() {
+            filtroSoloFisico = !filtroSoloFisico;
+            if (filtroSoloFisico) {
+                this.classList.replace('bg-slate-100', 'bg-blue-100');
+                this.classList.replace('text-slate-600', 'text-blue-700');
+                this.innerText = "Mostrar todos los códigos";
+            } else {
+                this.classList.replace('bg-blue-100', 'bg-slate-100');
+                this.classList.replace('text-blue-700', 'text-slate-600');
+                this.innerText = "Ver solo códigos de estaciones";
+            }
+            renderTable();
+        });
+
+        /* --- 5. DESCARGA EXCEL (Una sola hoja sin Pivot Base) --- */
+        document.getElementById('btnExportarExcel').addEventListener('click', () => {
+            const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            
+            const wsVisualData = [];
+
+            // Estilos para la Hoja Visual
+            const styleHeader = { fill: { fgColor: { rgb: "1E293B" } }, font: { color: { rgb: "FFFFFF" }, bold: true }, alignment: { horizontal: "center" } };
+            const styleSubtotal = { fill: { fgColor: { rgb: "E2E8F0" } }, font: { bold: true } };
+            const styleDifPos = { fill: { fgColor: { rgb: "E2E8F0" } }, font: { bold: true, color: { rgb: "2563EB" } } };
+            const styleDifNeg = { fill: { fgColor: { rgb: "E2E8F0" } }, font: { bold: true, color: { rgb: "DC2626" } } };
+            const styleDetalle = { font: { color: { rgb: "64748B" } } };
+
+            // Encabezados
+            wsVisualData.push([
+                {v: "Código", s: styleHeader}, {v: "Descripción", s: styleHeader}, {v: "U.M.", s: styleHeader}, 
+                {v: "Origen Estación", s: styleHeader}, {v: "Origen Kardex", s: styleHeader},
+                {v: "Cant. Física", s: styleHeader}, {v: "Cant. Kardex", s: styleHeader}, {v: "Diferencia Cant.", s: styleHeader},
+                {v: "Valor Físico", s: styleHeader}, {v: "Valor Kardex", s: styleHeader}, {v: "Diferencia Valor", s: styleHeader}
+            ]);
+
+            dataResultante.forEach(item => {
+                if (filtroSoloFisico && !item.existeFisico) return;
+                const origenesTxt = item.detalles.map(d => d.origen).join(' ');
+                if (searchTerm && !`${item.codigo} ${item.descripcion} ${origenesTxt} ${item.k_origen}`.toLowerCase().includes(searchTerm)) return;
+
+                // Llenar detalles
+                item.detalles.forEach(det => {
+                    wsVisualData.push([
+                        {v: item.codigo, s: styleDetalle}, {v: item.descripcion, s: styleDetalle}, {v: item.um, s: styleDetalle}, 
+                        {v: "↳ " + det.origen, s: styleDetalle}, {v: "-", s: styleDetalle}, 
+                        {v: det.cant, t: 'n', s: styleDetalle}, {v: "", s: styleDetalle}, 
+                        {v: "", s: styleDetalle}, {v: det.val, t: 'n', s: styleDetalle}, {v: "", s: styleDetalle}, {v: "", s: styleDetalle}
+                    ]);
+                });
+
+                // Lógica de color para diferencia
+                let sCantDif = styleSubtotal;
+                if (item.dif_cant > 0) sCantDif = styleDifPos;
+                if (item.dif_cant < 0) sCantDif = styleDifNeg;
+
+                let sValDif = styleSubtotal;
+                if (item.dif_val > 0) sValDif = styleDifPos;
+                if (item.dif_val < 0) sValDif = styleDifNeg;
+
+                // Llenar Subtotal (Incluyendo el Origen Kardex)
+                wsVisualData.push([
+                    {v: item.codigo, s: styleSubtotal}, {v: item.descripcion, s: styleSubtotal}, {v: item.um, s: styleSubtotal}, 
+                    {v: "∑ SUBTOTAL VS KARDEX", s: styleSubtotal}, {v: item.k_origen, s: styleSubtotal}, 
+                    {v: item.f_cant, t: 'n', s: styleSubtotal}, {v: item.k_cant, t: 'n', s: styleSubtotal}, {v: item.dif_cant, t: 'n', s: sCantDif}, 
+                    {v: item.f_val, t: 'n', s: styleSubtotal}, {v: item.k_val, t: 'n', s: styleSubtotal}, {v: item.dif_val, t: 'n', s: sValDif}
+                ]);
+            });
+
+            if (wsVisualData.length <= 1) return alert("No hay datos para exportar.");
+
+            const wb = XLSX.utils.book_new();
+            const ws1 = XLSX.utils.aoa_to_sheet(wsVisualData);
+            
+            // Ajustar ancho de columnas (Ahora son 11 columnas)
+            ws1['!cols'] = [{wch: 15}, {wch: 45}, {wch: 8}, {wch: 25}, {wch: 25}, {wch: 12}, {wch: 12}, {wch: 15}, {wch: 12}, {wch: 12}, {wch: 15}];
+            
+            XLSX.utils.book_append_sheet(wb, ws1, "Reporte_Visual");
+            XLSX.writeFile(wb, "Reporte_Conciliacion_Master.xlsx");
+        });
+    </script>
+</body>
+</html>
