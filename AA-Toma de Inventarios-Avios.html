@@ -27,6 +27,9 @@
     <!-- SheetJS: exportar a Excel -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
+    <!-- Chart.js: gráfico de avance diario -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
     <!-- html5-qrcode: Escáner de código de barras/QR usando la cámara -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
@@ -435,11 +438,23 @@
                     </div>
                 </div>
 
-                <!-- Dashboard de Avance por Grupos -->
-                <div class="mb-4 flex-shrink-0">
-                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-2 ml-1"><i class="fa-solid fa-people-group mr-1"></i> Avance Operativo por Grupo</h3>
-                    <div id="dashboard-grupos" class="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-                        <!-- Se llena dinámicamente -->
+                <!-- Avance por Día y por Grupo -->
+                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 flex-shrink-0">
+                    <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                        <div class="flex items-center justify-between mb-2">
+                            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider"><i class="fa-solid fa-chart-column mr-1"></i> Avance por Día</h3>
+                            <span class="text-[10px] text-gray-400 uppercase tracking-wide">Últimos 14 días</span>
+                        </div>
+                        <div class="h-44 relative">
+                            <canvas id="chart-avance-diario"></canvas>
+                            <p id="msg-sin-avance-diario" class="hidden-view text-center text-xs text-gray-400 py-16">Aún no hay conteos registrados en este rango.</p>
+                        </div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto" style="max-height: 13.5rem;">
+                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-people-group mr-1"></i> Avance por Grupo</h3>
+                        <div id="dashboard-grupos">
+                            <!-- Se llena dinámicamente -->
+                        </div>
                     </div>
                 </div>
 
@@ -544,7 +559,8 @@
                             </div>
                             <div class="mb-6">
                                 <label class="smart-label">Grupo Asignado</label>
-                                <input type="text" id="nuevo_grupo" required class="smart-input text-sm" placeholder="Ej. Grupo 1">
+                                <div id="preview-siguiente-grupo" class="smart-input text-sm bg-gray-50 text-gray-500 font-semibold cursor-not-allowed">Grupo 1</div>
+                                <p class="text-[10px] text-gray-400 mt-1">Se asigna automáticamente y en orden.</p>
                             </div>
                             <button type="submit" id="btn-guardar-personal" class="w-full btn-primary py-2 text-sm">Registrar</button>
                         </form>
@@ -782,7 +798,7 @@
                 const n = p.nombre || p.Nombre || 'Desconocido';
                 const g = p.grupo || p.Grupo || 'Sin Grupo';
                 opt.value = JSON.stringify({ nombre: n, grupo: g });
-                opt.textContent = `${n} (${g})`;
+                opt.textContent = n; // El grupo ya no se muestra al operador en el login
                 select.appendChild(opt);
             });
             document.getElementById('btn-login-op').disabled = false;
@@ -1532,10 +1548,118 @@
             datosFiltradosParaExportar = filtrados;
             
             renderizarReportesAdmin(filtrados);
-            actualizarEstadisticasAdmin(todosLosDatosReporte, fechaFiltroStr); 
+            actualizarEstadisticasAdmin(todosLosDatosReporte); 
         }
 
-        function actualizarEstadisticasAdmin(dataGlobal, fechaMatch) {
+        let chartAvanceDiario = null;
+
+        // Cuenta cuántos artículos se registraron cada uno de los últimos 14 días
+        // (incluye días sin actividad, para que se note la tendencia y los huecos).
+        function calcularAvancePorDia(dataGlobal) {
+            const hoy = new Date();
+            const dias = [];
+            for (let i = 13; i >= 0; i--) {
+                const d = new Date(hoy);
+                d.setDate(d.getDate() - i);
+                dias.push(d.toISOString().split('T')[0]);
+            }
+            const conteoPorDia = {};
+            dias.forEach(d => conteoPorDia[d] = 0);
+
+            dataGlobal.filter(i => i.Registro != null).forEach(item => {
+                const fecha = String(item.Registro).split('T')[0].split(' ')[0];
+                if (conteoPorDia.hasOwnProperty(fecha)) conteoPorDia[fecha]++;
+            });
+
+            return {
+                etiquetas: dias.map(d => { const [, m, dd] = d.split('-'); return `${dd}/${m}`; }),
+                valores: dias.map(d => conteoPorDia[d])
+            };
+        }
+
+        function renderizarGraficoDiario(dataGlobal) {
+            const canvas = document.getElementById('chart-avance-diario');
+            const msgVacio = document.getElementById('msg-sin-avance-diario');
+
+            if (typeof Chart === 'undefined') {
+                // La librería del gráfico no cargó (p.ej. sin conexión a internet en ese momento).
+                // El resto del panel de administración sigue funcionando con normalidad.
+                canvas.classList.add('hidden-view');
+                msgVacio.textContent = 'No se pudo cargar el gráfico (sin conexión al CDN). El resto del panel funciona normalmente.';
+                msgVacio.classList.remove('hidden-view');
+                return;
+            }
+
+            const { etiquetas, valores } = calcularAvancePorDia(dataGlobal);
+            const totalEnRango = valores.reduce((a, b) => a + b, 0);
+
+            if (totalEnRango === 0) {
+                canvas.classList.add('hidden-view');
+                msgVacio.classList.remove('hidden-view');
+                return;
+            }
+            canvas.classList.remove('hidden-view');
+            msgVacio.classList.add('hidden-view');
+
+            if (chartAvanceDiario) chartAvanceDiario.destroy();
+            chartAvanceDiario = new Chart(canvas, {
+                type: 'bar',
+                data: {
+                    labels: etiquetas,
+                    datasets: [{
+                        label: 'Artículos contados',
+                        data: valores,
+                        backgroundColor: '#0d9488',
+                        borderRadius: 4,
+                        maxBarThickness: 26
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false }, tooltip: { intersect: false } },
+                    scales: {
+                        y: { beginAtZero: true, ticks: { precision: 0, font: { size: 9 } }, grid: { color: '#f1f5f9' } },
+                        x: { grid: { display: false }, ticks: { font: { size: 8.5 } } }
+                    }
+                }
+            });
+        }
+
+        // Avance acumulado por grupo, con una barra de progreso relativa al grupo que más ha avanzado
+        function renderizarAvancePorGrupo(dataGlobal) {
+            const gruposContainer = document.getElementById('dashboard-grupos');
+            gruposContainer.innerHTML = '';
+
+            const gruposData = {};
+            dataGlobal.filter(i => i.Registro != null).forEach(item => {
+                const g = item['Grupo de Trabajo'] || 'Sin Grupo';
+                gruposData[g] = (gruposData[g] || 0) + 1;
+            });
+
+            const entradas = Object.entries(gruposData).sort((a, b) => b[1] - a[1]);
+            if (entradas.length === 0) {
+                gruposContainer.innerHTML = '<div class="text-xs text-gray-400 italic">Aún no hay conteos registrados.</div>';
+                return;
+            }
+            const maxValor = Math.max(...entradas.map(e => e[1]));
+
+            entradas.forEach(([g, total]) => {
+                const pct = Math.round((total / maxValor) * 100);
+                gruposContainer.innerHTML += `
+                    <div class="mb-3 last:mb-0">
+                        <div class="flex justify-between text-[11px] font-semibold text-gray-600 mb-1">
+                            <span class="truncate pr-2">${esc(g)}</span><span class="font-mono text-gray-800">${total}</span>
+                        </div>
+                        <div class="w-full bg-gray-100 rounded-full h-1.5">
+                            <div class="bg-teal-500 h-1.5 rounded-full" style="width:${pct}%"></div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        function actualizarEstadisticasAdmin(dataGlobal) {
             const total = dataGlobal.length;
             const completados = dataGlobal.filter(i => i.Registro != null).length;
             const faltantes = total - completados;
@@ -1545,40 +1669,9 @@
             document.getElementById('stat-completados').innerText = completados;
             document.getElementById('stat-faltantes').innerText = faltantes;
             document.getElementById('stat-porcentaje').innerText = pct + '%';
-            
-            const gruposContainer = document.getElementById('dashboard-grupos');
-            gruposContainer.innerHTML = '';
-            
-            const gruposData = {};
-            dataGlobal.filter(i => i.Registro != null).forEach(item => {
-                const g = item['Grupo de Trabajo'] || 'Sin Grupo';
-                if(!gruposData[g]) gruposData[g] = { hoy: 0, total: 0 };
-                
-                gruposData[g].total++;
-                if(fechaMatch && item.Registro.startsWith(fechaMatch)) gruposData[g].hoy++;
-            });
-            
-            const sortedKeys = Object.keys(gruposData).sort();
-            if(sortedKeys.length === 0) {
-                gruposContainer.innerHTML = '<div class="text-xs text-gray-400 italic">No hay avances registrados.</div>';
-                return;
-            }
 
-            for(const g of sortedKeys) {
-                const stats = gruposData[g];
-                gruposContainer.innerHTML += `
-                    <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center justify-between">
-                        <div>
-                            <p class="text-[11px] font-bold text-gray-700 uppercase">${esc(g)}</p>
-                            <p class="text-[10px] text-gray-500">Filtrados (${esc(fechaMatch || 'Todo')}): <span class="text-teal-600 font-bold">${stats.hoy}</span></p>
-                        </div>
-                        <div class="text-right">
-                            <p class="text-lg font-bold text-gray-800 leading-none">${stats.total}</p>
-                            <p class="text-[9px] text-gray-400 uppercase">Acumulado</p>
-                        </div>
-                    </div>
-                `;
-            }
+            renderizarGraficoDiario(dataGlobal);
+            renderizarAvancePorGrupo(dataGlobal);
         }
 
         function renderizarReportesAdmin(datos) {
@@ -1678,7 +1771,6 @@
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape');
             const pageWidth = doc.internal.pageSize.width;
-            const infoFiltros = obtenerInfoFiltrosExport();
             const generado = new Date().toLocaleString('es-PE');
 
             // Encabezado que se repite en cada página del PDF (igual que el formato de referencia):
@@ -1686,26 +1778,26 @@
             function dibujarEncabezado() {
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(7.5);
+                doc.setTextColor(107, 114, 128);
                 doc.text(`Generado: ${generado}`, 8, 8);
-                doc.text("INVENTARIADOR     SUPERVISOR DE ALMACEN     SUPERVISOR DE INVENTARIO", pageWidth / 2, 8, { align: "center" });
+                doc.setTextColor(15, 23, 42);
 
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(13);
-                doc.text("ART ATLAS SRL", 8, 17);
+                doc.text("ART ATLAS SRL", 8, 15);
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(7.5);
-                doc.text("RUC: 20413770204", 8, 21.5);
+                doc.setTextColor(107, 114, 128);
+                doc.text("RUC: 20413770204", 8, 19.5);
+                doc.setTextColor(15, 23, 42);
 
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(14);
-                doc.text("TOMA DE INVENTARIO 2025", pageWidth / 2, 17, { align: "center" });
+                doc.text("TOMA DE INVENTARIO 2025", pageWidth / 2, 15, { align: "center" });
 
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(8.5);
-                doc.text(`GRUPO: ${infoFiltros.grupo}     FILTRO: ${infoFiltros.filtro}     FECHA: ${infoFiltros.fecha}`, pageWidth / 2, 23, { align: "center" });
-
-                doc.setDrawColor(200);
-                doc.line(8, 26, pageWidth - 8, 26);
+                doc.setDrawColor(203, 213, 225);
+                doc.setLineWidth(0.3);
+                doc.line(8, 22, pageWidth - 8, 22);
             }
 
             const head = [
@@ -1731,16 +1823,43 @@
             ];
 
             doc.autoTable({
-                startY: 30,
-                margin: { top: 30 },
+                startY: 26,
+                margin: { top: 26 },
                 head: head,
                 body: armarFilasExport(true),
-                theme: 'grid',
-                styles: { fontSize: 5.5, cellPadding: 1, overflow: 'linebreak' },
-                headStyles: { fillColor: [13, 148, 136], textColor: 255, fontSize: 6 },
+                theme: 'striped',
+                styles: {
+                    fontSize: 5.8,
+                    cellPadding: 1.3,
+                    overflow: 'linebreak',
+                    textColor: [30, 41, 59],
+                    lineColor: [226, 232, 240],
+                    lineWidth: 0.1
+                },
+                headStyles: {
+                    fillColor: [30, 41, 59],
+                    textColor: 255,
+                    fontSize: 6,
+                    fontStyle: 'bold',
+                    halign: 'center',
+                    valign: 'middle',
+                    lineColor: [30, 41, 59]
+                },
+                alternateRowStyles: { fillColor: [248, 250, 252] },
                 columnStyles: {
-                    5: { cellWidth: 32 },  // Descripción
-                    15: { cellWidth: 18 }  // Observaciones
+                    2: { halign: 'center', cellWidth: 8 },   // #
+                    5: { cellWidth: 32 },                     // Descripción
+                    6: { halign: 'center' },                  // UM
+                    7: { halign: 'center' },                  // Alm
+                    8: { halign: 'center' },                  // Sub Alm
+                    9: { halign: 'right' },                   // Reserva SAP
+                    10: { halign: 'right' },                  // Sin Reserva SAP
+                    11: { halign: 'right', fontStyle: 'bold' },// Stock SAP
+                    13: { halign: 'right' },                  // Reserva Conteo
+                    14: { halign: 'right' },                  // Sin Reserva Conteo
+                    15: { cellWidth: 18 },                     // Observaciones
+                    16: { halign: 'right', fontStyle: 'bold' },// Total Inventario
+                    17: { halign: 'right', fontStyle: 'bold' } // Diferencia
                 },
                 didDrawPage: dibujarEncabezado
             });
@@ -1945,7 +2064,29 @@
         }
 
         // --- 8. GESTIÓN DEL PERSONAL (ADMIN) ---
+        // Calcula el siguiente número de grupo disponible (Grupo 1, Grupo 2, ...) según el
+        // número más alto ya usado en el personal registrado. Así, si se elimina a alguien
+        // a la mitad, el siguiente operador no repite un número de grupo ya usado.
+        function siguienteNumeroGrupo() {
+            let maxN = 0;
+            datosPersonal.forEach(p => {
+                const g = p.grupo || p.Grupo || '';
+                const match = /(\d+)/.exec(g);
+                if (match) {
+                    const n = parseInt(match[1], 10);
+                    if (n > maxN) maxN = n;
+                }
+            });
+            return maxN + 1;
+        }
+
+        function actualizarPreviewGrupo() {
+            const el = document.getElementById('preview-siguiente-grupo');
+            if (el) el.textContent = `Grupo ${siguienteNumeroGrupo()}`;
+        }
+
         function renderizarTablaPersonal() {
+            actualizarPreviewGrupo();
             const tbody = document.getElementById('cuerpoPersonal');
             tbody.innerHTML = '';
             
@@ -1977,9 +2118,10 @@
             const btn = document.getElementById('btn-guardar-personal');
             btn.disabled = true;
             try {
+                const grupoAsignado = `Grupo ${siguienteNumeroGrupo()}`;
                 const { error } = await _supabase.from(TABLA_PERSONAL).insert([{ 
                     nombre: document.getElementById('nuevo_nombre').value.trim(), 
-                    grupo: document.getElementById('nuevo_grupo').value.trim() 
+                    grupo: grupoAsignado
                 }]);
                 if (error) throw error;
                 document.getElementById('form-personal').reset();
