@@ -24,6 +24,9 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
+    <!-- SheetJS: exportar a Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
     <!-- html5-qrcode: Escáner de código de barras/QR usando la cámara -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
@@ -115,7 +118,10 @@
         </div>
         
         <!-- Botón Reset Alejado para evitar clics accidentales -->
-        <div>
+        <div class="flex items-center gap-2">
+            <button onclick="toggleOcultarStockSap()" id="btn-toggle-sap" class="text-gray-500 hover:text-white hover:bg-amber-500 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors" title="Controla si los operadores ven el stock teórico SAP mientras cuentan">
+                <i class="fa-solid fa-circle-notch fa-spin mr-1"></i> <span id="txt-toggle-sap">Cargando...</span>
+            </button>
             <button onclick="vaciarTodaLaTabla()" class="text-gray-400 hover:text-white hover:bg-red-600 border border-transparent rounded-lg px-3 py-1.5 text-xs font-bold transition-colors">
                 <i class="fa-solid fa-triangle-exclamation mr-1"></i> Borrar BD
             </button>
@@ -161,7 +167,7 @@
                 <form id="form-login-adm" onsubmit="loginAdmin(event)">
                     <div class="mb-4">
                         <label class="smart-label text-left">Correo electrónico</label>
-                        <input type="email" id="login-adm-user" required class="smart-input" placeholder="admin@tuempresa.com" autocomplete="username">
+                        <input type="email" id="login-adm-user" required class="smart-input" placeholder="correo@dominio.com" autocomplete="username">
                     </div>
                     <div class="mb-2">
                         <label class="smart-label text-left">Contraseña</label>
@@ -247,8 +253,11 @@
                 <div class="mb-5 border-b border-gray-100 pb-4">
                     <div class="font-mono font-extrabold text-teal-700 text-2xl leading-none mb-1" id="modal-codigo">CÓDIGO</div>
                     <div class="text-gray-600 text-sm leading-tight mb-2 font-medium" id="modal-descripcion">Descripción del artículo</div>
-                    <div class="flex gap-2">
+                    <div class="flex gap-2 items-center flex-wrap">
                         <span class="text-[10px] bg-gray-100 text-gray-500 px-2 py-0.5 rounded font-bold border border-gray-200 inline-block uppercase tracking-wider" id="modal-um">UM: UND</span>
+                        <span id="aviso-conteo-ciegas" class="hidden-view text-[10px] bg-amber-50 text-amber-700 px-2 py-0.5 rounded font-bold border border-amber-200 inline-block uppercase tracking-wider">
+                            <i class="fa-solid fa-eye-slash mr-1"></i> Conteo a ciegas: stock SAP oculto
+                        </span>
                     </div>
                 </div>
 
@@ -317,8 +326,8 @@
                             <!-- Detalles Adicionales Compactos -->
                             <div class="flex flex-col sm:flex-row gap-3 bg-gray-50 p-3 rounded-lg border border-gray-100 mt-auto">
                                 <div class="flex-1">
-                                    <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-location-dot mr-1"></i> Ubicación Fija</label>
-                                    <input type="text" id="ubicacion" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Estante A">
+                                    <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-location-dot mr-1"></i> Ubicación Fija <span class="text-red-500">*</span></label>
+                                    <input type="text" id="ubicacion" required class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Estante A">
                                 </div>
                                 <div class="flex-1">
                                     <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i> Observaciones</label>
@@ -458,6 +467,7 @@
                         </div>
                         <div class="flex gap-2 w-full md:w-auto justify-end">
                             <button onclick="cargarReportesAdmin()" class="btn-secondary py-1.5 px-3 text-xs bg-white border border-gray-300 shadow-sm" title="Sincronizar DB"><i class="fa-solid fa-rotate mr-1"></i> Sync</button>
+                            <button onclick="exportarExcel()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-emerald-600 hover:bg-emerald-700 border border-emerald-700"><i class="fa-solid fa-file-excel mr-1"></i> Exportar Excel</button>
                             <button onclick="exportarPDF()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-red-600 hover:bg-red-700 border border-red-700"><i class="fa-solid fa-file-pdf mr-1"></i> Imprimir PDF</button>
                         </div>
                     </div>
@@ -597,10 +607,70 @@
         // Se usa para no volver a exigir "nadie más lo contó" cuando es una edición autorizada.
         let modoEdicionAutorizada = false;
 
+        // Configuración global de la app (se guarda en la tabla app_config de Supabase).
+        // ocultar_stock_sap: si es true, los operadores NO ven el stock teórico SAP ni la
+        // diferencia mientras cuentan (conteo "a ciegas"). El administrador ve todo siempre.
+        let configuracionApp = { ocultar_stock_sap: true };
+
+        async function cargarConfiguracion() {
+            try {
+                const { data, error } = await _supabase.from('app_config').select('*').eq('id', 1).single();
+                if (error) throw error;
+                if (data) configuracionApp = data;
+            } catch (e) {
+                // Si falla, se mantiene el valor por defecto (oculto), la opción más segura.
+            }
+            actualizarBotonToggleSap();
+            return configuracionApp;
+        }
+
+        function actualizarBotonToggleSap() {
+            const btn = document.getElementById('btn-toggle-sap');
+            const txt = document.getElementById('txt-toggle-sap');
+            if (!btn || !txt) return;
+            if (configuracionApp.ocultar_stock_sap) {
+                txt.innerHTML = 'Stock SAP: <b>Oculto</b> a operadores';
+                btn.querySelector('i').className = 'fa-solid fa-eye-slash mr-1';
+            } else {
+                txt.innerHTML = 'Stock SAP: <b>Visible</b> a operadores';
+                btn.querySelector('i').className = 'fa-solid fa-eye mr-1';
+            }
+        }
+
+        // Solo el administrador puede cambiar esto (protegido también por política RLS en Supabase)
+        async function toggleOcultarStockSap() {
+            const nuevoValor = !configuracionApp.ocultar_stock_sap;
+            const accion = nuevoValor ? 'ocultar' : 'mostrar';
+
+            const result = await Swal.fire({
+                title: nuevoValor ? '¿Ocultar Stock SAP a operadores?' : '¿Mostrar Stock SAP a operadores?',
+                text: nuevoValor
+                    ? 'Los operadores dejarán de ver el stock teórico y la diferencia mientras cuentan (conteo a ciegas). Esto se mantiene así hasta que vuelvas a activarlo.'
+                    : 'Los operadores volverán a ver el stock teórico SAP y la diferencia en tiempo real.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#0d9488',
+                confirmButtonText: `Sí, ${accion}`,
+                cancelButtonText: 'Cancelar'
+            });
+            if (!result.isConfirmed) return;
+
+            try {
+                const { error } = await _supabase.from('app_config').update({ ocultar_stock_sap: nuevoValor }).eq('id', 1);
+                if (error) throw error;
+                configuracionApp.ocultar_stock_sap = nuevoValor;
+                actualizarBotonToggleSap();
+                Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Actualizado', showConfirmButton: false, timer: 1200 });
+            } catch (error) {
+                Swal.fire('Error', error.message, 'error');
+            }
+        }
+
         document.addEventListener('DOMContentLoaded', () => {
             obtenerPersonalBaseDatos();
             setupSearchListener();
             restaurarSesionAdmin();
+            cargarConfiguracion();
             
             // Prevenir Enter submiteo del form
             window.addEventListener('keydown',function(e){if(e.keyIdentifier=='U+000A'||e.keyIdentifier=='Enter'||e.keyCode==13){if(e.target.nodeName=='INPUT'&&e.target.type=='text'){e.preventDefault();return false;}}},true);
@@ -790,6 +860,7 @@
         }
 
         function iniciarSesion() {
+            cargarConfiguracion(); // Refresca el estado de "ocultar Stock SAP" por si cambió desde otra sesión
             document.getElementById('view-login').classList.add('hidden-view');
             document.getElementById('nav-user-info').classList.remove('hidden');
             document.getElementById('nav-user-info').style.display = 'flex';
@@ -884,10 +955,13 @@
                     renderizarResultadosBusqueda();
                     return;
                 }
-                const { data, error } = await _supabase.from(NOMBRE_TABLA)
-                    .select('id, "Nro", "Código de Item", "Descripción", "Stock SAP", "Unidad de Medida", "Reserva", "Sin Reserva", "Almacen", "Sub Almacen", "Reserva Inv", "Sin Reserva Inv", "Ubicación", "Observaciones", "Registro", "Inventariador"')
-                    .or(`Código de Item.ilike.%${termSeguro}%,Descripción.ilike.%${termSeguro}%`)
-                    .limit(50);
+                const [{ data, error }] = await Promise.all([
+                    _supabase.from(NOMBRE_TABLA)
+                        .select('id, "Nro", "Código de Item", "Descripción", "Stock SAP", "Unidad de Medida", "Reserva", "Sin Reserva", "Almacen", "Sub Almacen", "Reserva Inv", "Sin Reserva Inv", "Ubicación", "Observaciones", "Registro", "Inventariador"')
+                        .or(`Código de Item.ilike.%${termSeguro}%,Descripción.ilike.%${termSeguro}%`)
+                        .limit(50),
+                    cargarConfiguracion() // Se refresca por si el admin cambió el modo "ocultar SAP" en otra sesión
+                ]);
                     
                 if (error) throw error;
                 busquedaActual = data;
@@ -919,9 +993,14 @@
                 card.className = `item-card ${completado ? 'border-teal-300 bg-teal-50/30' : ''}`;
                 card.onclick = () => abrirModalConteo(index);
                 
-                let badgeHTML = completado 
-                    ? `<span class="bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded text-[10px] font-bold border border-teal-200 ml-auto flex-shrink-0 uppercase"><i class="fa-solid fa-check-double mr-1"></i>Inventariado</span>`
-                    : `<span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-200 ml-auto flex-shrink-0 font-mono">SAP: ${parseFloat(item['Stock SAP']||0).toFixed(2)}</span>`;
+                let badgeHTML;
+                if (completado) {
+                    badgeHTML = `<span class="bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded text-[10px] font-bold border border-teal-200 ml-auto flex-shrink-0 uppercase"><i class="fa-solid fa-check-double mr-1"></i>Inventariado</span>`;
+                } else if (configuracionApp.ocultar_stock_sap) {
+                    badgeHTML = `<span class="bg-gray-100 text-gray-400 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-200 ml-auto flex-shrink-0"><i class="fa-solid fa-eye-slash mr-1"></i>Pendiente</span>`;
+                } else {
+                    badgeHTML = `<span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-200 ml-auto flex-shrink-0 font-mono">SAP: ${parseFloat(item['Stock SAP']||0).toFixed(2)}</span>`;
+                }
 
                 // Código y Descripción se escapan antes de insertarse como HTML: si un CSV
                 // trajera texto con etiquetas/script, se muestra como texto plano en vez de ejecutarse.
@@ -1042,9 +1121,31 @@
             document.getElementById('modal-descripcion').innerText = item['Descripción'] || '';
             document.getElementById('modal-um').innerText = `UM: ${item['Unidad de Medida'] || 'UND'} | ALM: ${item['Almacen'] || '-'} / ${item['Sub Almacen'] || '-'}`;
             
-            document.getElementById('modal-reserva-sap').innerText = parseFloat(item['Reserva'] || 0).toFixed(2);
-            document.getElementById('modal-sinreserva-sap').innerText = parseFloat(item['Sin Reserva'] || 0).toFixed(2);
-            document.getElementById('modal-stock-sap').innerText = parseFloat(item['Stock SAP'] || 0).toFixed(2);
+            // El valor REAL siempre se guarda en data-valor (para que el cálculo y el guardado
+            // sigan siendo correctos); lo que cambia según la configuración es el TEXTO visible.
+            const reservaSap = parseFloat(item['Reserva'] || 0);
+            const sinReservaSap = parseFloat(item['Sin Reserva'] || 0);
+            const stockSap = parseFloat(item['Stock SAP'] || 0);
+            const elReservaSap = document.getElementById('modal-reserva-sap');
+            const elSinReservaSap = document.getElementById('modal-sinreserva-sap');
+            const elStockSap = document.getElementById('modal-stock-sap');
+            elReservaSap.dataset.valor = reservaSap;
+            elSinReservaSap.dataset.valor = sinReservaSap;
+            elStockSap.dataset.valor = stockSap;
+
+            const ocultoParaOperador = configuracionApp.ocultar_stock_sap && (!currentUser || currentUser.role !== 'admin');
+            if (ocultoParaOperador) {
+                elReservaSap.innerText = '•••';
+                elSinReservaSap.innerText = '•••';
+                elStockSap.innerText = '•••';
+            } else {
+                elReservaSap.innerText = reservaSap.toFixed(2);
+                elSinReservaSap.innerText = sinReservaSap.toFixed(2);
+                elStockSap.innerText = stockSap.toFixed(2);
+            }
+
+            const avisoCiegas = document.getElementById('aviso-conteo-ciegas');
+            if (avisoCiegas) avisoCiegas.classList.toggle('hidden-view', !ocultoParaOperador);
             
             // Setup Fields depending on State
             document.getElementById('reserva_inv').value = completado ? (item['Reserva Inv'] || 0) : '';
@@ -1209,14 +1310,23 @@
         function calcularModal() {
             const r = parseFloat(document.getElementById('reserva_inv').value) || 0;
             const sr = parseFloat(document.getElementById('sin_reserva_inv').value) || 0;
-            const sap = parseFloat(document.getElementById('modal-stock-sap').innerText) || 0;
+            const sap = parseFloat(document.getElementById('modal-stock-sap').dataset.valor) || 0;
 
             const total = r + sr;
-            const diff = total - sap;
-
             document.getElementById('modal-total-fisico').innerText = total.toFixed(2);
-            
+
             const txtDiff = document.getElementById('modal-diferencia');
+            const ocultoParaOperador = configuracionApp.ocultar_stock_sap && (!currentUser || currentUser.role !== 'admin');
+
+            if (ocultoParaOperador) {
+                // La diferencia no se muestra (revelaría el stock SAP por deducción), pero
+                // igual se calcula y se guarda correctamente al momento de guardar el conteo.
+                txtDiff.innerText = '•••';
+                txtDiff.className = "px-4 py-3 text-right font-mono font-bold text-xl text-gray-500";
+                return;
+            }
+
+            const diff = total - sap;
             txtDiff.innerText = diff > 0 ? "+" + diff.toFixed(2) : diff.toFixed(2);
             
             if(diff === 0) txtDiff.className = "px-4 py-3 text-right font-mono font-bold text-xl text-gray-300";
@@ -1231,13 +1341,23 @@
             if(calcTargetInput && !calcTargetInput.readOnly) calcAction('=');
             calcularModal(); 
 
+            // La ubicación fija es obligatoria para poder registrar el conteo.
+            const ubicacionValor = document.getElementById('ubicacion').value.trim();
+            if (!ubicacionValor) {
+                Swal.fire({ icon: 'warning', title: 'Falta la Ubicación', text: 'Debes ingresar la ubicación fija del artículo antes de guardar.' });
+                document.getElementById('ubicacion').focus();
+                return;
+            }
+
             const btn = document.getElementById('btnGuardar');
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> ...';
             
             const r = parseFloat(document.getElementById('reserva_inv').value) || 0;
             const sr = parseFloat(document.getElementById('sin_reserva_inv').value) || 0;
-            const sap = parseFloat(document.getElementById('modal-stock-sap').innerText) || 0;
+            // Se lee del atributo data-valor (el valor real), no del texto visible, que puede
+            // estar oculto ("•••") para el operador cuando el conteo a ciegas está activo.
+            const sap = parseFloat(document.getElementById('modal-stock-sap').dataset.valor) || 0;
             
             // FORMATO UNIVERSAL (Evita errores de Supabase/Postgres)
             const now = new Date();
@@ -1260,7 +1380,7 @@
                         p_password: claveModificacionPendiente,
                         p_reserva: r,
                         p_sin_reserva: sr,
-                        p_ubicacion: document.getElementById('ubicacion').value,
+                        p_ubicacion: ubicacionValor,
                         p_observaciones: document.getElementById('observaciones').value
                     });
                     data = resp.data ? [resp.data] : null;
@@ -1277,7 +1397,7 @@
                         "Sin Reserva Inv": sr,
                         "Total Inventario": r + sr,
                         "Diferencia": (r+sr) - sap,
-                        "Ubicación": document.getElementById('ubicacion').value,
+                        "Ubicación": ubicacionValor,
                         "Observaciones": document.getElementById('observaciones').value,
                         "Registro": fechaLocal
                     };
@@ -1509,64 +1629,141 @@
             }
         }
 
-        // --- EXPORTACIÓN PDF ---
+        // --- EXPORTACIÓN PDF Y EXCEL ---
+
+        // Info de filtros actualmente aplicados, para mostrarla en el encabezado de ambos exports
+        function obtenerInfoFiltrosExport() {
+            const estadoSel = document.getElementById('filtro-estado');
+            const grupoSel = document.getElementById('filtro-grupo');
+            const fechaVal = document.getElementById('filtro-fecha').value;
+            return {
+                grupo: grupoSel.value === 'todos' ? 'Todos' : grupoSel.value,
+                filtro: estadoSel.options[estadoSel.selectedIndex].text,
+                fecha: fechaVal || 'Todas'
+            };
+        }
+
+        // Arma las filas de datos en el mismo orden de columnas para PDF y Excel:
+        // Inventariador | Grupo de Trabajo | # | Grupo de Artículos | Código de Item | Descripción |
+        // UM | Almacén | Sub Almacén | [Teórico SAP: Reserva | Sin Reserva | Stock SAP] | Ubicación |
+        // [Físico: Reserva | Sin Reserva] | Observaciones | Total Inventario | Diferencia | Registro
+        function armarFilasExport(formatoTexto) {
+            const num = formatoTexto ? (v) => parseFloat(v || 0).toFixed(2) : (v) => parseFloat(v || 0);
+            return datosFiltradosParaExportar.map(e => [
+                e['Inventariador'] || '-',
+                e['Grupo de Trabajo'] || '-',
+                e['Nro'] || '-',
+                e['Grupo de Articulos'] || '-',
+                e['Código de Item'] || '',
+                e['Descripción'] || '',
+                e['Unidad de Medida'] || '',
+                e['Almacen'] || '',
+                e['Sub Almacen'] || '',
+                num(e['Reserva']),
+                num(e['Sin Reserva']),
+                num(e['Stock SAP']),
+                e['Ubicación'] || '-',
+                num(e['Reserva Inv']),
+                num(e['Sin Reserva Inv']),
+                e['Observaciones'] || '-',
+                num(e['Total Inventario']),
+                num(e['Diferencia']),
+                e['Registro'] || '-'
+            ]);
+        }
+
         function exportarPDF() {
             if(datosFiltradosParaExportar.length === 0) return Swal.fire('Vacío', 'No hay datos para exportar con los filtros actuales', 'info');
             
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('landscape');
-            
-            doc.setFont("helvetica", "bold");
-            doc.setFontSize(14);
-            doc.text("ART ATLAS SRL", 14, 15);
-            doc.setFontSize(10);
-            doc.text("RUC: 20413770204", 14, 21);
-            doc.setFontSize(16);
-            doc.text("TOMA DE INVENTARIO", doc.internal.pageSize.width / 2, 30, { align: "center" });
+            const pageWidth = doc.internal.pageSize.width;
+            const infoFiltros = obtenerInfoFiltrosExport();
+            const generado = new Date().toLocaleString('es-PE');
 
-            const columns = ["Fecha Reg.", "Inventariador", "Grupo", "Nro", "Cod Item", "Descripción", "UM", "Alm", "Sub Alm", "Rsv SAP", "S/Rsv SAP", "Stock SAP", "Rsv Inv", "S/Rsv Inv", "Total Fís", "Dif", "Ubic.", "Obs."];
-            
-            const rows = datosFiltradosParaExportar.map(e => [
-                e['Registro'] || '-', 
-                e['Inventariador'] || '-', 
-                e['Grupo de Trabajo'] || '-',
-                e['Nro'] || '-', 
-                e['Código de Item'] || '', 
-                e['Descripción'] || '',
-                e['Unidad de Medida'] || '', 
-                e['Almacen'] || '', 
-                e['Sub Almacen'] || '',
-                parseFloat(e['Reserva']||0).toFixed(2), 
-                parseFloat(e['Sin Reserva']||0).toFixed(2), 
-                parseFloat(e['Stock SAP']||0).toFixed(2),
-                parseFloat(e['Reserva Inv']||0).toFixed(2), 
-                parseFloat(e['Sin Reserva Inv']||0).toFixed(2), 
-                parseFloat(e['Total Inventario']||0).toFixed(2),
-                parseFloat(e['Diferencia']||0).toFixed(2), 
-                e['Ubicación'] || '-', 
-                e['Observaciones'] || '-'
-            ]);
+            // Encabezado que se repite en cada página del PDF (igual que el formato de referencia):
+            // fecha/hora de generación + roles a firmar a la derecha, luego empresa, título y filtros aplicados.
+            function dibujarEncabezado() {
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7.5);
+                doc.text(`Generado: ${generado}`, 8, 8);
+                doc.text("INVENTARIADOR     SUPERVISOR DE ALMACEN     SUPERVISOR DE INVENTARIO", pageWidth / 2, 8, { align: "center" });
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(13);
+                doc.text("ART ATLAS SRL", 8, 17);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7.5);
+                doc.text("RUC: 20413770204", 8, 21.5);
+
+                doc.setFont("helvetica", "bold");
+                doc.setFontSize(14);
+                doc.text("TOMA DE INVENTARIO 2025", pageWidth / 2, 17, { align: "center" });
+
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8.5);
+                doc.text(`GRUPO: ${infoFiltros.grupo}     FILTRO: ${infoFiltros.filtro}     FECHA: ${infoFiltros.fecha}`, pageWidth / 2, 23, { align: "center" });
+
+                doc.setDrawColor(200);
+                doc.line(8, 26, pageWidth - 8, 26);
+            }
+
+            const head = [
+                [
+                    { content: 'Inventariador', rowSpan: 2 },
+                    { content: 'Grupo de Trabajo', rowSpan: 2 },
+                    { content: '#', rowSpan: 2 },
+                    { content: 'Grupo de Artículos', rowSpan: 2 },
+                    { content: 'Código de Item', rowSpan: 2 },
+                    { content: 'Descripción', rowSpan: 2 },
+                    { content: 'UM', rowSpan: 2 },
+                    { content: 'Alm', rowSpan: 2 },
+                    { content: 'Sub Alm', rowSpan: 2 },
+                    { content: 'Teórico (SAP)', colSpan: 3, styles: { halign: 'center' } },
+                    { content: 'Ubicación', rowSpan: 2 },
+                    { content: 'Físico (Conteo)', colSpan: 2, styles: { halign: 'center' } },
+                    { content: 'Observaciones', rowSpan: 2 },
+                    { content: 'Total Inv.', rowSpan: 2 },
+                    { content: 'Diferencia', rowSpan: 2 },
+                    { content: 'Registro', rowSpan: 2 }
+                ],
+                ['Reserva', 'Sin Reserva', 'Stock SAP', 'Reserva', 'Sin Reserva']
+            ];
 
             doc.autoTable({
-                startY: 38,
-                head: [columns],
-                body: rows,
+                startY: 30,
+                margin: { top: 30 },
+                head: head,
+                body: armarFilasExport(true),
                 theme: 'grid',
-                styles: { fontSize: 6, cellPadding: 1, overflow: 'linebreak' },
-                headStyles: { fillColor: [13, 148, 136], textColor: 255 }, 
+                styles: { fontSize: 5.5, cellPadding: 1, overflow: 'linebreak' },
+                headStyles: { fillColor: [13, 148, 136], textColor: 255, fontSize: 6 },
                 columnStyles: {
-                    5: { cellWidth: 35 }, 
-                    17: { cellWidth: 20 } 
-                }
+                    5: { cellWidth: 32 },  // Descripción
+                    15: { cellWidth: 18 }  // Observaciones
+                },
+                didDrawPage: dibujarEncabezado
             });
 
+            // Numeración "Página X de Y": recién se sabe el total al terminar de dibujar la tabla
+            const totalPaginas = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= totalPaginas; i++) {
+                doc.setPage(i);
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(7.5);
+                doc.text(`Página ${i} de ${totalPaginas}`, pageWidth - 8, 8, { align: "right" });
+            }
+
+            // Firmas finales (en la última página, con líneas para firmar)
+            doc.setPage(totalPaginas);
             const finalY = doc.lastAutoTable.finalY || 40;
             const pageHeight = doc.internal.pageSize.height;
-            let sigY = finalY + 40;
+            let sigY = finalY + 20;
             
             if (sigY > pageHeight - 20) {
                 doc.addPage();
-                sigY = 40;
+                dibujarEncabezado();
+                sigY = 45;
             }
             
             doc.setLineWidth(0.5);
@@ -1583,6 +1780,43 @@
             doc.text("SUPERVISOR DE INVENTARIO", 237.5, sigY + 5, { align: "center" });
 
             doc.save(`Inventario_${new Date().toISOString().split('T')[0]}.pdf`);
+        }
+
+        // Exporta exactamente la misma data y el mismo orden de columnas que el PDF, en formato Excel.
+        function exportarExcel() {
+            if(datosFiltradosParaExportar.length === 0) return Swal.fire('Vacío', 'No hay datos para exportar con los filtros actuales', 'info');
+
+            const infoFiltros = obtenerInfoFiltrosExport();
+            const generado = new Date().toLocaleString('es-PE');
+
+            const encabezado = [
+                ['ART ATLAS SRL - RUC: 20413770204'],
+                ['TOMA DE INVENTARIO 2025'],
+                [`GRUPO: ${infoFiltros.grupo}    FILTRO: ${infoFiltros.filtro}    FECHA: ${infoFiltros.fecha}    Generado: ${generado}`],
+                [],
+                ['Inventariador','Grupo de Trabajo','#','Grupo de Artículos','Código de Item','Descripción','UM','Almacén','Sub Almacén',
+                 'Reserva (SAP)','Sin Reserva (SAP)','Stock SAP','Ubicación','Reserva (Conteo)','Sin Reserva (Conteo)','Observaciones',
+                 'Total Inventario','Diferencia','Registro']
+            ];
+
+            const filas = armarFilasExport(false);
+            const hoja = XLSX.utils.aoa_to_sheet([...encabezado, ...filas]);
+
+            const ultimaCol = encabezado[4].length - 1;
+            hoja['!merges'] = [
+                { s: { r: 0, c: 0 }, e: { r: 0, c: ultimaCol } },
+                { s: { r: 1, c: 0 }, e: { r: 1, c: ultimaCol } },
+                { s: { r: 2, c: 0 }, e: { r: 2, c: ultimaCol } }
+            ];
+
+            hoja['!cols'] = [
+                { wch: 24 }, { wch: 14 }, { wch: 8 }, { wch: 16 }, { wch: 20 }, { wch: 45 }, { wch: 8 }, { wch: 6 }, { wch: 8 },
+                { wch: 10 }, { wch: 12 }, { wch: 10 }, { wch: 16 }, { wch: 10 }, { wch: 12 }, { wch: 22 }, { wch: 12 }, { wch: 10 }, { wch: 18 }
+            ];
+
+            const libro = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(libro, hoja, 'Toma de Inventario');
+            XLSX.writeFile(libro, `Inventario_${new Date().toISOString().split('T')[0]}.xlsx`);
         }
 
         // --- 7. CARGA MASIVA CSV Y RESET DB (ADMIN) ---
