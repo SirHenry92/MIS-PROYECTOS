@@ -160,14 +160,15 @@
                 </div>
                 <form id="form-login-adm" onsubmit="loginAdmin(event)">
                     <div class="mb-4">
-                        <label class="smart-label text-left">Usuario</label>
-                        <input type="text" id="login-adm-user" required class="smart-input" placeholder="admin">
+                        <label class="smart-label text-left">Correo electrónico</label>
+                        <input type="email" id="login-adm-user" required class="smart-input" placeholder="admin@tuempresa.com" autocomplete="username">
                     </div>
-                    <div class="mb-8">
+                    <div class="mb-2">
                         <label class="smart-label text-left">Contraseña</label>
-                        <input type="password" id="login-adm-pass" required class="smart-input" placeholder="••••••••">
+                        <input type="password" id="login-adm-pass" required class="smart-input" placeholder="••••••••" autocomplete="current-password">
                     </div>
-                    <button type="submit" class="w-full btn-primary bg-gray-800 hover:bg-gray-900 text-base py-3 mb-4 shadow-md hover:shadow-lg">
+                    <p id="login-adm-error" class="text-xs text-red-500 font-semibold mb-4 hidden-view"></p>
+                    <button type="submit" id="btn-login-adm" class="w-full btn-primary bg-gray-800 hover:bg-gray-900 text-base py-3 mb-4 shadow-md hover:shadow-lg">
                         Acceder Panel <i class="fa-solid fa-lock-open ml-1"></i>
                     </button>
                     <div class="text-center">
@@ -569,6 +570,14 @@
         const TABLA_PERSONAL = 'inventariadores1'; 
         
         const SUPABASE_URL = 'https://ozyefhongybussdaxtex.supabase.co';
+        // NOTA DE SEGURIDAD: esta clave "anon" es pública por diseño (viaja en el HTML,
+        // cualquiera puede verla con "Ver código fuente"). Por eso mismo, la protección
+        // real NO depende de ocultarla, sino de las políticas de Row Level Security (RLS)
+        // activas en Supabase: lectura abierta (necesaria para buscar sin iniciar sesión),
+        // escritura de conteo solo si el artículo sigue pendiente, y borrado/importación/
+        // gestión de personal restringidos a la cuenta real de administrador (tabla
+        // "admins" + función is_admin()). Aunque alguien copie esta URL y esta clave, esas
+        // reglas se siguen aplicando del lado del servidor.
         const SUPABASE_ANON_KEY = 'sb_publishable_m7D5FrIs7rqufPO0T-GA3g_gcZDVrRe'; 
         
         const { createClient } = supabase;
@@ -584,10 +593,14 @@
         let debounceTimer;
         let busquedaActual = [];
         let calcTargetInput = null;
+        // Indica si el registro actual fue desbloqueado con la clave de modificación.
+        // Se usa para no volver a exigir "nadie más lo contó" cuando es una edición autorizada.
+        let modoEdicionAutorizada = false;
 
         document.addEventListener('DOMContentLoaded', () => {
             obtenerPersonalBaseDatos();
             setupSearchListener();
+            restaurarSesionAdmin();
             
             // Prevenir Enter submiteo del form
             window.addEventListener('keydown',function(e){if(e.keyIdentifier=='U+000A'||e.keyIdentifier=='Enter'||e.keyCode==13){if(e.target.nodeName=='INPUT'&&e.target.type=='text'){e.preventDefault();return false;}}},true);
@@ -596,6 +609,56 @@
             const hoyStr = new Date().toISOString().split('T')[0];
             document.getElementById('filtro-fecha').value = hoyStr;
         });
+
+        // --- UTILIDADES DE SEGURIDAD ---
+
+        // Escapa HTML antes de insertar texto dinámico con innerHTML, para evitar que
+        // un código, descripción o nombre con etiquetas/scripts se ejecute en el navegador
+        // (protección contra XSS almacenado, p.ej. vía una carga de CSV manipulada).
+        function esc(valor) {
+            if (valor === null || valor === undefined) return '';
+            return String(valor)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#039;');
+        }
+
+        // Neutraliza caracteres especiales de la sintaxis de filtros de Supabase/PostgREST
+        // (coma, paréntesis) para que el texto buscado no pueda alterar la consulta.
+        function escaparParaBusqueda(term) {
+            return term.replace(/[,()]/g, '').trim();
+        }
+
+        // Evaluador aritmético seguro para la calculadora lateral (sin usar eval/Function,
+        // que ejecutan código arbitrario). Solo entiende dígitos y + - * /, con precedencia
+        // correcta de multiplicación/división sobre suma/resta.
+        function evaluarExpresionSegura(expr) {
+            if (!expr || !/^[0-9+\-*/.]+$/.test(expr)) throw new Error('Expresión inválida');
+            const tokens = expr.match(/\d+\.?\d*|[+\-*/]/g);
+            if (!tokens || tokens.length === 0) throw new Error('Expresión vacía');
+            if (isNaN(parseFloat(tokens[0]))) throw new Error('Expresión incompleta');
+
+            // Primera pasada: resolver * y /
+            const paso1 = [parseFloat(tokens[0])];
+            for (let i = 1; i < tokens.length - 1; i += 2) {
+                const op = tokens[i];
+                const num = parseFloat(tokens[i + 1]);
+                if (isNaN(num)) throw new Error('Expresión incompleta');
+                if (op === '*') paso1.push(paso1.pop() * num);
+                else if (op === '/') paso1.push(paso1.pop() / num);
+                else paso1.push(op, num);
+            }
+            // Segunda pasada: resolver + y -
+            let resultado = paso1[0];
+            for (let i = 1; i < paso1.length - 1; i += 2) {
+                if (paso1[i] === '+') resultado += paso1[i + 1];
+                else if (paso1[i] === '-') resultado -= paso1[i + 1];
+            }
+            if (!isFinite(resultado)) throw new Error('Operación inválida');
+            return resultado;
+        }
 
         // UTILIDAD: Fetch sin límite de 1000 de Supabase (Paginación interna)
         async function fetchAllSupabase(tableName, selectStr = '*') {
@@ -682,16 +745,47 @@
             iniciarSesion();
         }
 
-        function loginAdmin(e) {
+        // Login real de administrador contra Supabase Auth. La contraseña ya NO vive en
+        // este archivo: viaja cifrada al servidor de Supabase, que la compara y devuelve
+        // una sesión válida solo si es correcta. Los permisos de admin (borrar todo,
+        // importar CSV, gestionar personal) están controlados del lado de la base de datos
+        // (tabla admins + políticas RLS), no por esta pantalla — esta pantalla es ahora
+        // solo la puerta de entrada, la cerradura de verdad está en Supabase.
+        async function loginAdmin(e) {
             e.preventDefault();
-            const user = document.getElementById('login-adm-user').value.trim().toLowerCase();
+            const errorEl = document.getElementById('login-adm-error');
+            errorEl.classList.add('hidden-view');
+            const btn = document.getElementById('btn-login-adm');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Verificando...';
+
+            const email = document.getElementById('login-adm-user').value.trim();
             const pass = document.getElementById('login-adm-pass').value;
-            
-            if (user === 'admin' && pass === 'admin123') {
-                currentUser = { role: 'admin', name: 'Administrador', group: 'Control' };
+
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pass });
+
+            document.getElementById('login-adm-pass').value = '';
+            btn.disabled = false;
+            btn.innerHTML = 'Acceder Panel <i class="fa-solid fa-lock-open ml-1"></i>';
+
+            if (error || !data.user) {
+                errorEl.textContent = 'Correo o contraseña incorrectos.';
+                errorEl.classList.remove('hidden-view');
+                return;
+            }
+
+            currentUser = { role: 'admin', name: data.user.email, group: 'Control' };
+            iniciarSesion();
+        }
+
+        // Al cargar la página, si ya había una sesión de administrador activa (Supabase la
+        // guarda de forma segura en el navegador), se restaura automáticamente sin pedir
+        // el correo/contraseña de nuevo.
+        async function restaurarSesionAdmin() {
+            const { data: { session } } = await _supabase.auth.getSession();
+            if (session && session.user) {
+                currentUser = { role: 'admin', name: session.user.email, group: 'Control' };
                 iniciarSesion();
-            } else {
-                Swal.fire({ icon: 'error', title: 'Error', text: 'Credenciales incorrectas.' });
             }
         }
 
@@ -704,7 +798,7 @@
             document.getElementById('lbl-group').innerText = currentUser.group;
             
             const initials = currentUser.name.split(' ').map(n=>n[0]).join('').substring(0,2).toUpperCase();
-            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${initials}&background=0d9488&color=fff&size=36`;
+            document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=0d9488&color=fff&size=36`;
 
             if (currentUser.role === 'admin') {
                 document.getElementById('view-admin').classList.remove('hidden-view');
@@ -721,7 +815,10 @@
             }
         }
 
-        function logout() {
+        async function logout() {
+            if (currentUser && currentUser.role === 'admin') {
+                await _supabase.auth.signOut();
+            }
             currentUser = null;
             document.getElementById('view-admin').classList.add('hidden-view');
             document.getElementById('view-operador').classList.add('hidden-view');
@@ -779,9 +876,17 @@
 
         async function realizarBusquedaDB(term) {
             try {
+                // El término se limpia de caracteres especiales de PostgREST (coma, paréntesis)
+                // antes de insertarlo en el filtro .or(), para que no pueda alterar la consulta.
+                const termSeguro = escaparParaBusqueda(term);
+                if (!termSeguro) {
+                    busquedaActual = [];
+                    renderizarResultadosBusqueda();
+                    return;
+                }
                 const { data, error } = await _supabase.from(NOMBRE_TABLA)
                     .select('id, "Nro", "Código de Item", "Descripción", "Stock SAP", "Unidad de Medida", "Reserva", "Sin Reserva", "Almacen", "Sub Almacen", "Reserva Inv", "Sin Reserva Inv", "Ubicación", "Observaciones", "Registro", "Inventariador"')
-                    .or(`Código de Item.ilike.%${term}%,Descripción.ilike.%${term}%`)
+                    .or(`Código de Item.ilike.%${termSeguro}%,Descripción.ilike.%${termSeguro}%`)
                     .limit(50);
                     
                 if (error) throw error;
@@ -818,13 +923,15 @@
                     ? `<span class="bg-teal-100 text-teal-700 px-1.5 py-0.5 rounded text-[10px] font-bold border border-teal-200 ml-auto flex-shrink-0 uppercase"><i class="fa-solid fa-check-double mr-1"></i>Inventariado</span>`
                     : `<span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-200 ml-auto flex-shrink-0 font-mono">SAP: ${parseFloat(item['Stock SAP']||0).toFixed(2)}</span>`;
 
+                // Código y Descripción se escapan antes de insertarse como HTML: si un CSV
+                // trajera texto con etiquetas/script, se muestra como texto plano en vez de ejecutarse.
                 card.innerHTML = `
                     <div class="flex-1 min-w-0 pr-4">
                         <div class="flex items-center gap-2 mb-1">
-                            <span class="text-xs font-bold ${completado ? 'text-teal-800' : 'text-teal-700'} truncate">${item['Código de Item']}</span>
+                            <span class="text-xs font-bold ${completado ? 'text-teal-800' : 'text-teal-700'} truncate">${esc(item['Código de Item'])}</span>
                             ${badgeHTML}
                         </div>
-                        <p class="text-[11px] font-medium ${completado ? 'text-teal-700/80' : 'text-gray-500'} truncate leading-snug">${item['Descripción']}</p>
+                        <p class="text-[11px] font-medium ${completado ? 'text-teal-700/80' : 'text-gray-500'} truncate leading-snug">${esc(item['Descripción'])}</p>
                     </div>
                     <div class="w-8 h-8 ${completado ? 'bg-teal-600 text-white' : 'bg-teal-50 text-teal-600'} rounded-full flex items-center justify-center flex-shrink-0 transition-colors">
                         <i class="fa-solid fa-chevron-right text-xs"></i>
@@ -927,7 +1034,8 @@
         function abrirModalConteo(index) {
             const item = busquedaActual[index];
             const completado = item.Registro != null;
-            
+            modoEdicionAutorizada = false; // Reinicia el modo edición cada vez que se abre un artículo
+
             document.getElementById('registro_id').value = item.id;
             document.getElementById('modal-nro').innerText = `Nro: ${item['Nro'] || '-'}`;
             document.getElementById('modal-codigo').innerText = item['Código de Item'] || 'Sin Código';
@@ -958,9 +1066,8 @@
                 btnGuardar.classList.add('hidden-view');
                 btnModificar.classList.remove('hidden-view');
                 
-                // Mostrar Info
-                const fechaCorta = item.Registro.substring(0,10); 
-                badgeEstado.innerHTML = `<span class="bg-teal-100 text-teal-700 px-2 py-1 rounded border border-teal-200 text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-check-double mr-1"></i> Por ${item.Inventariador || 'N/A'}</span>`;
+                // Mostrar Info (escapado por ser texto libre proveniente de la base de datos)
+                badgeEstado.innerHTML = `<span class="bg-teal-100 text-teal-700 px-2 py-1 rounded border border-teal-200 text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-check-double mr-1"></i> Por ${esc(item.Inventariador || 'N/A')}</span>`;
             } else {
                 inputs.forEach(id => {
                     document.getElementById(id).readOnly = false;
@@ -990,6 +1097,12 @@
             }
         }
 
+        // La contraseña de modificación ya NO se compara en el navegador: se envía a una
+        // función en Supabase (modificar_conteo) que la compara contra un hash cifrado
+        // guardado en el servidor. El navegador nunca sabe si acertó "por deducción": solo
+        // recibe un error genérico si falla, igual que cualquier login serio.
+        let claveModificacionPendiente = null;
+
         async function solicitarClaveModificacion() {
             const { value: password } = await Swal.fire({
                 title: 'Desbloquear Registro',
@@ -1002,27 +1115,28 @@
                 confirmButtonColor: '#0d9488'
             });
 
-            if (password) {
-                if (password === '20091846') {
-                    const inputs = ['reserva_inv', 'sin_reserva_inv', 'ubicacion', 'observaciones'];
-                    inputs.forEach(id => {
-                        document.getElementById(id).readOnly = false;
-                        document.getElementById(id).classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
-                        if(id.includes('inv')) document.getElementById(id).classList.add('text-teal-700', 'bg-white');
-                    });
-                    
-                    document.getElementById('btnGuardar').classList.remove('hidden-view');
-                    document.getElementById('btnGuardar').innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Actualizar Conteo';
-                    document.getElementById('btnModificar').classList.add('hidden-view');
-                    
-                    // Activate Calc default
-                    calcTargetInput = document.getElementById('reserva_inv');
-                    
-                    Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Registro Desbloqueado', showConfirmButton: false, timer: 1500 });
-                } else {
-                    Swal.fire({ icon: 'error', title: 'Acceso Denegado', text: 'Contraseña incorrecta' });
-                }
-            }
+            if (!password) return;
+
+            // Guardamos la contraseña para enviarla junto con los datos al momento de
+            // guardar (así el servidor valida contraseña + datos en una sola operación
+            // atómica, evitando que alguien "desbloquee" y luego escriba por otra vía).
+            claveModificacionPendiente = password;
+
+            const inputs = ['reserva_inv', 'sin_reserva_inv', 'ubicacion', 'observaciones'];
+            inputs.forEach(id => {
+                document.getElementById(id).readOnly = false;
+                document.getElementById(id).classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
+                if(id.includes('inv')) document.getElementById(id).classList.add('text-teal-700', 'bg-white');
+            });
+
+            document.getElementById('btnGuardar').classList.remove('hidden-view');
+            document.getElementById('btnGuardar').innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Actualizar Conteo';
+            document.getElementById('btnModificar').classList.add('hidden-view');
+
+            calcTargetInput = document.getElementById('reserva_inv');
+            modoEdicionAutorizada = true;
+
+            Swal.fire({ toast: true, position: 'top', icon: 'info', title: 'Campos desbloqueados. Guarda para confirmar.', showConfirmButton: false, timer: 2000 });
         }
 
         function cerrarModal() {
@@ -1034,6 +1148,8 @@
             content.classList.add('translate-y-full');
             
             document.getElementById('panel-calculadora').classList.add('hidden-view');
+            modoEdicionAutorizada = false;
+            claveModificacionPendiente = null;
             
             setTimeout(() => modal.classList.add('hidden-view'), 300);
         }
@@ -1075,7 +1191,8 @@
                     let toEval = current.replace(/×/g, '*').replace(/÷/g, '/');
                     toEval = toEval.replace(/[^0-9+\-*/.]/g, "");
                     if(!toEval) return;
-                    const res = Function("return " + toEval)();
+                    // Evaluador propio (sin eval/Function) para no ejecutar código arbitrario
+                    const res = evaluarExpresionSegura(toEval);
                     const finalVal = res === undefined ? '' : parseFloat(res).toFixed(2);
                     disp.innerText = finalVal;
                     calcTargetInput.value = finalVal;
@@ -1133,27 +1250,62 @@
             const fechaLocal = `${y}-${m}-${d} ${h}:${min}:${s}`; 
 
             try {
-                const payload = {
-                    "Inventariador": document.getElementById('inventariador').value.trim(),
-                    "Grupo de Trabajo": document.getElementById('grupo_trabajo').value.trim(),
-                    "Reserva Inv": r,
-                    "Sin Reserva Inv": sr,
-                    "Total Inventario": r + sr,
-                    "Diferencia": (r+sr) - sap,
-                    "Ubicación": document.getElementById('ubicacion').value,
-                    "Observaciones": document.getElementById('observaciones').value,
-                    "Registro": fechaLocal
-                };
+                let data, error;
 
-                const { error } = await _supabase.from(NOMBRE_TABLA).update(payload).eq('id', registroId);
-                if (error) throw error; 
+                if (modoEdicionAutorizada) {
+                    // Edición de un registro ya contado: pasa por la función segura del
+                    // servidor, que valida la contraseña (cifrada) antes de escribir nada.
+                    const resp = await _supabase.rpc('modificar_conteo', {
+                        p_id: registroId,
+                        p_password: claveModificacionPendiente,
+                        p_reserva: r,
+                        p_sin_reserva: sr,
+                        p_ubicacion: document.getElementById('ubicacion').value,
+                        p_observaciones: document.getElementById('observaciones').value
+                    });
+                    data = resp.data ? [resp.data] : null;
+                    error = resp.error;
+                    claveModificacionPendiente = null;
+                } else {
+                    // Conteo inicial: la base de datos (no el navegador) es quien garantiza
+                    // que el artículo siga sin contar en ese instante (protección contra
+                    // doble conteo aplicada también del lado del servidor).
+                    const payload = {
+                        "Inventariador": document.getElementById('inventariador').value.trim(),
+                        "Grupo de Trabajo": document.getElementById('grupo_trabajo').value.trim(),
+                        "Reserva Inv": r,
+                        "Sin Reserva Inv": sr,
+                        "Total Inventario": r + sr,
+                        "Diferencia": (r+sr) - sap,
+                        "Ubicación": document.getElementById('ubicacion').value,
+                        "Observaciones": document.getElementById('observaciones').value,
+                        "Registro": fechaLocal
+                    };
+                    const resp = await _supabase.from(NOMBRE_TABLA).update(payload).eq('id', registroId).select();
+                    data = resp.data;
+                    error = resp.error;
+                }
+
+                if (error) throw error;
+
+                if (!modoEdicionAutorizada && (!data || data.length === 0)) {
+                    Swal.fire({
+                        icon: 'warning',
+                        title: 'Este artículo ya fue contado',
+                        text: 'Otro operador registró este conteo mientras tenías el formulario abierto. Tu registro no se guardó para no sobrescribirlo.'
+                    });
+                    cerrarModal();
+                    actualizarAvanceOperador();
+                    document.getElementById('buscador-articulos').dispatchEvent(new Event('input'));
+                    return;
+                }
 
                 Swal.fire({ toast: true, position: 'top', icon: 'success', title: '¡Guardado!', showConfirmButton: false, timer: 1200 });
                 cerrarModal();
                 
                 const index = busquedaActual.findIndex(i => i.id === registroId);
-                if(index > -1) {
-                    busquedaActual[index] = { ...busquedaActual[index], ...payload };
+                if(index > -1 && data && data[0]) {
+                    busquedaActual[index] = { ...busquedaActual[index], ...data[0] };
                     renderizarResultadosBusqueda();
                 }
                 
@@ -1162,7 +1314,10 @@
                 document.getElementById('buscador-articulos').value = '';
                 document.getElementById('buscador-articulos').focus();
             } catch (error) {
-                Swal.fire({ icon: 'error', title: 'Error', text: error.message });
+                const msg = error.message && error.message.includes('Contraseña incorrecta')
+                    ? 'Contraseña incorrecta.'
+                    : error.message;
+                Swal.fire({ icon: 'error', title: 'Error', text: msg });
             } finally {
                 // SOLUCIÓN AL BUG: Reactivar el botón de guardar siempre al terminar el proceso
                 btn.disabled = false;
@@ -1209,7 +1364,7 @@
                 
                 const gruposUnicos = [...new Set(todosLosDatosReporte.filter(i=>i['Grupo de Trabajo']).map(i => i['Grupo de Trabajo']))].sort();
                 const selGrupo = document.getElementById('filtro-grupo');
-                selGrupo.innerHTML = '<option value="todos">Todos los Grupos</option>' + gruposUnicos.map(g => `<option value="${g}">${g}</option>`).join('');
+                selGrupo.innerHTML = '<option value="todos">Todos los Grupos</option>' + gruposUnicos.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
 
                 filtrarReportesTabla(); 
             } catch (error) {
@@ -1294,8 +1449,8 @@
                 gruposContainer.innerHTML += `
                     <div class="bg-white p-3 rounded-lg shadow-sm border border-gray-100 flex items-center justify-between">
                         <div>
-                            <p class="text-[11px] font-bold text-gray-700 uppercase">${g}</p>
-                            <p class="text-[10px] text-gray-500">Filtrados (${fechaMatch || 'Todo'}): <span class="text-teal-600 font-bold">${stats.hoy}</span></p>
+                            <p class="text-[11px] font-bold text-gray-700 uppercase">${esc(g)}</p>
+                            <p class="text-[10px] text-gray-500">Filtrados (${esc(fechaMatch || 'Todo')}): <span class="text-teal-600 font-bold">${stats.hoy}</span></p>
                         </div>
                         <div class="text-right">
                             <p class="text-lg font-bold text-gray-800 leading-none">${stats.total}</p>
@@ -1330,14 +1485,16 @@
                     if(dif < 0) diffColor = "text-red-500 font-bold";
                 }
 
+                // Todos los campos de texto libre (Inventariador, Código, Descripción) se
+                // escapan antes de insertarse como HTML, incluida la versión que va en "title".
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-gray-50 border-b border-gray-100 transition-colors";
                 tr.innerHTML = `
                     <td class="py-2 px-3">${estadoBadge}</td>
-                    <td class="py-2 px-3 text-gray-500 font-mono text-[10px]">${fechaStr}</td>
-                    <td class="py-2 px-3 font-semibold text-gray-700 text-[10px] truncate max-w-[100px]">${item['Inventariador'] || '-'}</td>
-                    <td class="py-2 px-3 text-teal-700 font-bold">${item['Código de Item'] || ''}</td>
-                    <td class="py-2 px-3 truncate max-w-[200px]" title="${item['Descripción'] || ''}">${item['Descripción'] || ''}</td>
+                    <td class="py-2 px-3 text-gray-500 font-mono text-[10px]">${esc(fechaStr)}</td>
+                    <td class="py-2 px-3 font-semibold text-gray-700 text-[10px] truncate max-w-[100px]">${esc(item['Inventariador'] || '-')}</td>
+                    <td class="py-2 px-3 text-teal-700 font-bold">${esc(item['Código de Item'] || '')}</td>
+                    <td class="py-2 px-3 truncate max-w-[200px]" title="${esc(item['Descripción'] || '')}">${esc(item['Descripción'] || '')}</td>
                     <td class="py-2 px-3 text-right text-gray-400 font-mono">${parseFloat(item['Stock SAP']||0).toFixed(2)}</td>
                     <td class="py-2 px-3 text-right font-mono font-bold text-gray-800">${completado ? parseFloat(item['Total Inventario']||0).toFixed(2) : '-'}</td>
                     <td class="py-2 px-3 text-right font-mono ${diffColor}">${completado ? (dif > 0 ? '+'+dif.toFixed(2) : dif.toFixed(2)) : '-'}</td>
@@ -1518,27 +1675,39 @@
         }
 
         async function vaciarTodaLaTabla() {
-            Swal.fire({
+            // Confirmación reforzada: además del diálogo de advertencia, exige escribir
+            // la palabra BORRAR para reducir el riesgo de un clic accidental en una acción irreversible.
+            const { value: confirmacion } = await Swal.fire({
                 title: '¿Limpiar Toda la Base de Datos?',
-                text: "ESTA ACCIÓN ES IRREVERSIBLE. Se borrarán absolutamente todos los registros.",
+                html: "<b>ESTA ACCIÓN ES IRREVERSIBLE.</b><br>Se borrarán absolutamente todos los registros.<br><br>Escribe <b>BORRAR</b> para confirmar:",
                 icon: 'warning',
+                input: 'text',
+                inputPlaceholder: 'BORRAR',
                 showCancelButton: true,
                 confirmButtonColor: '#ef4444',
                 cancelButtonColor: '#64748b',
-                confirmButtonText: 'Sí, borrar todo permanentemente'
-            }).then(async (result) => {
-                if (result.isConfirmed) {
-                    try {
-                        Swal.fire({title: 'Borrando...', allowOutsideClick:false, didOpen: () => Swal.showLoading()});
-                        const { error } = await _supabase.from(NOMBRE_TABLA).delete().not('id', 'is', null);
-                        if(error) throw error;
-                        Swal.fire('¡Borrado!', 'La base de datos está completamente limpia.', 'success');
-                        cargarReportesAdmin(); 
-                    } catch (err) {
-                        Swal.fire('Error', err.message, 'error');
+                confirmButtonText: 'Sí, borrar todo permanentemente',
+                cancelButtonText: 'Cancelar',
+                preConfirm: (valor) => {
+                    if (valor !== 'BORRAR') {
+                        Swal.showValidationMessage('Debes escribir exactamente BORRAR para continuar');
+                        return false;
                     }
+                    return valor;
                 }
-            })
+            });
+
+            if (confirmacion === 'BORRAR') {
+                try {
+                    Swal.fire({title: 'Borrando...', allowOutsideClick:false, didOpen: () => Swal.showLoading()});
+                    const { error } = await _supabase.from(NOMBRE_TABLA).delete().not('id', 'is', null);
+                    if(error) throw error;
+                    Swal.fire('¡Borrado!', 'La base de datos está completamente limpia.', 'success');
+                    cargarReportesAdmin(); 
+                } catch (err) {
+                    Swal.fire('Error', err.message, 'error');
+                }
+            }
         }
 
         // --- 8. GESTIÓN DEL PERSONAL (ADMIN) ---
@@ -1557,8 +1726,8 @@
                 const n = p.nombre || p.Nombre || 'Desconocido';
                 const g = p.grupo || p.Grupo || 'Sin Grupo';
                 tr.innerHTML = `
-                    <td class="py-3 px-4 font-bold text-gray-700">${n}</td>
-                    <td class="py-3 px-4 text-gray-500">${g}</td>
+                    <td class="py-3 px-4 font-bold text-gray-700">${esc(n)}</td>
+                    <td class="py-3 px-4 text-gray-500">${esc(g)}</td>
                     <td class="py-3 px-4 text-center">
                         <button onclick="eliminarPersonal(${p.id})" class="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 w-8 h-8 rounded-full transition-colors" title="Borrar">
                             <i class="fa-solid fa-trash-can"></i>
@@ -1589,9 +1758,23 @@
         }
 
         async function eliminarPersonal(id) {
-            if(!confirm("¿Retirar este operador del sistema?")) return;
+            // Se reemplazó el confirm() nativo del navegador por un diálogo SweetAlert,
+            // consistente con el resto de la interfaz.
+            const result = await Swal.fire({
+                title: '¿Retirar este operador?',
+                text: 'Ya no aparecerá en la lista de login de operadores.',
+                icon: 'warning',
+                showCancelButton: true,
+                confirmButtonColor: '#ef4444',
+                cancelButtonColor: '#64748b',
+                confirmButtonText: 'Sí, retirar',
+                cancelButtonText: 'Cancelar'
+            });
+            if (!result.isConfirmed) return;
+
             const { error } = await _supabase.from(TABLA_PERSONAL).delete().eq('id', id);
             if(!error) obtenerPersonalBaseDatos();
+            else Swal.fire('Error', error.message, 'error');
         }
     </script>
 </body>
