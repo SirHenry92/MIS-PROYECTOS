@@ -2460,6 +2460,7 @@
             Papa.parse(file, {
                 header: true,
                 skipEmptyLines: true,
+                encoding: "ISO-8859-1",
                 complete: function(results) {
                     if (results.errors.length && results.data.length === 0) {
                         Swal.fire('Error', 'Archivo no válido.', 'error');
@@ -2490,38 +2491,51 @@
             btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Procesando...';
 
             try {
-                const payload = csvDataToUpload.map(row => ({
-                    "id": crypto.randomUUID(),
-                    "Nro": row["Nro"] || '',
-                    "Código de Item": row["Código de Item"] || row["Codigo"] || '',
-                    "Descripción": row["Descripción"] || row["Descripcion"] || '',
-                    "Grupo de Articulos": row["Grupo de Articulos"] || '',
-                    "Unidad de Medida": row["Unidad de Medida"] || row["UM"] || '',
-                    "Almacen": row["Almacen"] || '',
-                    "Sub Almacen": row["Sub Almacen"] || '',
-                    "Reserva": parseFloat(row["Reserva"]) || 0,
-                    "Sin Reserva": parseFloat(row["Sin Reserva"]) || 0,
-                    "Stock SAP": parseFloat(row["Stock SAP"] || row["Stock"]) || 0,
-                    "Inventariador": null,
-                    "Grupo de Trabajo": null,
-                    "Reserva Inv": null,
-                    "Sin Reserva Inv": null,
-                    "Total Inventario": null,
-                    "Diferencia": null,
-                    "Ubicación": null,
-                    "Observaciones": null,
-                    "Registro": null
-                }));
+                const payload = csvDataToUpload.map(row => {
+                    // 1. Limpiamos todas las cabeceras del CSV (quitamos tildes, símbolos raros y mayúsculas)
+                    const rowLimpio = {};
+                    for (let key in row) {
+                        if (key) {
+                            // Esto convierte "Cdigo de Item" o "Código" a "codigo de item"
+                            let cleanKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, "").toLowerCase().trim();
+                            rowLimpio[cleanKey] = row[key];
+                        }
+                    }
 
-                const payloadValido = payload.filter(item => item["Código de Item"].trim() !== '');
+                    // 2. Mapeamos usando las cabeceras limpias (así ya no importan las tildes)
+                    return {
+                        "id": crypto.randomUUID(),
+                        "Nro": rowLimpio["nro"] || '',
+                        "Código de Item": rowLimpio["codigo de item"] || rowLimpio["codigo"] || rowLimpio["item"] || '',
+                        "Descripción": rowLimpio["descripcion"] || '',
+                        "Grupo de Articulos": rowLimpio["grupo de articulos"] || rowLimpio["grupo"] || '',
+                        "Unidad de Medida": rowLimpio["unidad de medida"] || rowLimpio["um"] || '',
+                        "Almacen": rowLimpio["almacen"] || '',
+                        "Sub Almacen": rowLimpio["sub almacen"] || rowLimpio["subalmacen"] || '',
+                        "Stock SAP": parseFloat(rowLimpio["stock sap"]) || parseFloat(rowLimpio["stock"]) || 0,
+                        "Inventariador": null,
+                        "Grupo de Trabajo": null,
+                        "Diferencia": null,
+                        "Ubicación": null,
+                        "Observaciones": null,
+                        "Registro": null
+                    };
+                });
+
+                // 3. Filtramos los que sí tengan un código válido
+                const payloadValido = payload.filter(item => item["Código de Item"] !== '');
+
+                // Si después de limpiar sigue en 0, mostramos un error claro
+                if (payloadValido.length === 0) {
+                    throw new Error("No se detectó la columna del código. Verifica que el archivo esté separado por comas.");
+                }
+
                 const CHUNK_SIZE = 500;
                 let insertados = 0;
 
                 for (let i = 0; i < payloadValido.length; i += CHUNK_SIZE) {
                     const chunk = payloadValido.slice(i, i + CHUNK_SIZE);
-                    const {
-                        error
-                    } = await _supabase.from(NOMBRE_TABLA).insert(chunk);
+                    const { error } = await _supabase.from(NOMBRE_TABLA).insert(chunk);
                     if (error) throw error;
                     insertados += chunk.length;
                 }
