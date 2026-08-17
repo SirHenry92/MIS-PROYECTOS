@@ -9,112 +9,195 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
     <style>
         :root {
-            --primary: #4F46E5;
-            --primary-hover: #4338CA;
-            --secondary: #F3F4F6;
-            --text-dark: #1F2937;
-            --border: #D1D5DB;
+            --primary: #6366F1;
+            --primary-hover: #4F46E5;
+            --primary-light: #EEF2FF;
+            --bg: #F1F5F9;
+            --surface: #FFFFFF;
+            --surface-alt: #F8FAFC;
+            --text: #0F172A;
+            --text-muted: #64748B;
+            --border: #E2E8F0;
+            --border-strong: #CBD5E1;
             --success: #10B981;
             --success-hover: #059669;
+            --success-light: #ECFDF5;
             --danger: #EF4444;
+            --danger-hover: #DC2626;
+            --danger-light: #FEF2F2;
             --info: #3B82F6;
             --info-hover: #2563EB;
-            --surface: #FFFFFF;
+            --info-light: #EFF6FF;
+            --warning: #F59E0B;
+            --warning-light: #FFFBEB;
+            --radius-lg: 16px;
+            --radius-md: 10px;
+            --radius-sm: 7px;
+            --shadow-sm: 0 1px 2px rgba(15,23,42,0.06);
+            --shadow-md: 0 8px 24px -8px rgba(15,23,42,0.18);
+            --shadow-lg: 0 20px 45px -12px rgba(15,23,42,0.25);
         }
+        * { box-sizing: border-box; }
         body {
             font-family: 'Inter', sans-serif;
-            background: var(--secondary);
-            color: var(--text-dark);
+            background: var(--bg);
+            color: var(--text);
             margin: 0;
             padding: 0;
             height: 100vh;
             display: flex;
             flex-direction: column;
             overflow: hidden;
+            -webkit-font-smoothing: antialiased;
         }
-        
+        ::-webkit-scrollbar { width: 10px; height: 10px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 10px; }
+        ::-webkit-scrollbar-thumb:hover { background: #94A3B8; }
+
         /* PANTALLA DE CARGA */
         #uploadScreen {
             display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%;
+            background:
+                radial-gradient(circle at 15% 20%, rgba(99,102,241,0.12), transparent 45%),
+                radial-gradient(circle at 85% 80%, rgba(16,185,129,0.10), transparent 45%),
+                var(--bg);
         }
         .upload-card {
-            background: var(--surface); padding: 40px; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0,0,0,0.1);
-            max-width: 420px; width: 90%; text-align: center; border: 1px solid var(--border);
+            background: var(--surface); padding: 40px 36px; border-radius: var(--radius-lg); box-shadow: var(--shadow-lg);
+            max-width: 440px; width: 90%; text-align: center; border: 1px solid var(--border);
         }
-        .upload-card h2 { margin-top: 0; font-size: 22px; margin-bottom: 25px; }
-        .form-group { margin-bottom: 20px; text-align: left; }
-        label { font-weight: 600; font-size: 13px; color: #4B5563; display: block; margin-bottom: 8px; }
+        .upload-icon {
+            width: 56px; height: 56px; border-radius: 16px; margin: 0 auto 18px;
+            background: linear-gradient(135deg, var(--primary), #8B5CF6);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px; box-shadow: 0 10px 24px -8px rgba(99,102,241,0.55);
+        }
+        .upload-card h2 { margin-top: 0; font-size: 20px; font-weight: 700; margin-bottom: 6px; letter-spacing: -0.01em; }
+        .upload-card .subtitle { color: var(--text-muted); font-size: 13px; margin-bottom: 26px; }
+        .form-group { margin-bottom: 18px; text-align: left; }
+        label { font-weight: 600; font-size: 12.5px; color: var(--text-muted); display: block; margin-bottom: 7px; letter-spacing: 0.01em; }
         input[type="file"] {
-            width: 100%; padding: 10px; border: 2px dashed var(--border); border-radius: 8px; 
-            font-size: 13px; background: #F9FAFB; box-sizing: border-box; cursor: pointer;
+            width: 100%; padding: 14px; border: 1.5px dashed var(--border-strong); border-radius: var(--radius-md);
+            font-size: 13px; background: var(--surface-alt); box-sizing: border-box; cursor: pointer; color: var(--text-muted);
+            transition: border-color .15s, background .15s;
         }
-        
+        input[type="file"]:hover { border-color: var(--primary); background: var(--primary-light); }
+        input[type="password"], input[type="text"], input[type="number"], select {
+            width: 100%; padding: 10px 12px; border: 1.5px solid var(--border); border-radius: var(--radius-md);
+            font-size: 13px; font-family: inherit; background: var(--surface); color: var(--text); transition: border-color .15s, box-shadow .15s;
+        }
+        input[type="password"]:focus, input[type="text"]:focus, input[type="number"]:focus, select:focus {
+            outline: none; border-color: var(--primary); box-shadow: 0 0 0 3px var(--primary-light);
+        }
+
         /* WORKSPACE (DASHBOARD) */
         #dashboardScreen {
-            display: none; height: 100vh; flex-direction: column; padding: 10px 15px; box-sizing: border-box;
+            display: none; height: 100vh; flex-direction: column; padding: 16px 20px; box-sizing: border-box; gap: 12px;
         }
-        .dash-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
-        .dash-header h3 { margin: 0; font-size: 18px; font-weight: 700; color: var(--primary); }
-        
+        .dash-header { display: flex; justify-content: space-between; align-items: center; }
+        .dash-header h3 { margin: 0; font-size: 17px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; display: flex; align-items: center; gap: 8px; }
+        .dash-header h3::before {
+            content: ""; width: 9px; height: 9px; border-radius: 50%;
+            background: linear-gradient(135deg, var(--primary), #8B5CF6); display: inline-block;
+        }
+
         /* BOTONES */
         .btn {
-            background-color: var(--primary); color: white; border: none; padding: 6px 12px;
-            border-radius: 4px; cursor: pointer; font-weight: 600; font-size: 12px; transition: 0.2s;
+            background-color: var(--primary); color: white; border: none; padding: 8px 16px;
+            border-radius: var(--radius-sm); cursor: pointer; font-weight: 600; font-size: 12.5px; transition: transform .1s, background .15s, box-shadow .15s;
+            box-shadow: var(--shadow-sm); font-family: inherit; letter-spacing: 0.01em;
         }
-        .btn:hover { background-color: var(--primary-hover); }
+        .btn:hover { background-color: var(--primary-hover); box-shadow: var(--shadow-md); }
+        .btn:active { transform: translateY(1px); }
         .btn-success { background-color: var(--success); }
         .btn-success:hover { background-color: var(--success-hover); }
         .btn-info { background-color: var(--info); }
         .btn-info:hover { background-color: var(--info-hover); }
-        .btn-outline { background: transparent; border: 1px solid var(--border); color: #4B5563; }
-        .btn-outline:hover { background: #E5E7EB; }
+        .btn-outline { background: var(--surface); border: 1.5px solid var(--border); color: var(--text-muted); box-shadow: none; }
+        .btn-outline:hover { background: var(--surface-alt); border-color: var(--border-strong); color: var(--text); box-shadow: none; }
+        .btn-sm { padding: 6px 12px; font-size: 11.5px; }
 
-        /* PESTAÑAS (TABS) */
-        .tabs-header { display: flex; gap: 2px; margin-bottom: 0; }
-        .tab-btn {
-            background: #E5E7EB; border: 1px solid var(--border); border-bottom: none;
-            padding: 8px 20px; border-radius: 6px 6px 0 0; cursor: pointer; font-weight: 600;
-            font-size: 12px; color: #6B7280; transition: 0.2s;
+        /* PESTAÑAS (TABS) — segmented pill control */
+        .tabs-header {
+            display: flex; gap: 4px; padding: 4px; background: var(--surface-alt);
+            border: 1px solid var(--border); border-radius: var(--radius-md); width: fit-content;
         }
-        .tab-btn.active { background: var(--surface); color: var(--primary); border-bottom-color: var(--surface); position: relative; z-index: 2; }
+        .tab-btn {
+            background: transparent; border: none;
+            padding: 7px 18px; border-radius: var(--radius-sm); cursor: pointer; font-weight: 600;
+            font-size: 12.5px; color: var(--text-muted); transition: all .15s;
+        }
+        .tab-btn:hover { color: var(--text); }
+        .tab-btn.active { background: var(--surface); color: var(--primary); box-shadow: var(--shadow-sm); }
         .tab-content {
             display: none; flex-direction: column; flex-grow: 1; overflow: hidden;
-            background: var(--surface); border: 1px solid var(--border); border-radius: 0 4px 4px 4px; margin-top: -1px;
+            background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-sm);
         }
         .tab-content.active { display: flex; }
 
         /* BARRA DE TOTALES */
         .totals-bar {
-            display: flex; justify-content: space-between; align-items: center; background: #F9FAFB; 
-            padding: 8px 15px; border-bottom: 1px solid var(--border); font-weight: 600; font-size: 13px;
+            display: flex; justify-content: space-between; align-items: center; background: var(--surface-alt);
+            padding: 10px 16px; border-bottom: 1px solid var(--border); gap: 12px; flex-wrap: wrap;
         }
-        .totals-info { display: flex; gap: 20px; align-items: center; }
+        .totals-info { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+        .stat-chip {
+            display: flex; align-items: center; gap: 6px; background: var(--surface); border: 1px solid var(--border);
+            padding: 5px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-muted);
+        }
+        .stat-chip .stat-value { color: var(--text); font-variant-numeric: tabular-nums; }
+        .stat-chip.stat-ok .stat-value { color: var(--success); }
+        .stat-chip.stat-bad .stat-value { color: var(--danger); }
 
         /* TABLA AJUSTADA A PANTALLA */
-        .table-responsive { flex-grow: 1; overflow-y: auto; overflow-x: hidden; }
-        table { width: 100%; border-collapse: collapse; table-layout: auto; white-space: normal; }
-        th, td { padding: 4px 6px; border-bottom: 1px solid var(--border); border-right: 1px solid var(--border); text-align: left; font-size: 11px; word-wrap: break-word; }
-        th { background-color: #F3F4F6; color: #374151; position: sticky; top: 0; z-index: 10; font-weight: 600; border-bottom: 2px solid var(--border); }
-        .col-index { width: 25px; text-align: center; font-weight: bold; background: #F9FAFB; }
-        tr:hover td { background-color: #EEF2FF; }
-        td[contenteditable="true"]:hover { background-color: #FEF3C7; cursor: text; outline: 1px solid var(--primary); }
-        
-        .col-filter { width: 100%; box-sizing: border-box; font-size: 10px; padding: 2px; margin-top: 4px; border: 1px solid var(--border); border-radius: 2px; }
-        .col-filter:focus { outline: none; border-color: var(--primary); }
+        .table-responsive { flex-grow: 1; overflow-y: auto; overflow-x: auto; }
+        table { width: 100%; border-collapse: collapse; table-layout: auto; white-space: normal; font-variant-numeric: tabular-nums; }
+        th, td { padding: 8px 10px; border-bottom: 1px solid var(--border); text-align: left; font-size: 12px; word-wrap: break-word; }
+        th { background-color: var(--surface-alt); color: var(--text-muted); position: sticky; top: 0; z-index: 10; font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: 0.03em; border-bottom: 1px solid var(--border); box-shadow: 0 1px 0 var(--border); }
+        .col-index { width: 34px; text-align: center; font-weight: 600; color: var(--text-muted); background: var(--surface-alt); font-size: 11px; }
+        tbody tr:nth-child(even) td { background-color: var(--surface-alt); }
+        tbody tr:hover td { background-color: var(--primary-light); }
+        td[contenteditable="true"]:hover { background-color: var(--warning-light); cursor: text; outline: 1.5px solid var(--primary); outline-offset: -1.5px; }
+
+        .col-filter {
+            width: 100%; box-sizing: border-box; font-size: 11px; padding: 5px 8px; margin-top: 6px;
+            border: 1px solid var(--border); border-radius: 6px; font-weight: 400; text-transform: none;
+            letter-spacing: normal; background: var(--surface); color: var(--text);
+        }
+        .col-filter:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
+        .col-filter::placeholder { color: #94A3B8; }
+        th .th-label { display: block; margin-bottom: 2px; }
+
+        /* SELECTOR DE COLUMNAS (DESCUENTOS) */
+        .col-picker { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
+        .col-chip {
+            display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
+            border: 1.5px solid var(--border); background: var(--surface-alt); color: var(--text-muted);
+            font-size: 11.5px; font-weight: 600; cursor: pointer; user-select: none; transition: all .12s;
+        }
+        .col-chip:hover { border-color: var(--border-strong); }
+        .col-chip.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary-hover); }
+        .col-chip input { display: none; }
+        .col-picker-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; }
+        .col-picker-hint { font-size: 11px; color: var(--text-muted); padding: 0 16px 10px; }
 
         /* MODAL WIDGET TXT */
         #txtModal {
             display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
-            background: rgba(17, 24, 39, 0.6); z-index: 100; justify-content: center; align-items: center;
+            background: rgba(15, 23, 42, 0.55); backdrop-filter: blur(2px); z-index: 100; justify-content: center; align-items: center;
         }
         .modal-content {
-            background: #fff; padding: 25px; border-radius: 8px; width: 300px; text-align: center;
+            background: var(--surface); padding: 26px; border-radius: var(--radius-lg); width: 320px; text-align: center;
+            box-shadow: var(--shadow-lg); border: 1px solid var(--border);
         }
-        .modal-content h4 { margin-top: 0; color: var(--primary); font-size: 16px; margin-bottom: 15px;}
-        .modal-content select, .modal-content input { width: 100%; padding: 8px; margin-bottom: 15px; border: 1px solid var(--border); border-radius: 4px; font-size: 13px; box-sizing: border-box;}
-        .modal-actions { display: flex; justify-content: space-between; gap: 10px;}
+        .modal-content h4 { margin-top: 0; color: var(--text); font-size: 16px; font-weight: 700; margin-bottom: 18px; }
+        .modal-content select, .modal-content input { margin-bottom: 15px; }
+        .modal-actions { display: flex; justify-content: space-between; gap: 10px; margin-top: 4px; }
         .modal-actions button { flex: 1; }
     </style>
 </head>
@@ -123,26 +206,28 @@
 <!-- PANTALLA DE CARGA -->
 <div id="uploadScreen">
     <div class="upload-card">
-        <h2>Análisis completo de asientos Contables</h2>
+        <div class="upload-icon">📊</div>
+        <h2>Análisis de Asientos Contables</h2>
+        <p class="subtitle">Sube el archivo de planilla para generar los asientos SAP</p>
         <div class="form-group">
-            <label>Archivo Base (.xlsx):</label>
+            <label>Archivo Base (.xlsx)</label>
             <input type="file" id="excelFile" accept=".xlsx, .xls">
         </div>
         <div class="form-group">
-            <label>Contraseña (solo si el archivo está protegido):</label>
+            <label>Contraseña (solo si el archivo está protegido)</label>
             <input type="password" id="filePassword" placeholder="Dejar en blanco si no tiene contraseña">
         </div>
-        <button class="btn" id="btnProcess" style="width: 100%; padding: 10px; font-size: 14px;">Procesar Tablas</button>
+        <button class="btn" id="btnProcess" style="width: 100%; padding: 12px; font-size: 13.5px;">Procesar Tablas</button>
     </div>
 </div>
 
 <!-- WORKSPACE -->
 <div id="dashboardScreen">
     <div class="dash-header">
-        <h3>Workspace - Análisis de Asientos</h3>
+        <h3>Workspace · Análisis de Asientos</h3>
         <button class="btn btn-outline" id="btnBack">Cargar otro archivo</button>
     </div>
-    
+
     <div id="tabsHeader" class="tabs-header"></div>
     <div id="tabsBody" style="display: flex; flex-direction: column; flex-grow: 1; overflow: hidden;"></div>
 </div>
@@ -222,7 +307,7 @@
                     // Thead con correlativo
                     let theadHtml = "<tr><th class='col-index'>#</th>";
                     COLS.forEach((col, idx) => {
-                        theadHtml += `<th>${col}<br><input type="text" class="col-filter" data-col="${idx+1}" placeholder="Filtrar..."></th>`;
+                        theadHtml += `<th><span class="th-label">${col}</span><input type="text" class="col-filter" data-col="${idx+1}" placeholder="Filtrar..."></th>`;
                     });
                     theadHtml += "</tr>";
 
@@ -242,10 +327,10 @@
                     content.innerHTML = `
                         <div class="totals-bar">
                             <div class="totals-info">
-                                <div>DEBE: <span class="tot-debe" style="color: var(--primary);">0.00</span></div>
-                                <div>HABER: <span class="tot-haber" style="color: var(--primary);">0.00</span></div>
-                                <div>Dif: <span class="tot-dif">0.00</span></div>
-                                <button class="btn btn-info btn-diagnostic">Diagnóstico de Cuadres</button>
+                                <div class="stat-chip">DEBE <span class="tot-debe stat-value">0.00</span></div>
+                                <div class="stat-chip">HABER <span class="tot-haber stat-value">0.00</span></div>
+                                <div class="stat-chip stat-ok"><span class="tot-dif-label">Dif</span> <span class="tot-dif stat-value">0.00</span></div>
+                                <button class="btn btn-info btn-sm btn-diagnostic">Diagnóstico de Cuadres</button>
                             </div>
                             <button class="btn btn-success btn-export-section">Generar SAP (${title})</button>
                         </div>
@@ -274,7 +359,9 @@
                         let dif = Math.abs(sumDebe - sumHaber);
                         let difSpan = content.querySelector('.tot-dif');
                         difSpan.innerText = dif.toFixed(2);
-                        difSpan.style.color = dif < 0.01 ? 'var(--success)' : 'var(--danger)';
+                        const difChip = content.querySelector('.tot-dif').closest('.stat-chip');
+                        difChip.classList.toggle('stat-ok', dif < 0.01);
+                        difChip.classList.toggle('stat-bad', dif >= 0.01);
                     };
                     updateTotalsFast();
                     content.querySelector('tbody').addEventListener('input', updateTotalsFast);
@@ -308,34 +395,55 @@
                         });
                     });
 
-                    // Botón de Diagnóstico Inteligente
+                    // Botón de Diagnóstico Inteligente (distinto por pestaña)
                     content.querySelector(`.btn-diagnostic`).addEventListener('click', () => {
                         const rows = content.querySelector('tbody').children;
-                        let grouped = {};
-                        for(let i=0; i<rows.length; i++) {
-                            let tr = rows[i];
-                            let nombre = tr.children[8].textContent.trim(); 
-                            let debe = parseFloat(tr.children[3].textContent) || 0;
-                            let haber = parseFloat(tr.children[4].textContent) || 0;
-                            
-                            if(!nombre) continue;
-                            if(!grouped[nombre]) grouped[nombre] = {debe:0, haber:0};
-                            grouped[nombre].debe += debe;
-                            grouped[nombre].haber += haber;
-                        }
-                        
-                        let errores = [];
-                        for(let nom in grouped) {
-                            let diff = Math.abs(grouped[nom].debe - grouped[nom].haber);
-                            if(diff > 0.01) {
-                                errores.push(`❌ ${nom} | Dif: ${diff.toFixed(2)} (Debe: ${grouped[nom].debe.toFixed(2)} - Haber: ${grouped[nom].haber.toFixed(2)})`);
+
+                        if (title === 'LIQUIDACIONES') {
+                            // Cuadre Debe = Haber agrupado por empleado
+                            let grouped = {};
+                            for(let i=0; i<rows.length; i++) {
+                                let tr = rows[i];
+                                let nombre = tr.children[8].textContent.trim();
+                                let debe = parseFloat(tr.children[3].textContent) || 0;
+                                let haber = parseFloat(tr.children[4].textContent) || 0;
+
+                                if(!nombre) continue;
+                                if(!grouped[nombre]) grouped[nombre] = {debe:0, haber:0};
+                                grouped[nombre].debe += debe;
+                                grouped[nombre].haber += haber;
                             }
-                        }
-                        
-                        if(errores.length > 0) {
-                            alert(`Se encontraron ${errores.length} descuadres en ${title}:\n\n` + errores.join("\n"));
+
+                            let errores = [];
+                            for(let nom in grouped) {
+                                let diff = Math.abs(grouped[nom].debe - grouped[nom].haber);
+                                if(diff > 0.01) {
+                                    errores.push(`❌ ${nom} | Dif: ${diff.toFixed(2)} (Debe: ${grouped[nom].debe.toFixed(2)} - Haber: ${grouped[nom].haber.toFixed(2)})`);
+                                }
+                            }
+
+                            if(errores.length > 0) {
+                                alert(`Se encontraron ${errores.length} descuadres en ${title}:\n\n` + errores.join("\n"));
+                            } else {
+                                alert(`✅ ¡Perfecto! Todos los subtotales por empleado cuadran correctamente en ${title}.`);
+                            }
                         } else {
-                            alert(`✅ ¡Perfecto! Todos los subtotales por empleado cuadran correctamente en ${title}.`);
+                            // PRACTICANTES / PLANILLA: toda fila debe tener Cuenta Contable
+                            let sinCuenta = [];
+                            for(let i=0; i<rows.length; i++) {
+                                let tr = rows[i];
+                                let cuenta = tr.children[1].textContent.trim();
+                                let nombre = tr.children[8].textContent.trim();
+                                if(!cuenta || cuenta === 'null') {
+                                    sinCuenta.push(`❌ Fila ${tr.children[0].textContent} | ${nombre || '(sin nombre)'}`);
+                                }
+                            }
+
+                            if(sinCuenta.length > 0) {
+                                alert(`Se encontraron ${sinCuenta.length} filas sin Cuenta Contable en ${title}:\n\n` + sinCuenta.join("\n"));
+                            } else {
+                                alert(`✅ ¡Perfecto! Todas las filas de ${title} tienen Cuenta Contable asignada.`);
+                            }
                         }
                     });
 
@@ -355,6 +463,126 @@
                     isFirstTab = false;
                 };
 
+                // Pestaña DESCUENTOS: matriz filtrable por columnas, con totales dinámicos y exportación a Excel.
+                const buildDescuentosTab = (descData) => {
+                    if (!descData || descData.rows.length === 0) return;
+                    validSheets++;
+                    const title = 'DESCUENTOS';
+
+                    const btn = document.createElement('button');
+                    btn.className = 'tab-btn' + (isFirstTab ? ' active' : '');
+                    btn.innerText = title;
+                    tabsHeader.appendChild(btn);
+
+                    const content = document.createElement('div');
+                    content.className = 'tab-content' + (isFirstTab ? ' active' : '');
+                    content.id = 'tab-' + title;
+
+                    const chipsHtml = descData.discountCols.map(col =>
+                        `<label class="col-chip active"><input type="checkbox" value="${col}" checked>${col}</label>`
+                    ).join('');
+
+                    content.innerHTML = `
+                        <div class="col-picker">
+                            ${chipsHtml}
+                            <div class="col-picker-actions">
+                                <button class="btn btn-outline btn-sm" id="btnDescSelAll">Todo</button>
+                                <button class="btn btn-outline btn-sm" id="btnDescSelNone">Ninguno</button>
+                                <button class="btn btn-success btn-sm" id="btnDescExport">Exportar Excel</button>
+                            </div>
+                        </div>
+                        <div class="col-picker-hint">Elige las columnas de descuento a mantener. Las filas y columnas que queden en cero se ocultan automáticamente.</div>
+                        <div class="totals-bar">
+                            <div class="totals-info">
+                                <div class="stat-chip">Filas <span class="desc-row-count stat-value">0</span></div>
+                                <div class="stat-chip">Columnas <span class="desc-col-count stat-value">0</span></div>
+                                <div class="stat-chip stat-ok">Total General <span class="desc-total stat-value">0.00</span></div>
+                            </div>
+                        </div>
+                        <div class="table-responsive">
+                            <table id="table-DESCUENTOS"></table>
+                        </div>
+                    `;
+                    tabsBody.appendChild(content);
+
+                    const renderDescTable = () => {
+                        const checked = Array.from(content.querySelectorAll('.col-picker input[type=checkbox]:checked')).map(cb => cb.value);
+                        content.querySelectorAll('.col-chip').forEach(chip => {
+                            chip.classList.toggle('active', chip.querySelector('input').checked);
+                        });
+
+                        let visibleRows = descData.rows.map(r => {
+                            let total = 0;
+                            checked.forEach(c => total += (parseFloat(r[c]) || 0));
+                            return { r, total };
+                        }).filter(x => Math.abs(x.total) > 0.004);
+
+                        let visibleCols = checked.filter(c => {
+                            let sum = 0;
+                            visibleRows.forEach(x => sum += (parseFloat(x.r[c]) || 0));
+                            return Math.abs(sum) > 0.004;
+                        });
+
+                        let theadHtml = "<tr><th class='col-index'>#</th><th>DOCUMENTO</th><th>APELLIDOS Y NOMBRES</th>";
+                        visibleCols.forEach(c => theadHtml += `<th style="text-align:right">${c}</th>`);
+                        theadHtml += `<th style="text-align:right">TOTAL</th></tr>`;
+
+                        let colTotals = {}; visibleCols.forEach(c => colTotals[c] = 0);
+                        let grandTotal = 0;
+                        let tbodyHtml = "";
+                        visibleRows.forEach((x, i) => {
+                            const r = x.r;
+                            tbodyHtml += `<tr><td class="col-index">${i + 1}</td>`;
+                            tbodyHtml += `<td>${r['DOCUMENTO'] ?? ''}</td>`;
+                            tbodyHtml += `<td>${r['APELLIDOS Y NOMBRES'] ?? ''}</td>`;
+                            visibleCols.forEach(c => {
+                                const v = parseFloat(r[c]) || 0;
+                                colTotals[c] += v;
+                                tbodyHtml += `<td style="text-align:right">${v ? v.toFixed(2) : ''}</td>`;
+                            });
+                            grandTotal += x.total;
+                            tbodyHtml += `<td style="text-align:right; font-weight:600">${x.total.toFixed(2)}</td></tr>`;
+                        });
+
+                        let tfootHtml = `<tr><td class="col-index"></td><td colspan="2" style="font-weight:700">TOTALES</td>`;
+                        visibleCols.forEach(c => tfootHtml += `<td style="text-align:right; font-weight:700; background:var(--surface-alt)">${colTotals[c].toFixed(2)}</td>`);
+                        tfootHtml += `<td style="text-align:right; font-weight:700; background:var(--surface-alt)">${grandTotal.toFixed(2)}</td></tr>`;
+
+                        const table = content.querySelector('#table-DESCUENTOS');
+                        table.innerHTML = `<thead>${theadHtml}</thead><tbody>${tbodyHtml}</tbody><tfoot>${tfootHtml}</tfoot>`;
+
+                        content.querySelector('.desc-row-count').innerText = visibleRows.length;
+                        content.querySelector('.desc-col-count').innerText = visibleCols.length;
+                        content.querySelector('.desc-total').innerText = grandTotal.toFixed(2);
+
+                        content._descState = { visibleRows, visibleCols, colTotals, grandTotal, titleLine1: descData.titleLine1, titleLine2: descData.titleLine2 };
+                    };
+
+                    content.querySelectorAll('.col-picker input[type=checkbox]').forEach(cb => cb.addEventListener('change', renderDescTable));
+                    content.querySelector('#btnDescSelAll').addEventListener('click', () => {
+                        content.querySelectorAll('.col-picker input[type=checkbox]').forEach(cb => cb.checked = true);
+                        renderDescTable();
+                    });
+                    content.querySelector('#btnDescSelNone').addEventListener('click', () => {
+                        content.querySelectorAll('.col-picker input[type=checkbox]').forEach(cb => cb.checked = false);
+                        renderDescTable();
+                    });
+                    content.querySelector('#btnDescExport').addEventListener('click', () => {
+                        const state = content._descState;
+                        if (!state || state.visibleRows.length === 0) return alert('No hay datos para exportar.');
+                        exportDescuentosStyled(state, 'Descuentos_filtrado.xlsx');
+                    });
+
+                    btn.addEventListener('click', () => {
+                        document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+                        document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+                        btn.classList.add('active'); content.classList.add('active');
+                    });
+
+                    renderDescTable();
+                    isFirstTab = false;
+                };
+
                 const readSheet = (sn) => XLSX.utils.sheet_to_json(workbook.Sheets[sn], { defval: null });
                 const tieneFormatoImportador = workbook.Sheets['LIQ'] || workbook.Sheets['PRA'] || workbook.Sheets['PLL'];
                 const tieneFormatoOrigen = workbook.Sheets['LIQUIDACIONES'] || workbook.Sheets['PRACTICANTES'] || workbook.Sheets['ASTO OK'];
@@ -368,6 +596,7 @@
                     if (workbook.Sheets['LIQUIDACIONES']) buildTab('LIQUIDACIONES', process_TB_liq(extractLIQFromSource(workbook, categoriaMap)));
                     if (workbook.Sheets['PRACTICANTES']) buildTab('PRACTICANTES', process_TB_pra(extractPRAFromSource(workbook)));
                     if (workbook.Sheets['ASTO OK']) buildTab('PLANILLA', process_TB_pll(extractPLLFromSource(workbook)));
+                    if (workbook.Sheets['DESCUENTOS']) buildDescuentosTab(extractDescuentosFromSource(workbook));
                 }
 
                 if (validSheets > 0) {
@@ -715,6 +944,139 @@
         return raw.slice(2)
             .filter(arr => arr[1] !== null && arr[1] !== undefined && arr[1] !== '')
             .map(arr => ({ CTA: arr[1], A3: arr[4], A4: arr[7], A5: arr[8], DEBE: arr[5], HABER: arr[6], Columna8: arr[13] }));
+    }
+
+    // Hoja DESCUENTOS: matriz de trabajador x tipo de descuento, con encabezados
+    // duplicados en el archivo origen (se desambiguan con sufijo " (2)").
+    function extractDescuentosFromSource(workbook) {
+        const sheet = workbook.Sheets['DESCUENTOS'];
+        if (!sheet) return null;
+        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 5, defval: null });
+        const header = raw[0];
+        const dataRows = raw.slice(1);
+
+        const seen = {};
+        const colNames = header.map(h => {
+            if (h === null || h === undefined || h.toString().trim() === '') return null;
+            let key = h.toString().trim();
+            seen[key] = (seen[key] || 0) + 1;
+            if (seen[key] > 1) key = `${key} (${seen[key]})`;
+            return key;
+        });
+
+        const identityCols = ['Nº', 'T.DOC', 'DOCUMENTO', 'APELLIDOS Y NOMBRES'];
+        const discountCols = colNames.filter(name => name && !identityCols.includes(name) && name !== 'TOTAL DESCUENTOS');
+
+        const rows = [];
+        dataRows.forEach(arr => {
+            const nombre = arr[3];
+            if (!nombre || nombre.toString().trim() === '') return; // salta fila TOTAL / vacías
+            const row = {};
+            colNames.forEach((name, idx) => { if (name) row[name] = arr[idx]; });
+            rows.push(row);
+        });
+
+        // Título superior de la hoja original (filas 2 y 3, ej. "DETALLE DE PLANILLA
+        // MENSUAL" / "TODOS LOS TIPOS DE PERSONAL - JUNIO 2026"), para replicarlo al exportar.
+        const titleLine1 = (sheet['A2'] && sheet['A2'].v) ? sheet['A2'].v.toString() : 'DETALLE DE PLANILLA MENSUAL';
+        const titleLine2 = (sheet['A3'] && sheet['A3'].v) ? sheet['A3'].v.toString() : '';
+
+        return { identityCols, discountCols, rows, titleLine1, titleLine2 };
+    }
+
+    // ------------------------------------------------------------------
+    // EXPORTACIÓN CON ESTILO DE LA PESTAÑA DESCUENTOS (ExcelJS)
+    // Replica el look de la hoja DESCUENTOS original: encabezado en negrita
+    // con relleno naranja claro, bordes finos, fuente Calibri 8pt y formato
+    // de número con separador de miles (rojo para negativos).
+    // ------------------------------------------------------------------
+    const HEADER_FILL = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFDE9D9' } };
+    const THIN_BORDER = { style: 'thin', color: { argb: 'FFBFBFBF' } };
+    const ALL_BORDERS = { top: THIN_BORDER, bottom: THIN_BORDER, left: THIN_BORDER, right: THIN_BORDER };
+    const NUM_FMT = '#,##0.00_);[Red](#,##0.00)';
+
+    async function exportDescuentosStyled(state, filename) {
+        const wb = new ExcelJS.Workbook();
+        const ws = wb.addWorksheet('DESCUENTOS', { views: [{ state: 'frozen', ySplit: 4 }] });
+
+        const headers = ['DOCUMENTO', 'APELLIDOS Y NOMBRES', ...state.visibleCols, 'TOTAL'];
+        const IDENTITY_COUNT = 2; // DOCUMENTO, APELLIDOS Y NOMBRES
+        ws.columns = headers.map(h => ({
+            width: h === 'APELLIDOS Y NOMBRES' ? 34 : (h === 'DOCUMENTO' ? 13 : Math.max(12, Math.min(h.length + 4, 22))),
+        }));
+        const lastColLetter = ws.getColumn(headers.length).letter;
+
+        // Fila 1: título superior (ej. "DETALLE DE PLANILLA MENSUAL")
+        ws.addRow([state.titleLine1 || 'DETALLE DE PLANILLA MENSUAL']);
+        ws.mergeCells(`A1:${lastColLetter}1`);
+        ws.getCell('A1').font = { name: 'Calibri', size: 11, bold: true };
+        ws.getCell('A1').alignment = { horizontal: 'center', vertical: 'middle' };
+        ws.getRow(1).height = 20;
+
+        // Fila 2: subtítulo (ej. "TODOS LOS TIPOS DE PERSONAL - JUNIO 2026")
+        ws.addRow([state.titleLine2 || '']);
+        ws.mergeCells(`A2:${lastColLetter}2`);
+        ws.getCell('A2').font = { name: 'Calibri', size: 9, bold: true };
+        ws.getCell('A2').alignment = { horizontal: 'center', vertical: 'middle' };
+
+        // Fila 3: "RESUMEN TOTAL DE PLANILLLAS" (bloque identidad) + "DESCUENTOS DEL TRABAJADOR" (bloque de columnas)
+        ws.addRow(['RESUMEN TOTAL DE PLANILLLAS']);
+        ws.mergeCells(`A3:${ws.getColumn(IDENTITY_COUNT).letter}3`);
+        ws.getCell('A3').font = { name: 'Calibri', size: 8, bold: true };
+        if (headers.length > IDENTITY_COUNT) {
+            const startLetter = ws.getColumn(IDENTITY_COUNT + 1).letter;
+            ws.mergeCells(`${startLetter}3:${lastColLetter}3`);
+            const labelCell = ws.getCell(`${startLetter}3`);
+            labelCell.value = 'DESCUENTOS DEL TRABAJADOR';
+            labelCell.font = { name: 'Calibri', size: 9, bold: true };
+            labelCell.fill = HEADER_FILL;
+            labelCell.border = ALL_BORDERS;
+            labelCell.alignment = { horizontal: 'center', vertical: 'middle' };
+        }
+
+        // Fila 4: encabezados de columna
+        const headerRow = ws.addRow(headers);
+        headerRow.eachCell(cell => {
+            cell.font = { name: 'Calibri', size: 9, bold: true };
+            cell.fill = HEADER_FILL;
+            cell.border = ALL_BORDERS;
+            cell.alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
+        });
+        headerRow.height = 28;
+
+        state.visibleRows.forEach(x => {
+            const rowVals = [x.r['DOCUMENTO'] ?? '', x.r['APELLIDOS Y NOMBRES'] ?? ''];
+            state.visibleCols.forEach(c => rowVals.push(parseFloat(x.r[c]) || 0));
+            rowVals.push(Math.round(x.total * 100) / 100);
+            const row = ws.addRow(rowVals);
+            row.eachCell((cell, colNum) => {
+                cell.font = { name: 'Calibri', size: 8 };
+                cell.border = ALL_BORDERS;
+                if (colNum > 2) { cell.numFmt = NUM_FMT; cell.alignment = { horizontal: 'right' }; }
+            });
+        });
+
+        const totalsVals = ['', 'TOTALES'];
+        state.visibleCols.forEach(c => totalsVals.push(Math.round(state.colTotals[c] * 100) / 100));
+        totalsVals.push(Math.round(state.grandTotal * 100) / 100);
+        const totalsRow = ws.addRow(totalsVals);
+        totalsRow.eachCell((cell, colNum) => {
+            cell.font = { name: 'Calibri', size: 8.5, bold: true };
+            cell.fill = HEADER_FILL;
+            cell.border = ALL_BORDERS;
+            if (colNum > 2) { cell.numFmt = NUM_FMT; cell.alignment = { horizontal: 'right' }; }
+        });
+
+        const buffer = await wb.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = filename;
+        link.style.visibility = 'hidden';
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(link.href);
     }
 
     // ------------------------------------------------------------------
