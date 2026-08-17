@@ -2251,6 +2251,10 @@
             const doc = new jsPDF('landscape');
             const pageWidth = doc.internal.pageSize.width;
             const generado = new Date().toLocaleString('es-PE');
+            const infoFiltros = obtenerInfoFiltrosExport();
+            const inventariadoresUnicos = [...new Set(datosFiltradosParaExportar.map(e => e['Inventariador']).filter(Boolean))];
+            const inventariadorTxt = inventariadoresUnicos.length === 0 ? '-' : inventariadoresUnicos.length === 1 ? inventariadoresUnicos[0] : `Varios (${inventariadoresUnicos.length})`;
+            const fmtFecha = (v) => v ? String(v).replace('T', ' ').split('.')[0] : '-';
 
             function dibujarEncabezado() {
                 doc.setFont("helvetica", "normal");
@@ -2268,6 +2272,12 @@
                 doc.text("RUC: 20413770204", 8, 19.5);
                 doc.setTextColor(15, 23, 42);
 
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.setTextColor(71, 85, 105);
+                doc.text(`Grupo: ${infoFiltros.grupo}    Inventariador: ${inventariadorTxt}    Filtro: ${infoFiltros.filtro}    Fecha: ${infoFiltros.fecha}`, pageWidth / 2, 20.5, { align: "center" });
+                doc.setTextColor(15, 23, 42);
+
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(14);
                 doc.text("TOMA DE INVENTARIO - DESPERDICIOS", pageWidth / 2, 15, {
@@ -2276,13 +2286,11 @@
 
                 doc.setDrawColor(203, 213, 225);
                 doc.setLineWidth(0.3);
-                doc.line(8, 22, pageWidth - 8, 22);
+                doc.line(8, 24, pageWidth - 8, 24);
             }
 
             const head = [
                 [
-                    { content: 'Inventariador' },
-                    { content: 'Grupo' },
                     { content: '#' },
                     { content: 'Código' },
                     { content: 'Descripción' },
@@ -2303,8 +2311,6 @@
             ];
 
             const bodyFilas = datosFiltradosParaExportar.map(e => [
-                e['Inventariador'] || '-',
-                e['Grupo de Trabajo'] || '-',
                 e['Nro'] || '-',
                 e['Código de Item'] || '',
                 e['Descripción'] || '',
@@ -2320,13 +2326,13 @@
                 e.Registro ? parseFloat(e['Peso Neto'] || e['Peso Neto Inv'] || 0).toFixed(3) : '-',
                 e.Registro ? (parseFloat(e['Diferencia'] || 0) > 0 ? '+' : '') + parseFloat(e['Diferencia'] || 0).toFixed(3) : '-',
                 e['Ubicación'] || '-',
-                e['Registro'] || '-'
+                fmtFecha(e['Registro'])
             ]);
 
             doc.autoTable({
-                startY: 26,
+                startY: 30,
                 margin: {
-                    top: 26
+                    top: 30
                 },
                 head: head,
                 body: bodyFilas,

@@ -1774,6 +1774,10 @@
             const doc = new jsPDF('landscape');
             const pageWidth = doc.internal.pageSize.width;
             const generado = new Date().toLocaleString('es-PE');
+            const infoFiltros = obtenerInfoFiltrosExport();
+            const inventariadoresUnicos = [...new Set(datosFiltradosParaExportar.map(e => e['Inventariador']).filter(Boolean))];
+            const inventariadorTxt = inventariadoresUnicos.length === 0 ? '-' : inventariadoresUnicos.length === 1 ? inventariadoresUnicos[0] : `Varios (${inventariadoresUnicos.length})`;
+            const fmtFecha = (v) => v ? String(v).replace('T', ' ').split('.')[0] : '-';
 
             // Encabezado que se repite en cada página del PDF (igual que el formato de referencia):
             // fecha/hora de generación + roles a firmar a la derecha, luego empresa, título y filtros aplicados.
@@ -1797,15 +1801,19 @@
                 doc.setFontSize(14);
                 doc.text("TOMA DE INVENTARIO 2025", pageWidth / 2, 15, { align: "center" });
 
+                doc.setFont("helvetica", "normal");
+                doc.setFontSize(8);
+                doc.setTextColor(71, 85, 105);
+                doc.text(`Grupo: ${infoFiltros.grupo}    Inventariador: ${inventariadorTxt}    Filtro: ${infoFiltros.filtro}    Fecha: ${infoFiltros.fecha}`, pageWidth / 2, 20.5, { align: "center" });
+                doc.setTextColor(15, 23, 42);
+
                 doc.setDrawColor(203, 213, 225);
                 doc.setLineWidth(0.3);
-                doc.line(8, 22, pageWidth - 8, 22);
+                doc.line(8, 24, pageWidth - 8, 24);
             }
 
             const head = [
                 [
-                    { content: 'Inventariador', rowSpan: 2 },
-                    { content: 'Grupo de Trabajo', rowSpan: 2 },
                     { content: '#', rowSpan: 2 },
                     { content: 'Grupo de Artículos', rowSpan: 2 },
                     { content: 'Código de Item', rowSpan: 2 },
@@ -1825,10 +1833,14 @@
             ];
 
             doc.autoTable({
-                startY: 26,
-                margin: { top: 26 },
+                startY: 30,
+                margin: { top: 30 },
                 head: head,
-                body: armarFilasExport(true),
+                body: armarFilasExport(true).map(row => {
+                    const r = row.slice(2); // quita Inventariador y Grupo de Trabajo (ya están en el encabezado)
+                    r[r.length - 1] = fmtFecha(r[r.length - 1]); // Registro
+                    return r;
+                }),
                 theme: 'striped',
                 styles: {
                     fontSize: 5.8,
@@ -1849,19 +1861,19 @@
                 },
                 alternateRowStyles: { fillColor: [248, 250, 252] },
                 columnStyles: {
-                    2: { halign: 'center', cellWidth: 8 },   // #
-                    5: { cellWidth: 32 },                     // Descripción
-                    6: { halign: 'center' },                  // UM
-                    7: { halign: 'center' },                  // Alm
-                    8: { halign: 'center' },                  // Sub Alm
-                    9: { halign: 'right' },                   // Reserva SAP
-                    10: { halign: 'right' },                  // Sin Reserva SAP
-                    11: { halign: 'right', fontStyle: 'bold' },// Stock SAP
-                    13: { halign: 'right' },                  // Reserva Conteo
-                    14: { halign: 'right' },                  // Sin Reserva Conteo
-                    15: { cellWidth: 18 },                     // Observaciones
-                    16: { halign: 'right', fontStyle: 'bold' },// Total Inventario
-                    17: { halign: 'right', fontStyle: 'bold' } // Diferencia
+                    0: { halign: 'center', cellWidth: 8 },   // #
+                    3: { cellWidth: 32 },                     // Descripción
+                    4: { halign: 'center' },                  // UM
+                    5: { halign: 'center' },                  // Alm
+                    6: { halign: 'center' },                  // Sub Alm
+                    7: { halign: 'right' },                   // Reserva SAP
+                    8: { halign: 'right' },                   // Sin Reserva SAP
+                    9: { halign: 'right', fontStyle: 'bold' },// Stock SAP
+                    11: { halign: 'right' },                  // Reserva Conteo
+                    12: { halign: 'right' },                  // Sin Reserva Conteo
+                    13: { cellWidth: 18 },                     // Observaciones
+                    14: { halign: 'right', fontStyle: 'bold' },// Total Inventario
+                    15: { halign: 'right', fontStyle: 'bold' } // Diferencia
                 },
                 didDrawPage: dibujarEncabezado
             });
