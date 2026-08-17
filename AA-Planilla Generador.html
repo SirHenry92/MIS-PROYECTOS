@@ -168,23 +168,29 @@
             width: 100%; box-sizing: border-box; font-size: 11px; padding: 5px 8px; margin-top: 6px;
             border: 1px solid var(--border); border-radius: 6px; font-weight: 400; text-transform: none;
             letter-spacing: normal; background: var(--surface); color: var(--text);
+            display: none;
         }
+        .tab-content.filters-on .col-filter { display: block; }
         .col-filter:focus { outline: none; border-color: var(--primary); box-shadow: 0 0 0 2px var(--primary-light); }
         .col-filter::placeholder { color: #94A3B8; }
-        th .th-label { display: block; margin-bottom: 2px; }
+        th .th-label { display: block; }
+        .btn-toggle-filters.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary-hover); }
 
-        /* SELECTOR DE COLUMNAS (DESCUENTOS) */
-        .col-picker { display: flex; flex-wrap: wrap; gap: 6px; padding: 12px 16px; border-bottom: 1px solid var(--border); background: var(--surface); }
-        .col-chip {
-            display: inline-flex; align-items: center; gap: 6px; padding: 5px 11px; border-radius: 999px;
-            border: 1.5px solid var(--border); background: var(--surface-alt); color: var(--text-muted);
-            font-size: 11.5px; font-weight: 600; cursor: pointer; user-select: none; transition: all .12s;
+        /* COLUMNA DE ACCIONES (insertar / eliminar fila) */
+        .col-actions { width: 54px; text-align: center; padding: 4px; white-space: nowrap; }
+        .row-insert, .row-delete {
+            border: none; background: transparent; color: var(--text-muted); cursor: pointer;
+            font-size: 12px; line-height: 1; padding: 4px 6px; border-radius: 6px; opacity: 0; transition: opacity .1s, background .1s, color .1s;
         }
-        .col-chip:hover { border-color: var(--border-strong); }
-        .col-chip.active { background: var(--primary-light); border-color: var(--primary); color: var(--primary-hover); }
-        .col-chip input { display: none; }
-        .col-picker-actions { display: flex; gap: 6px; align-items: center; margin-left: auto; }
-        .col-picker-hint { font-size: 11px; color: var(--text-muted); padding: 0 16px 10px; }
+        tbody tr:hover .row-insert, tbody tr:hover .row-delete { opacity: 1; }
+        .row-insert:hover { background: var(--success-light); color: var(--success); }
+        .row-delete:hover { background: var(--danger-light); color: var(--danger); }
+        th.col-actions .row-insert-top { opacity: 1; color: var(--primary); font-weight: 700; }
+        th.col-actions .row-insert-top:hover { background: var(--primary-light); }
+
+        /* CASILLA DE COLUMNA EMBEBIDA EN EL PROPIO TH (DESCUENTOS) — sin fila/franja aparte */
+        th .col-check-th { display: flex; align-items: center; justify-content: flex-end; gap: 5px; cursor: pointer; user-select: none; }
+        th .col-check-th input { width: 12px; height: 12px; accent-color: var(--primary); cursor: pointer; margin: 0; flex-shrink: 0; }
 
         /* MODAL WIDGET TXT */
         #txtModal {
@@ -304,25 +310,34 @@
                     content.className = 'tab-content' + (isFirstTab ? ' active' : '');
                     content.id = 'tab-' + title;
 
-                    // Thead con correlativo
+                    // Thead con correlativo (+ columna de acciones al final, sin afectar
+                    // los índices que usan el diagnóstico y el exportador)
                     let theadHtml = "<tr><th class='col-index'>#</th>";
                     COLS.forEach((col, idx) => {
                         theadHtml += `<th><span class="th-label">${col}</span><input type="text" class="col-filter" data-col="${idx+1}" placeholder="Filtrar..."></th>`;
                     });
-                    theadHtml += "</tr>";
+                    theadHtml += `<th class='col-actions'><button class="row-insert row-insert-top" title="Insertar fila al inicio">+</button></th></tr>`;
 
-                    let tbodyHtml = "";
-                    data.forEach((row, rIndex) => {
-                        tbodyHtml += "<tr>";
-                        tbodyHtml += `<td class="col-index">${rIndex + 1}</td>`;
+                    const buildRowHtml = (rIndex, row) => {
+                        let html = "<tr>";
+                        html += `<td class="col-index">${rIndex}</td>`;
                         COLS.forEach(col => {
-                            let val = row[col] !== null && row[col] !== undefined ? row[col] : "";
+                            let val = row && row[col] !== null && row[col] !== undefined ? row[col] : "";
                             if (col === "CTA" && val !== "") val = parseInt(val) || val;
                             else if (typeof val === 'number') val = val.toFixed(2);
-                            tbodyHtml += `<td contenteditable="true" data-colname="${col}">${val}</td>`;
+                            html += `<td contenteditable="true" data-colname="${col}">${val}</td>`;
                         });
-                        tbodyHtml += "</tr>";
-                    });
+                        html += `<td class="col-actions">
+                            <button class="row-insert" title="Insertar fila debajo">+</button>
+                            <button class="row-delete" title="Eliminar fila">✕</button>
+                        </td>`;
+                        html += "</tr>";
+                        return html;
+                    };
+                    const blankRowHtml = () => buildRowHtml(0, null);
+
+                    let tbodyHtml = "";
+                    data.forEach((row, rIndex) => { tbodyHtml += buildRowHtml(rIndex + 1, row); });
 
                     content.innerHTML = `
                         <div class="totals-bar">
@@ -330,6 +345,8 @@
                                 <div class="stat-chip">DEBE <span class="tot-debe stat-value">0.00</span></div>
                                 <div class="stat-chip">HABER <span class="tot-haber stat-value">0.00</span></div>
                                 <div class="stat-chip stat-ok"><span class="tot-dif-label">Dif</span> <span class="tot-dif stat-value">0.00</span></div>
+                                <button class="btn btn-outline btn-sm btn-toggle-filters">Filtros</button>
+                                <button class="btn btn-outline btn-sm btn-add-row">+ Agregar fila</button>
                                 <button class="btn btn-info btn-sm btn-diagnostic">Diagnóstico de Cuadres</button>
                             </div>
                             <button class="btn btn-success btn-export-section">Generar SAP (${title})</button>
@@ -342,6 +359,50 @@
                         </div>
                     `;
                     tabsBody.appendChild(content);
+
+                    // Renumera la columna "#" tras agregar/eliminar filas manualmente
+                    const renumberRows = () => {
+                        const rows = content.querySelector('tbody').children;
+                        for (let i = 0; i < rows.length; i++) rows[i].children[0].textContent = i + 1;
+                    };
+
+                    // Agregar fila en blanco (editable) al final, para completar a mano antes de "Generar SAP"
+                    content.querySelector('.btn-add-row').addEventListener('click', () => {
+                        const tbody = content.querySelector('tbody');
+                        tbody.insertAdjacentHTML('beforeend', blankRowHtml());
+                        renumberRows();
+                        updateTotalsFast();
+                        tbody.lastElementChild.children[1].focus();
+                    });
+
+                    // Insertar fila al inicio (botón "+" en el encabezado)
+                    content.querySelector('.row-insert-top').addEventListener('click', () => {
+                        const tbody = content.querySelector('tbody');
+                        tbody.insertAdjacentHTML('afterbegin', blankRowHtml());
+                        renumberRows();
+                        updateTotalsFast();
+                        tbody.firstElementChild.children[1].focus();
+                    });
+
+                    // Insertar fila debajo de otra (medio de la tabla) / Eliminar cualquier fila
+                    // (delegado: funciona igual para filas originales y filas agregadas después)
+                    content.querySelector('tbody').addEventListener('click', (e) => {
+                        const insertBtn = e.target.closest('.row-insert:not(.row-insert-top)');
+                        if (insertBtn) {
+                            const tr = insertBtn.closest('tr');
+                            tr.insertAdjacentHTML('afterend', blankRowHtml());
+                            renumberRows();
+                            updateTotalsFast();
+                            tr.nextElementSibling.children[1].focus();
+                            return;
+                        }
+                        const delBtn = e.target.closest('.row-delete');
+                        if (delBtn) {
+                            delBtn.closest('tr').remove();
+                            renumberRows();
+                            updateTotalsFast();
+                        }
+                    });
 
                     // Actualización Rápida de Totales
                     const updateTotalsFast = () => {
@@ -365,6 +426,12 @@
                     };
                     updateTotalsFast();
                     content.querySelector('tbody').addEventListener('input', updateTotalsFast);
+
+                    // Mostrar/ocultar filtros (ocultos por defecto para mantener la vista minimalista)
+                    content.querySelector('.btn-toggle-filters').addEventListener('click', (e) => {
+                        content.classList.toggle('filters-on');
+                        e.currentTarget.classList.toggle('active');
+                    });
 
                     // Filtros dinámicos
                     const filters = content.querySelectorAll('.col-filter');
@@ -478,26 +545,25 @@
                     content.className = 'tab-content' + (isFirstTab ? ' active' : '');
                     content.id = 'tab-' + title;
 
-                    const chipsHtml = descData.discountCols.map(col =>
-                        `<label class="col-chip active"><input type="checkbox" value="${col}" checked>${col}</label>`
-                    ).join('');
+                    // Columnas con algún valor distinto de cero en todo el mes (las que están
+                    // en cero para todas las filas no tiene sentido ni mostrarlas ni marcarlas).
+                    const nonZeroCols = descData.discountCols.filter(c => {
+                        let sum = 0;
+                        descData.rows.forEach(r => sum += (parseFloat(r[c]) || 0));
+                        return Math.abs(sum) > 0.004;
+                    });
+                    let checkedCols = new Set(nonZeroCols);
 
                     content.innerHTML = `
-                        <div class="col-picker">
-                            ${chipsHtml}
-                            <div class="col-picker-actions">
-                                <button class="btn btn-outline btn-sm" id="btnDescSelAll">Todo</button>
-                                <button class="btn btn-outline btn-sm" id="btnDescSelNone">Ninguno</button>
-                                <button class="btn btn-success btn-sm" id="btnDescExport">Exportar Excel</button>
-                            </div>
-                        </div>
-                        <div class="col-picker-hint">Elige las columnas de descuento a mantener. Las filas y columnas que queden en cero se ocultan automáticamente.</div>
                         <div class="totals-bar">
                             <div class="totals-info">
                                 <div class="stat-chip">Filas <span class="desc-row-count stat-value">0</span></div>
                                 <div class="stat-chip">Columnas <span class="desc-col-count stat-value">0</span></div>
                                 <div class="stat-chip stat-ok">Total General <span class="desc-total stat-value">0.00</span></div>
+                                <button class="btn btn-outline btn-sm" id="btnDescSelAll">Todo</button>
+                                <button class="btn btn-outline btn-sm" id="btnDescSelNone">Ninguno</button>
                             </div>
+                            <button class="btn btn-success btn-sm" id="btnDescExport">Exportar Excel</button>
                         </div>
                         <div class="table-responsive">
                             <table id="table-DESCUENTOS"></table>
@@ -506,25 +572,20 @@
                     tabsBody.appendChild(content);
 
                     const renderDescTable = () => {
-                        const checked = Array.from(content.querySelectorAll('.col-picker input[type=checkbox]:checked')).map(cb => cb.value);
-                        content.querySelectorAll('.col-chip').forEach(chip => {
-                            chip.classList.toggle('active', chip.querySelector('input').checked);
-                        });
+                        // Solo se muestran las columnas marcadas; desmarcar una casilla del
+                        // encabezado la retira de la tabla (usa "Todo" para volver a traerlas).
+                        let visibleCols = nonZeroCols.filter(c => checkedCols.has(c));
 
                         let visibleRows = descData.rows.map(r => {
                             let total = 0;
-                            checked.forEach(c => total += (parseFloat(r[c]) || 0));
+                            visibleCols.forEach(c => total += (parseFloat(r[c]) || 0));
                             return { r, total };
                         }).filter(x => Math.abs(x.total) > 0.004);
 
-                        let visibleCols = checked.filter(c => {
-                            let sum = 0;
-                            visibleRows.forEach(x => sum += (parseFloat(x.r[c]) || 0));
-                            return Math.abs(sum) > 0.004;
-                        });
-
                         let theadHtml = "<tr><th class='col-index'>#</th><th>DOCUMENTO</th><th>APELLIDOS Y NOMBRES</th>";
-                        visibleCols.forEach(c => theadHtml += `<th style="text-align:right">${c}</th>`);
+                        visibleCols.forEach(c => {
+                            theadHtml += `<th style="text-align:right"><label class="col-check-th"><span class="th-label">${c}</span><input type="checkbox" data-col="${c}" checked></label></th>`;
+                        });
                         theadHtml += `<th style="text-align:right">TOTAL</th></tr>`;
 
                         let colTotals = {}; visibleCols.forEach(c => colTotals[c] = 0);
@@ -556,15 +617,22 @@
                         content.querySelector('.desc-total').innerText = grandTotal.toFixed(2);
 
                         content._descState = { visibleRows, visibleCols, colTotals, grandTotal, titleLine1: descData.titleLine1, titleLine2: descData.titleLine2 };
+
+                        // Casillas embebidas en el propio encabezado: desmarcar quita esa columna.
+                        table.querySelectorAll('thead input[type=checkbox]').forEach(cb => {
+                            cb.addEventListener('change', () => {
+                                checkedCols.delete(cb.getAttribute('data-col'));
+                                renderDescTable();
+                            });
+                        });
                     };
 
-                    content.querySelectorAll('.col-picker input[type=checkbox]').forEach(cb => cb.addEventListener('change', renderDescTable));
                     content.querySelector('#btnDescSelAll').addEventListener('click', () => {
-                        content.querySelectorAll('.col-picker input[type=checkbox]').forEach(cb => cb.checked = true);
+                        checkedCols = new Set(nonZeroCols);
                         renderDescTable();
                     });
                     content.querySelector('#btnDescSelNone').addEventListener('click', () => {
-                        content.querySelectorAll('.col-picker input[type=checkbox]').forEach(cb => cb.checked = false);
+                        checkedCols = new Set();
                         renderDescTable();
                     });
                     content.querySelector('#btnDescExport').addEventListener('click', () => {
@@ -594,7 +662,10 @@
                 } else if (tieneFormatoOrigen) {
                     const categoriaMap = buildCategoriaMap(workbook);
                     if (workbook.Sheets['LIQUIDACIONES']) buildTab('LIQUIDACIONES', process_TB_liq(extractLIQFromSource(workbook, categoriaMap)));
-                    if (workbook.Sheets['PRACTICANTES']) buildTab('PRACTICANTES', process_TB_pra(extractPRAFromSource(workbook)));
+                    if (workbook.Sheets['PRACTICANTES']) {
+                        const pra = extractPRAFromSource(workbook);
+                        buildTab('PRACTICANTES', pra.detail ? process_TB_pra_detail(pra.rows) : process_TB_pra(pra.rows));
+                    }
                     if (workbook.Sheets['ASTO OK']) buildTab('PLANILLA', process_TB_pll(extractPLLFromSource(workbook)));
                     if (workbook.Sheets['DESCUENTOS']) buildDescuentosTab(extractDescuentosFromSource(workbook));
                 }
@@ -818,6 +889,55 @@
         return results;
     }
 
+    // Variante de process_TB_pra para el formato "detalle" de PRACTICANTES (una fila
+    // por trabajador en vez de por Centro de Costos). Agrupa TOTAL INGRESOS por Centro
+    // de Costos usando las mismas filas marcadoras "CENTRO DE COSTOS: ..." que LIQUIDACIONES;
+    // si la hoja no trae esas marcas, se agrupa todo en una sola línea sin dimensiones.
+    function process_TB_pra_detail(rows) {
+        let currentCC = null;
+        let ccTotals = new Map();
+        let sumAdelanto = 0, sumNeto = 0;
+
+        for (let r of rows) {
+            let numKey = Object.keys(r).find(k => k.trim().toUpperCase() === "Nº" || k.trim().toUpperCase() === "N°");
+            let numVal = numKey && r[numKey] !== null ? r[numKey].toString().trim().toUpperCase() : null;
+
+            if (numVal !== null && numVal.startsWith("CENTRO DE COSTOS")) {
+                let parts = numVal.split(":");
+                if (parts.length > 1) {
+                    let ccExtraido = parts[1].trim().substring(0, 5);
+                    currentCC = (ccExtraido === "40001") ? "40101" : ccExtraido;
+                } else {
+                    let match = numVal.match(/\d{5}/);
+                    if (match) currentCC = (match[0] === "40001") ? "40101" : match[0];
+                }
+                continue;
+            }
+
+            let nombreOriginal = r["APELLIDOS Y NOMBRES"];
+            let nomStr = nombreOriginal !== null && nombreOriginal !== undefined ? nombreOriginal.toString().trim().toUpperCase() : "";
+            if (numVal === null || numVal === "" || numVal === "Nº" || numVal === "N°" || nomStr === "" || nomStr.startsWith("TOTAL")) continue;
+
+            let totIngresos = safeNum(r["TOTAL INGRESOS"]);
+            sumAdelanto += safeNum(r["ADEL. QUIN."]);
+            sumNeto += safeNum(r["NETO A PAGAR"]);
+
+            if (totIngresos !== 0) {
+                let key = currentCC || "__SIN_CC__";
+                ccTotals.set(key, (ccTotals.get(key) || 0) + totIngresos);
+            }
+        }
+
+        let results = [];
+        for (let [cc, total] of ccTotals) {
+            let dims = cc === "__SIN_CC__" ? { nat: null, lin: null, proc: null } : assignDimsClass6(6211301, cc);
+            results.push({ "Cuenta Contable": "6211301", "CTA": 6211301, "DEBE": total, "HABER": 0, "Naturaleza de Costo/Gasto": dims.nat, "Línea de Producción Costo/Gasto": dims.lin, "Proceso/Area de Costo/Gasto": dims.proc, "APELLIDOS Y NOMBRES": cc === "__SIN_CC__" ? "TOTAL PRACTICANTES" : `CENTRO DE COSTOS: ${cc}`, "Concepto de Control": "TOTAL INGRESOS" });
+        }
+        if (sumAdelanto !== 0) results.push({ "Cuenta Contable": "1412101", "CTA": 1412101, "DEBE": 0, "HABER": sumAdelanto, "Naturaleza de Costo/Gasto": null, "Línea de Producción Costo/Gasto": null, "Proceso/Area de Costo/Gasto": null, "APELLIDOS Y NOMBRES": "TOTAL ADELANTOS QUINCENA", "Concepto de Control": "ADELANTO QUINCENA" });
+        if (sumNeto !== 0) results.push({ "Cuenta Contable": "4191101", "CTA": 4191101, "DEBE": 0, "HABER": sumNeto, "Naturaleza de Costo/Gasto": null, "Línea de Producción Costo/Gasto": null, "Proceso/Area de Costo/Gasto": null, "APELLIDOS Y NOMBRES": "TOTAL NETO A PAGAR", "Concepto de Control": "NETO A PAGAR" });
+        return results;
+    }
+
     function fnCta_PLL(cta, dni) {
         if (!cta) return null;
         let ctatxt = cta.toString().trim(), pref2 = ctatxt.substring(0, 2), pref4 = ctatxt.substring(0, 4);
@@ -892,17 +1012,22 @@
     // Mapea las hojas crudas (LIQUIDACIONES, PRACTICANTES, ASTO OK) a la
     // misma forma que ya consumen process_TB_liq / process_TB_pra / process_TB_pll.
     // ------------------------------------------------------------------
+    // Se indexa por DOCUMENTO (DNI, columna C de PREVIO, sin nombre de encabezado)
+    // en vez de CODIGO: la columna CODIGO no existe en todos los archivos mensuales
+    // (ausente en 01,03,04,05-2026), pero DOCUMENTO siempre está presente en LIQUIDACIONES.
     function buildCategoriaMap(workbook) {
         const sheet = workbook.Sheets['PREVIO'];
         if (!sheet) return {};
-        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null, range: 2 });
+        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 2, defval: null }); // fila 3 = encabezado
         const map = {};
-        rows.forEach(r => {
-            const codigo = r['CODIGO TRABAJ'];
-            const codCcto = r['COD_CCTO'];
-            if (codigo && codCcto) {
-                const prefix = codCcto.toString().trim().charAt(0).toUpperCase();
-                map[codigo.toString().trim()] = prefix === 'O' ? 'OBRERO' : 'EMPLEADO';
+        raw.slice(1).forEach(arr => {
+            const dni = arr[2];        // DNI del trabajador (columna sin nombre en el archivo origen)
+            const categoria = arr[36]; // Columna sin nombre con el valor literal OBRERO/EMPLEADO/EJECUTIVO
+            if (dni && categoria) {
+                const cat = categoria.toString().trim().toUpperCase();
+                if (cat === 'OBRERO' || cat === 'EMPLEADO' || cat === 'EJECUTIVO') {
+                    map[dni.toString().trim()] = cat === 'OBRERO' ? 'OBRERO' : 'EMPLEADO';
+                }
             }
         });
         return map;
@@ -916,25 +1041,44 @@
         const dataRows = raw.slice(1);
         return dataRows.map(arr => {
             const obj = {};
-            let dupSeen = false;
+            const seen = {};
             header.forEach((h, idx) => {
                 if (h === null) return;
                 let key = h.toString().trim();
-                if (key === 'PRESTAMO ESCOLAR') {
-                    if (dupSeen) key = 'PRESTAMO ESCOLAR2'; else dupSeen = true;
-                }
+                // Desambiguar CUALQUIER columna duplicada (no solo "PRESTAMO ESCOLAR": en
+                // algunos meses es "PRESTAMO BANCO COMERCIO" la que aparece dos veces) para
+                // no perder la primera ocurrencia al sobreescribirla con la segunda.
+                seen[key] = (seen[key] || 0) + 1;
+                if (seen[key] > 1) key = `${key}${seen[key]}`;
                 obj[key] = arr[idx] !== undefined ? arr[idx] : null;
             });
-            const codigo = obj['CODIGO'] ? obj['CODIGO'].toString().trim() : null;
-            obj['CATEGORIA'] = (codigo && categoriaMap[codigo]) ? categoriaMap[codigo] : 'EMPLEADO';
+            const documento = obj['DOCUMENTO'] ? obj['DOCUMENTO'].toString().trim() : null;
+            obj['CATEGORIA'] = (documento && categoriaMap[documento]) ? categoriaMap[documento] : 'EMPLEADO';
             return obj;
         });
     }
 
+    // La hoja PRACTICANTES tiene DOS formatos distintos según el mes:
+    //  - "agrupado" (04,05,06-2026): una fila por Centro de Costos con columna AGRUPAMIENTO.
+    //  - "detalle" (01,02,03-2026): una fila por trabajador, sin columna AGRUPAMIENTO,
+    //    con la misma estructura que LIQUIDACIONES (Nº, CODIGO, DOCUMENTO, APELLIDOS Y NOMBRES...).
+    // Se detecta el formato y se devuelve junto con las filas para que el llamador
+    // use process_TB_pra o process_TB_pra_detail según corresponda.
     function extractPRAFromSource(workbook) {
         const sheet = workbook.Sheets['PRACTICANTES'];
-        if (!sheet) return [];
-        return XLSX.utils.sheet_to_json(sheet, { range: 5, defval: null });
+        if (!sheet) return { rows: [], detail: false };
+        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 5, defval: null });
+        const header = raw[0] || [];
+        const isDetail = !header.some(h => h && h.toString().trim() === 'AGRUPAMIENTO');
+        if (!isDetail) {
+            return { rows: XLSX.utils.sheet_to_json(sheet, { range: 5, defval: null }), detail: false };
+        }
+        const rows = raw.slice(1).map(arr => {
+            const obj = {};
+            header.forEach((h, idx) => { if (h !== null) obj[h.toString().trim()] = arr[idx] !== undefined ? arr[idx] : null; });
+            return obj;
+        });
+        return { rows, detail: true };
     }
 
     function extractPLLFromSource(workbook) {
@@ -967,9 +1111,12 @@
         const identityCols = ['Nº', 'T.DOC', 'DOCUMENTO', 'APELLIDOS Y NOMBRES'];
         const discountCols = colNames.filter(name => name && !identityCols.includes(name) && name !== 'TOTAL DESCUENTOS');
 
+        // La posición de "APELLIDOS Y NOMBRES" varía según el mes (algunos archivos
+        // no tienen columna T.DOC), así que se ubica dinámicamente en vez de asumir arr[3].
+        const nombreIdx = colNames.indexOf('APELLIDOS Y NOMBRES');
         const rows = [];
         dataRows.forEach(arr => {
-            const nombre = arr[3];
+            const nombre = nombreIdx !== -1 ? arr[nombreIdx] : null;
             if (!nombre || nombre.toString().trim() === '') return; // salta fila TOTAL / vacías
             const row = {};
             colNames.forEach((name, idx) => { if (name) row[name] = arr[idx]; });
