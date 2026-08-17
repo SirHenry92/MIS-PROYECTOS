@@ -8,6 +8,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.2.0/crypto-js.min.js"></script>
     <style>
         :root {
             --primary: #4F46E5;
@@ -127,6 +128,10 @@
             <label>Archivo Base (.xlsx):</label>
             <input type="file" id="excelFile" accept=".xlsx, .xls">
         </div>
+        <div class="form-group">
+            <label>Contraseña (solo si el archivo está protegido):</label>
+            <input type="password" id="filePassword" placeholder="Dejar en blanco si no tiene contraseña">
+        </div>
         <button class="btn" id="btnProcess" style="width: 100%; padding: 10px; font-size: 14px;">Procesar Tablas</button>
     </div>
 </div>
@@ -183,12 +188,19 @@
     document.getElementById('btnProcess').addEventListener('click', () => {
         const file = document.getElementById('excelFile').files[0];
         if (!file) return alert('Por favor selecciona un archivo.');
+        const password = document.getElementById('filePassword').value;
 
         const reader = new FileReader();
         reader.onload = (e) => {
             try {
-                const workbook = XLSX.read(new Uint8Array(e.target.result), { type: 'array' });
-                
+                let dataBytes = new Uint8Array(e.target.result);
+                const esCFB = dataBytes[0] === 0xD0 && dataBytes[1] === 0xCF && dataBytes[2] === 0x11 && dataBytes[3] === 0xE0;
+                if (esCFB) {
+                    if (!password) { alert('Este archivo está protegido con contraseña. Ingresa la contraseña para continuar.'); return; }
+                    dataBytes = decryptAgileOfficeFile(dataBytes, password);
+                }
+                const workbook = XLSX.read(dataBytes, { type: 'array' });
+
                 const tabsHeader = document.getElementById('tabsHeader');
                 const tabsBody = document.getElementById('tabsBody');
                 tabsHeader.innerHTML = ''; tabsBody.innerHTML = '';
@@ -344,13 +356,23 @@
                 };
 
                 const readSheet = (sn) => XLSX.utils.sheet_to_json(workbook.Sheets[sn], { defval: null });
-                if (workbook.Sheets['LIQ']) buildTab('LIQUIDACIONES', process_TB_liq(readSheet('LIQ')));
-                if (workbook.Sheets['PRA']) buildTab('PRACTICANTES', process_TB_pra(readSheet('PRA')));
-                if (workbook.Sheets['PLL']) buildTab('PLANILLA', process_TB_pll(readSheet('PLL')));
+                const tieneFormatoImportador = workbook.Sheets['LIQ'] || workbook.Sheets['PRA'] || workbook.Sheets['PLL'];
+                const tieneFormatoOrigen = workbook.Sheets['LIQUIDACIONES'] || workbook.Sheets['PRACTICANTES'] || workbook.Sheets['ASTO OK'];
+
+                if (tieneFormatoImportador) {
+                    if (workbook.Sheets['LIQ']) buildTab('LIQUIDACIONES', process_TB_liq(readSheet('LIQ')));
+                    if (workbook.Sheets['PRA']) buildTab('PRACTICANTES', process_TB_pra(readSheet('PRA')));
+                    if (workbook.Sheets['PLL']) buildTab('PLANILLA', process_TB_pll(readSheet('PLL')));
+                } else if (tieneFormatoOrigen) {
+                    const categoriaMap = buildCategoriaMap(workbook);
+                    if (workbook.Sheets['LIQUIDACIONES']) buildTab('LIQUIDACIONES', process_TB_liq(extractLIQFromSource(workbook, categoriaMap)));
+                    if (workbook.Sheets['PRACTICANTES']) buildTab('PRACTICANTES', process_TB_pra(extractPRAFromSource(workbook)));
+                    if (workbook.Sheets['ASTO OK']) buildTab('PLANILLA', process_TB_pll(extractPLLFromSource(workbook)));
+                }
 
                 if (validSheets > 0) {
                     uploadScreen.style.display = 'none'; dashboardScreen.style.display = 'flex';
-                } else alert('NO se encontraron las hojas LIQ, PRA o PLL en el archivo.');
+                } else alert('NO se encontraron las hojas esperadas. Sube "prueba importador.xlsx" (hojas LIQ, PRA, PLL) o el archivo origen (hojas LIQUIDACIONES, PRACTICANTES, ASTO OK).');
 
             } catch (error) { alert('Error: ' + error.message); }
         };
@@ -634,6 +656,184 @@
             }
             return { "Cuenta Contable": r["Cuenta Contable"], "CTA": r.CTA, "DEBE": r.DEBE || 0, "HABER": r.HABER || 0, "Naturaleza de Costo/Gasto": nat, "Línea de Producción Costo/Gasto": lin, "Proceso/Area de Costo/Gasto": proc, "APELLIDOS Y NOMBRES": r.A5, "Concepto de Control": null };
         });
+    }
+
+    // ------------------------------------------------------------------
+    // LECTURA DIRECTA DEL ARCHIVO ORIGEN (sin tablas LIQ/PRA/PLL previas)
+    // Mapea las hojas crudas (LIQUIDACIONES, PRACTICANTES, ASTO OK) a la
+    // misma forma que ya consumen process_TB_liq / process_TB_pra / process_TB_pll.
+    // ------------------------------------------------------------------
+    function buildCategoriaMap(workbook) {
+        const sheet = workbook.Sheets['PREVIO'];
+        if (!sheet) return {};
+        const rows = XLSX.utils.sheet_to_json(sheet, { defval: null, range: 2 });
+        const map = {};
+        rows.forEach(r => {
+            const codigo = r['CODIGO TRABAJ'];
+            const codCcto = r['COD_CCTO'];
+            if (codigo && codCcto) {
+                const prefix = codCcto.toString().trim().charAt(0).toUpperCase();
+                map[codigo.toString().trim()] = prefix === 'O' ? 'OBRERO' : 'EMPLEADO';
+            }
+        });
+        return map;
+    }
+
+    function extractLIQFromSource(workbook, categoriaMap) {
+        const sheet = workbook.Sheets['LIQUIDACIONES'];
+        if (!sheet) return [];
+        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, range: 5, defval: null });
+        const header = raw[0];
+        const dataRows = raw.slice(1);
+        return dataRows.map(arr => {
+            const obj = {};
+            let dupSeen = false;
+            header.forEach((h, idx) => {
+                if (h === null) return;
+                let key = h.toString().trim();
+                if (key === 'PRESTAMO ESCOLAR') {
+                    if (dupSeen) key = 'PRESTAMO ESCOLAR2'; else dupSeen = true;
+                }
+                obj[key] = arr[idx] !== undefined ? arr[idx] : null;
+            });
+            const codigo = obj['CODIGO'] ? obj['CODIGO'].toString().trim() : null;
+            obj['CATEGORIA'] = (codigo && categoriaMap[codigo]) ? categoriaMap[codigo] : 'EMPLEADO';
+            return obj;
+        });
+    }
+
+    function extractPRAFromSource(workbook) {
+        const sheet = workbook.Sheets['PRACTICANTES'];
+        if (!sheet) return [];
+        return XLSX.utils.sheet_to_json(sheet, { range: 5, defval: null });
+    }
+
+    function extractPLLFromSource(workbook) {
+        const sheet = workbook.Sheets['ASTO OK'];
+        if (!sheet) return [];
+        const raw = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
+        return raw.slice(2)
+            .filter(arr => arr[1] !== null && arr[1] !== undefined && arr[1] !== '')
+            .map(arr => ({ CTA: arr[1], A3: arr[4], A4: arr[7], A5: arr[8], DEBE: arr[5], HABER: arr[6], Columna8: arr[13] }));
+    }
+
+    // ------------------------------------------------------------------
+    // DESCIFRADO EN NAVEGADOR DE ARCHIVOS .XLSX PROTEGIDOS CON CONTRASEÑA
+    // (Cifrado "Agile" ECMA-376 / MS-OFFCRYPTO, usado por Excel moderno)
+    // ------------------------------------------------------------------
+    function toUint8(x) { return x instanceof Uint8Array ? x : new Uint8Array(x); }
+    function b64ToUint8(str) {
+        const bin = atob(str);
+        const out = new Uint8Array(bin.length);
+        for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
+        return out;
+    }
+    function concatUint8(...arrs) {
+        const len = arrs.reduce((a, b) => a + b.length, 0);
+        const out = new Uint8Array(len);
+        let off = 0;
+        for (const a of arrs) { out.set(a, off); off += a.length; }
+        return out;
+    }
+    function le32(n) { return new Uint8Array([n & 0xff, (n >>> 8) & 0xff, (n >>> 16) & 0xff, (n >>> 24) & 0xff]); }
+    function waFromUint8(u8) { return CryptoJS.lib.WordArray.create(u8); }
+    function uint8FromWA(wordArray) {
+        const { words, sigBytes } = wordArray;
+        const u8 = new Uint8Array(sigBytes);
+        for (let i = 0; i < sigBytes; i++) u8[i] = (words[i >>> 2] >>> (24 - (i % 4) * 8)) & 0xff;
+        return u8;
+    }
+    function sha512(buf) { return uint8FromWA(CryptoJS.SHA512(waFromUint8(buf))); }
+    function aesCbcDecryptNoPad(keyBytes, ivBytes, cipherBytes) {
+        const cipherParams = CryptoJS.lib.CipherParams.create({ ciphertext: waFromUint8(cipherBytes) });
+        const decrypted = CryptoJS.AES.decrypt(cipherParams, waFromUint8(keyBytes), { iv: waFromUint8(ivBytes), mode: CryptoJS.mode.CBC, padding: CryptoJS.pad.NoPadding });
+        return uint8FromWA(decrypted);
+    }
+    function passwordToUtf16LE(pw) {
+        const bytes = new Uint8Array(pw.length * 2);
+        for (let i = 0; i < pw.length; i++) {
+            const code = pw.charCodeAt(i);
+            bytes[i * 2] = code & 0xff;
+            bytes[i * 2 + 1] = (code >> 8) & 0xff;
+        }
+        return bytes;
+    }
+    function deriveKey(password, salt, spinCount, blockKey, keyBytesLen) {
+        let h = sha512(concatUint8(salt, passwordToUtf16LE(password)));
+        for (let i = 0; i < spinCount; i++) h = sha512(concatUint8(le32(i), h));
+        h = sha512(concatUint8(h, blockKey));
+        if (h.length < keyBytesLen) {
+            const padded = new Uint8Array(keyBytesLen);
+            padded.set(h);
+            for (let i = h.length; i < keyBytesLen; i++) padded[i] = 0x36;
+            h = padded;
+        } else {
+            h = h.slice(0, keyBytesLen);
+        }
+        return h;
+    }
+
+    const BLOCK_KEY_VERIFIER_INPUT = new Uint8Array([0xfe, 0xa7, 0xd2, 0x76, 0x3b, 0x4b, 0x9e, 0x79]);
+    const BLOCK_KEY_VERIFIER_VALUE = new Uint8Array([0xd7, 0xaa, 0x0f, 0x6d, 0x30, 0x61, 0x34, 0x4e]);
+    const BLOCK_KEY_KEY_VALUE = new Uint8Array([0x14, 0x6e, 0x0b, 0xe7, 0xab, 0xac, 0xd0, 0xd6]);
+
+    function decryptAgileOfficeFile(fileBytes, password) {
+        const cfb = XLSX.CFB.read(fileBytes, { type: 'array' });
+        const encInfoEntry = XLSX.CFB.find(cfb, 'EncryptionInfo');
+        const encPkgEntry = XLSX.CFB.find(cfb, 'EncryptedPackage');
+        if (!encInfoEntry || !encPkgEntry) throw new Error('El archivo no tiene el formato de cifrado esperado (EncryptionInfo/EncryptedPackage no encontrados).');
+
+        const encInfoBytes = toUint8(encInfoEntry.content);
+        const xmlStr = new TextDecoder('utf-8').decode(encInfoBytes.slice(8));
+        const doc = new DOMParser().parseFromString(xmlStr, 'application/xml');
+        const keyDataEl = doc.getElementsByTagName('keyData')[0];
+        const keyEncEl = doc.getElementsByTagName('p:encryptedKey')[0] || doc.getElementsByTagName('encryptedKey')[0];
+        if (!keyDataEl || !keyEncEl) throw new Error('Este archivo usa un tipo de cifrado no soportado (se esperaba cifrado "Agile").');
+
+        const keyDataSalt = b64ToUint8(keyDataEl.getAttribute('saltValue'));
+        const keyDataBlockSize = parseInt(keyDataEl.getAttribute('blockSize'));
+
+        const spinCount = parseInt(keyEncEl.getAttribute('spinCount'));
+        const pwSalt = b64ToUint8(keyEncEl.getAttribute('saltValue'));
+        const encVerifierHashInput = b64ToUint8(keyEncEl.getAttribute('encryptedVerifierHashInput'));
+        const encVerifierHashValue = b64ToUint8(keyEncEl.getAttribute('encryptedVerifierHashValue'));
+        const encKeyValue = b64ToUint8(keyEncEl.getAttribute('encryptedKeyValue'));
+        const keyBytesLen = parseInt(keyEncEl.getAttribute('keyBits')) / 8;
+
+        const verifierInputKey = deriveKey(password, pwSalt, spinCount, BLOCK_KEY_VERIFIER_INPUT, keyBytesLen);
+        const verifierValueKey = deriveKey(password, pwSalt, spinCount, BLOCK_KEY_VERIFIER_VALUE, keyBytesLen);
+        const keyValueKey = deriveKey(password, pwSalt, spinCount, BLOCK_KEY_KEY_VALUE, keyBytesLen);
+
+        const verifierHashInput = aesCbcDecryptNoPad(verifierInputKey, pwSalt, encVerifierHashInput);
+        const verifierHashInputHash = sha512(verifierHashInput);
+        const verifierHashValue = aesCbcDecryptNoPad(verifierValueKey, pwSalt, encVerifierHashValue);
+
+        let match = verifierHashValue.length <= verifierHashInputHash.length;
+        if (match) {
+            for (let i = 0; i < verifierHashValue.length; i++) {
+                if (verifierHashInputHash[i] !== verifierHashValue[i]) { match = false; break; }
+            }
+        }
+        if (!match) throw new Error('Contraseña incorrecta.');
+
+        const secretKey = aesCbcDecryptNoPad(keyValueKey, pwSalt, encKeyValue);
+
+        const pkgBytes = toUint8(encPkgEntry.content);
+        const view = new DataView(pkgBytes.buffer, pkgBytes.byteOffset, pkgBytes.byteLength);
+        const totalSize = view.getUint32(0, true);
+        const encryptedData = pkgBytes.slice(8);
+
+        const SEGMENT_LENGTH = 4096;
+        const chunks = [];
+        let segIdx = 0;
+        for (let offset = 0; offset < encryptedData.length; offset += SEGMENT_LENGTH) {
+            const segment = encryptedData.slice(offset, offset + SEGMENT_LENGTH);
+            const iv = sha512(concatUint8(keyDataSalt, le32(segIdx))).slice(0, keyDataBlockSize);
+            const dec = aesCbcDecryptNoPad(secretKey, iv, segment);
+            chunks.push(dec);
+            segIdx++;
+        }
+        return concatUint8(...chunks).slice(0, totalSize);
     }
 </script>
 </body>
