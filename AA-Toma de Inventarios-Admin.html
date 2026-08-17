@@ -222,8 +222,8 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 flex-shrink-0">
-                        <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4 flex-shrink-0">
+                        <div class="lg:col-span-3 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                             <div class="flex items-center justify-between mb-2">
                                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider"><i class="fa-solid fa-chart-column mr-1"></i> Avance por Día</h3>
                                 <span class="text-[10px] text-gray-400 uppercase tracking-wide">Últimos 14 días</span>
@@ -233,9 +233,9 @@
                                 <p id="msg-sin-avance-diario" class="hidden-view text-center text-xs text-gray-400 py-16">Aún no hay conteos registrados en este rango.</p>
                             </div>
                         </div>
-                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto" style="max-height: 13.5rem;">
+                        <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto" style="max-height: 26rem;">
                             <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-people-group mr-1"></i> Avance por Grupo</h3>
-                            <div id="dashboard-grupos"></div>
+                            <div id="dashboard-grupos" class="grid grid-cols-1 sm:grid-cols-2 gap-x-4"></div>
                         </div>
                     </div>
 
@@ -433,6 +433,7 @@
                     { header: 'Sin Reserva SAP', get: it => num3(it['Sin Reserva']), num: true },
                     { header: 'Reserva Conteo', get: (it, c) => c ? num3(it['Reserva Inv']) : '-', num: true },
                     { header: 'Sin Reserva Conteo', get: (it, c) => c ? num3(it['Sin Reserva Inv']) : '-', num: true },
+                    { header: 'Total Inventariado', get: (it, c) => c ? num3(it['Total Inventario']) : '-', num: true },
                 ],
             },
             hilado: {
