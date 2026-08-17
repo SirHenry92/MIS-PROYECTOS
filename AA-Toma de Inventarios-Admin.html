@@ -782,8 +782,41 @@
             return cols.length;
         }
 
-        function verFotoBalanza(url) {
-            Swal.fire({ imageUrl: url, imageAlt: 'Foto de la báscula', showConfirmButton: false, showCloseButton: true, width: 'min(90vw, 600px)', padding: '0.5rem' });
+        // Muestra la foto de la báscula junto con el peso que quedó registrado para ese
+        // artículo, para poder corroborar de un vistazo que el número de la foto coincide
+        // con lo que se guardó en el sistema.
+        function verFotoBalanza(id) {
+            const item = todosLosDatosReporte.find(i => i.id === id);
+            if (!item) return;
+            const pesoNeto = parseFloat(item['Peso Neto'] ?? item['Peso Neto Inv'] ?? 0);
+            const pesoBruto = parseFloat(item['Peso Bruto'] || 0);
+            const sap = parseFloat(item['Stock SAP'] || 0);
+            const dif = parseFloat(item['Diferencia'] || 0);
+            const difColor = Math.abs(dif) < 0.001 ? '#0d9488' : (dif < 0 ? '#ef4444' : '#0d9488');
+
+            Swal.fire({
+                showConfirmButton: false,
+                showCloseButton: true,
+                width: 'min(95vw, 780px)',
+                padding: '1.25rem',
+                html: `
+                    <div style="display:flex; gap:16px; flex-wrap:wrap; text-align:left;">
+                        <div style="flex:1 1 200px; min-width:180px;">
+                            <div style="font-family:monospace; font-weight:800; color:#0f766e; font-size:1.1rem;">${esc(item['Código de Item'] || '')}</div>
+                            <div style="color:#64748b; font-size:0.8rem; margin-bottom:10px;">${esc(item['Descripción'] || '')}</div>
+                            <table style="width:100%; font-size:0.85rem;">
+                                <tr><td style="color:#64748b; padding:3px 0;">Peso Bruto</td><td style="text-align:right; font-family:monospace; font-weight:700;">${pesoBruto.toFixed(3)} kg</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0;">Peso Neto (registrado)</td><td style="text-align:right; font-family:monospace; font-weight:800; color:#0f766e;">${pesoNeto.toFixed(3)} kg</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0;">Stock SAP (teórico)</td><td style="text-align:right; font-family:monospace;">${sap.toFixed(3)} kg</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0;">Diferencia</td><td style="text-align:right; font-family:monospace; font-weight:700; color:${difColor};">${dif > 0 ? '+' : ''}${dif.toFixed(3)} kg</td></tr>
+                            </table>
+                        </div>
+                        <div style="flex:1 1 260px; min-width:220px;">
+                            <img src="${esc(item['Foto Balanza'])}" alt="Foto de la báscula" style="width:100%; max-height:60vh; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0;">
+                        </div>
+                    </div>
+                `
+            });
         }
 
         async function cargarReportesAdmin() {
@@ -876,7 +909,7 @@
                 }).join('');
 
                 const fotoHtml = app.tieneFoto
-                    ? `<td class="py-2 px-3 text-center">${item['Foto Balanza'] ? `<button type="button" onclick="verFotoBalanza('${esc(item['Foto Balanza'])}')" class="text-teal-600 hover:text-teal-800" title="Ver foto de la báscula"><i class="fa-solid fa-image"></i></button>` : '<span class="text-gray-300"><i class="fa-solid fa-image-slash"></i></span>'}</td>`
+                    ? `<td class="py-2 px-3 text-center">${item['Foto Balanza'] ? `<button type="button" onclick="verFotoBalanza('${esc(item.id)}')" class="text-teal-600 hover:text-teal-800" title="Ver foto de la báscula"><i class="fa-solid fa-image"></i></button>` : '<span class="text-gray-300"><i class="fa-solid fa-image-slash"></i></span>'}</td>`
                     : '';
 
                 const tr = document.createElement('tr');
@@ -1009,11 +1042,13 @@
                 doc.line(8, 24, pageWidth - 8, 24);
             }
 
-            const head = [['#', ...app.exportExtra.map(c => c.header), 'Stock SAP', 'Diferencia', 'Ubicación', 'Registro'].map(h => ({ content: h }))];
+            const head = [['#', 'Código', 'Descripción', ...app.exportExtra.map(c => c.header), 'Stock SAP', 'Diferencia', 'Ubicación', 'Registro'].map(h => ({ content: h }))];
             const bodyFilas = datosFiltradosParaExportar.map(e => {
                 const completado = e.Registro != null;
                 return [
                     e['Nro'] || '-',
+                    e['Código de Item'] || '',
+                    e['Descripción'] || '',
                     ...app.exportExtra.map(c => c.get(e, completado)),
                     parseFloat(e['Stock SAP'] || 0).toFixed(3),
                     completado ? (parseFloat(e['Diferencia'] || 0) > 0 ? '+' : '') + parseFloat(e['Diferencia'] || 0).toFixed(3) : '-',
@@ -1056,7 +1091,7 @@
 
             const infoFiltros = obtenerInfoFiltrosExport();
             const generado = new Date().toLocaleString('es-PE');
-            const encabezadoCols = ['Inventariador', 'Grupo de Trabajo', '#', ...app.exportExtra.map(c => c.header), 'Stock SAP', 'Diferencia', 'Ubicación', 'Observaciones', 'Registro'];
+            const encabezadoCols = ['Inventariador', 'Grupo de Trabajo', '#', 'Código de Item', 'Descripción', ...app.exportExtra.map(c => c.header), 'Stock SAP', 'Diferencia', 'Ubicación', 'Observaciones', 'Registro'];
             const encabezado = [
                 ['ART ATLAS SRL - RUC: 20413770204'],
                 [`TOMA DE INVENTARIO - ${app.label.toUpperCase()} 2025`],
@@ -1071,6 +1106,8 @@
                     e['Inventariador'] || '-',
                     e['Grupo de Trabajo'] || '-',
                     e['Nro'] || '-',
+                    e['Código de Item'] || '',
+                    e['Descripción'] || '',
                     ...app.exportExtra.map(c => c.get(e, completado)),
                     parseFloat(e['Stock SAP'] || 0),
                     parseFloat(e['Diferencia'] || 0),

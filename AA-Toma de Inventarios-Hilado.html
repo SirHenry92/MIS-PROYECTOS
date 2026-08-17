@@ -1072,31 +1072,57 @@
         // El plan gratuito de Supabase Storage tiene solo 1GB, así que la foto se redimensiona
         // y recomprime en el propio navegador (canvas + JPEG) antes de subirla: de varios MB que
         // entrega la cámara del celular se baja a ~100-300KB sin perder legibilidad del número.
+        // Convierte el canvas a blob para una calidad JPEG dada (envuelto en Promise porque
+        // canvas.toBlob es por callback).
+        function canvasToBlob(canvas, calidad) {
+            return new Promise((resolve, reject) => {
+                canvas.toBlob((blob) => {
+                    if (!blob) return reject(new Error('No se pudo procesar la imagen'));
+                    resolve(blob);
+                }, 'image/jpeg', calidad);
+            });
+        }
+
         function comprimirImagenBascula(file) {
             return new Promise((resolve, reject) => {
-                const MAX_LADO = 1280;
+                // Solo hace falta leer el número en la pantalla de la báscula: 900px de lado
+                // mayor y escala de grises (sin color que aportar) ya dejan el dígito legible
+                // y reducen bastante el peso del archivo frente a una foto a color de cámara.
+                const MAX_LADO = 900;
+                const TARGET_KB = 70;
                 const img = new Image();
                 const url = URL.createObjectURL(file);
-                img.onload = () => {
+                img.onload = async () => {
                     URL.revokeObjectURL(url);
-                    let { width, height } = img;
-                    if (width > MAX_LADO || height > MAX_LADO) {
-                        if (width >= height) {
-                            height = Math.round(height * (MAX_LADO / width));
-                            width = MAX_LADO;
-                        } else {
-                            width = Math.round(width * (MAX_LADO / height));
-                            height = MAX_LADO;
+                    try {
+                        let { width, height } = img;
+                        if (width > MAX_LADO || height > MAX_LADO) {
+                            if (width >= height) {
+                                height = Math.round(height * (MAX_LADO / width));
+                                width = MAX_LADO;
+                            } else {
+                                width = Math.round(width * (MAX_LADO / height));
+                                height = MAX_LADO;
+                            }
                         }
-                    }
-                    const canvas = document.createElement('canvas');
-                    canvas.width = width;
-                    canvas.height = height;
-                    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
-                    canvas.toBlob((blob) => {
-                        if (!blob) return reject(new Error('No se pudo procesar la imagen'));
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.filter = 'grayscale(1) contrast(1.15)';
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        // Baja la calidad JPEG en pasos hasta acercarse al peso objetivo, sin
+                        // pasar de una calidad mínima que ya no se leería bien.
+                        let blob = await canvasToBlob(canvas, 0.6);
+                        for (const calidad of [0.45, 0.35]) {
+                            if (blob.size / 1024 <= TARGET_KB) break;
+                            blob = await canvasToBlob(canvas, calidad);
+                        }
                         resolve(blob);
-                    }, 'image/jpeg', 0.72);
+                    } catch (err) {
+                        reject(err);
+                    }
                 };
                 img.onerror = () => {
                     URL.revokeObjectURL(url);
