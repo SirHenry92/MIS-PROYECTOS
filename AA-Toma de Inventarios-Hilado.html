@@ -525,6 +525,12 @@
                                 <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-location-dot mr-1"></i> Ubicación Fija <span class="text-red-500">*</span></label>
                                 <input type="text" id="ubicacion" required class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Estante A">
                             </div>
+
+                            <!-- Observaciones -->
+                            <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
+                                <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i> Observaciones (Opcional)</label>
+                                <input type="text" id="observaciones" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Cono dañado, lote mixto, etc.">
+                            </div>
                         </div>
 
                         <!-- Lado Derecho: Calculadora Lateral (atada al Peso Bruto) -->
@@ -690,6 +696,7 @@
                                     <th class="py-2 px-3 font-bold text-gray-500 uppercase">Inventariador</th>
                                     <th class="py-2 px-3 font-bold text-gray-500 uppercase">Código</th>
                                     <th class="py-2 px-3 font-bold text-gray-500 uppercase">Descripción</th>
+                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Lote</th>
                                     <th class="py-2 px-3 font-bold text-gray-400 uppercase text-right">SAP</th>
                                     <th class="py-2 px-3 font-bold text-gray-500 uppercase text-right">Físico</th>
                                     <th class="py-2 px-3 font-bold text-gray-500 uppercase text-right">Dif</th>
@@ -697,7 +704,7 @@
                             </thead>
                             <tbody id="cuerpoReportes" class="divide-y divide-gray-100">
                                 <tr>
-                                    <td colspan="8" class="text-center py-10 text-gray-400">Cargando data...</td>
+                                    <td colspan="9" class="text-center py-10 text-gray-400">Cargando data...</td>
                                 </tr>
                             </tbody>
                         </table>
@@ -1223,23 +1230,24 @@
                     error
                 }] = await Promise.all([
                     _supabase.from(NOMBRE_TABLA)
-                    .select('id, "Nro", "Código de Item", "Descripción", "Stock SAP", "Unidad de Medida", "Reserva", "Sin Reserva", "Almacen", "Sub Almacen", "Reserva Inv", "Sin Reserva Inv", "Ubicación", "Observaciones", "Registro", "Inventariador"')
-                    .or(`Código de Item.ilike.%${termSeguro}%,Descripción.ilike.%${termSeguro}%`)
+                    .select('*')
+                    .or(`"Código de Item".ilike.%${termSeguro}%,"Descripción".ilike.%${termSeguro}%,"Lote".ilike.%${termSeguro}%`)
                     .limit(50),
                     cargarConfiguracion() // Se refresca por si el admin cambió el modo "ocultar SAP" en otra sesión
                 ]);
 
                 if (error) throw error;
-                busquedaActual = data;
+                busquedaActual = data || [];
                 renderizarResultadosBusqueda();
             } catch (err) {
+                console.error("Error buscando:", err);
                 Swal.fire({
                     toast: true,
                     position: 'top',
                     icon: 'error',
-                    title: 'Error buscando',
+                    title: 'Error buscando: ' + (err.message || ''),
                     showConfirmButton: false,
-                    timer: 1500
+                    timer: 2500
                 });
             } finally {
                 document.getElementById('loading-spinner').classList.add('hidden');
@@ -1275,12 +1283,17 @@
                     badgeHTML = `<span class="bg-gray-100 text-gray-500 px-1.5 py-0.5 rounded text-[10px] font-bold border border-gray-200 ml-auto flex-shrink-0 font-mono">SAP: ${parseFloat(item['Stock SAP']||0).toFixed(2)}</span>`;
                 }
 
+                const loteBadge = (item['Lote'] && item['Lote'] !== '-' && item['Lote'] !== '')
+                    ? `<span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-gray-200 flex-shrink-0"><i class="fa-solid fa-tag text-[9px] mr-1 text-gray-400"></i>${esc(item['Lote'])}</span>`
+                    : '';
+
                 // Código y Descripción se escapan antes de insertarse como HTML: si un CSV
                 // trajera texto con etiquetas/script, se muestra como texto plano en vez de ejecutarse.
                 card.innerHTML = `
                     <div class="flex-1 min-w-0 pr-4">
-                        <div class="flex items-center gap-2 mb-1">
+                        <div class="flex items-center gap-2 mb-1 flex-wrap">
                             <span class="text-xs font-bold ${completado ? 'text-teal-800' : 'text-teal-700'} truncate">${esc(item['Código de Item'])}</span>
+                            ${loteBadge}
                             ${badgeHTML}
                         </div>
                         <p class="text-[11px] font-medium ${completado ? 'text-teal-700/80' : 'text-gray-500'} truncate leading-snug">${esc(item['Descripción'])}</p>
@@ -1385,102 +1398,147 @@
             setTimeout(() => modal.classList.add('hidden-view'), 300);
         }
 
-        // --- 5. MODAL WIDGET GRID Y CALCULADORA (OPERADOR) ---
-        function abrirModalConteo(index) {
-            const item = busquedaActual[index];
-            const completado = item.Registro != null;
-            modoEdicionAutorizada = false; // Reinicia el modo edición cada vez que se abre un artículo
+        // --- 5. MODAL WIDGET GRID Y CALCULADORA (OPERADOR HILADOS) ---
+        const TARA_VALORES_CONO = {
+            'Cartón': 0.040,
+            'Plástico': 0.035,
+            'Otro': 0,
+            '': 0
+        };
 
-            document.getElementById('registro_id').value = item.id;
-            document.getElementById('modal-nro').innerText = `Nro: ${item['Nro'] || '-'}`;
-            document.getElementById('modal-codigo').innerText = item['Código de Item'] || 'Sin Código';
-            document.getElementById('modal-descripcion').innerText = item['Descripción'] || '';
-            document.getElementById('modal-um').innerText = `UM: ${item['Unidad de Medida'] || 'UND'} | ALM: ${item['Almacen'] || '-'} / ${item['Sub Almacen'] || '-'}`;
+        const TARA_VALORES_BOLSA = {
+            'Delgada': 0.010,
+            'Mediana': 0.020,
+            'Gruesa': 0.030,
+            'Otro': 0,
+            '': 0
+        };
 
-            // El valor REAL siempre se guarda en data-valor (para que el cálculo y el guardado
-            // sigan siendo correctos); lo que cambia según la configuración es el TEXTO visible.
-            const reservaSap = parseFloat(item['Reserva'] || 0);
-            const sinReservaSap = parseFloat(item['Sin Reserva'] || 0);
-            const stockSap = parseFloat(item['Stock SAP'] || 0);
-            const elReservaSap = document.getElementById('modal-reserva-sap');
-            const elSinReservaSap = document.getElementById('modal-sinreserva-sap');
-            const elStockSap = document.getElementById('modal-stock-sap');
-            elReservaSap.dataset.valor = reservaSap;
-            elSinReservaSap.dataset.valor = sinReservaSap;
-            elStockSap.dataset.valor = stockSap;
-
-            const ocultoParaOperador = configuracionApp.ocultar_stock_sap && (!currentUser || currentUser.role !== 'admin');
-            if (ocultoParaOperador) {
-                elReservaSap.innerText = '•••';
-                elSinReservaSap.innerText = '•••';
-                elStockSap.innerText = '•••';
+        function onTipoConoChange() {
+            const tipo = document.getElementById('tipo_cono').value;
+            const inputManual = document.getElementById('tipo_cono_manual');
+            if (tipo === 'Otro') {
+                inputManual.classList.remove('hidden-view');
             } else {
-                elReservaSap.innerText = reservaSap.toFixed(2);
-                elSinReservaSap.innerText = sinReservaSap.toFixed(2);
-                elStockSap.innerText = stockSap.toFixed(2);
-            }
-
-            const avisoCiegas = document.getElementById('aviso-conteo-ciegas');
-            if (avisoCiegas) avisoCiegas.classList.toggle('hidden-view', !ocultoParaOperador);
-
-            // Setup Fields depending on State
-            document.getElementById('reserva_inv').value = completado ? (item['Reserva Inv'] || 0) : '';
-            document.getElementById('sin_reserva_inv').value = completado ? (item['Sin Reserva Inv'] || 0) : '';
-            document.getElementById('ubicacion').value = completado ? (item['Ubicación'] || '') : '';
-            document.getElementById('observaciones').value = completado ? (item['Observaciones'] || '') : '';
-
-            const inputs = ['reserva_inv', 'sin_reserva_inv', 'ubicacion', 'observaciones'];
-            const btnGuardar = document.getElementById('btnGuardar');
-            const btnModificar = document.getElementById('btnModificar');
-            const badgeEstado = document.getElementById('modal-estado-badge');
-
-            if (completado) {
-                inputs.forEach(id => {
-                    document.getElementById(id).readOnly = true;
-                    document.getElementById(id).classList.add('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
-                    document.getElementById(id).classList.remove('text-teal-700', 'bg-white');
-                });
-                btnGuardar.classList.add('hidden-view');
-                btnModificar.classList.remove('hidden-view');
-
-                // Mostrar Info (escapado por ser texto libre proveniente de la base de datos)
-                badgeEstado.innerHTML = `<span class="bg-teal-100 text-teal-700 px-2 py-1 rounded border border-teal-200 text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-check-double mr-1"></i> Por ${esc(item.Inventariador || 'N/A')}</span>`;
-            } else {
-                inputs.forEach(id => {
-                    document.getElementById(id).readOnly = false;
-                    document.getElementById(id).classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
-                    if (id.includes('inv')) document.getElementById(id).classList.add('text-teal-700', 'bg-white');
-                });
-                btnGuardar.classList.remove('hidden-view');
-                btnGuardar.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Guardar Conteo';
-                btnModificar.classList.add('hidden-view');
-                badgeEstado.innerHTML = `<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded border border-amber-200 text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-clock mr-1"></i> PENDIENTE</span>`;
-            }
-
-            calcTargetInput = completado ? null : document.getElementById('reserva_inv');
-            document.getElementById('calc-display').innerText = '';
-            calcularModal();
-
-            const modal = document.getElementById('modal-conteo');
-            const content = document.getElementById('modal-content');
-            modal.classList.remove('hidden-view');
-            void modal.offsetWidth;
-            modal.classList.remove('opacity-0');
-            modal.classList.add('opacity-100');
-            content.classList.remove('translate-y-full');
-
-            if (!completado) {
-                setTimeout(() => {
-                    document.getElementById('reserva_inv').focus();
-                }, 300);
+                inputManual.classList.add('hidden-view');
+                inputManual.value = '';
             }
         }
 
-        // La contraseña de modificación ya NO se compara en el navegador: se envía a una
-        // función en Supabase (modificar_conteo) que la compara contra un hash cifrado
-        // guardado en el servidor. El navegador nunca sabe si acertó "por deducción": solo
-        // recibe un error genérico si falla, igual que cualquier login serio.
-        let claveModificacionPendiente = null;
+        function onTipoBolsaChange() {
+            const tipo = document.getElementById('tipo_bolsa').value;
+            const inputManual = document.getElementById('tipo_bolsa_manual');
+            if (tipo === 'Otro') {
+                inputManual.classList.remove('hidden-view');
+            } else {
+                inputManual.classList.add('hidden-view');
+                inputManual.value = '';
+            }
+        }
+
+        function activarCalcPesoBruto() {
+            activarCalc(document.getElementById('peso_bruto'));
+        }
+
+        function abrirModalConteo(index) {
+            try {
+                const item = busquedaActual[index];
+                if (!item) return;
+                const completado = item.Registro != null;
+                modoEdicionAutorizada = false; // Reinicia el modo edición cada vez que se abre un artículo
+
+                document.getElementById('registro_id').value = item.id || '';
+                document.getElementById('modal-nro').innerText = `Nro: ${item['Nro'] || '-'}`;
+                document.getElementById('modal-codigo').innerText = item['Código de Item'] || 'Sin Código';
+                document.getElementById('modal-descripcion').innerText = item['Descripción'] || '';
+                document.getElementById('modal-um').innerText = `UM: ${item['Unidad de Medida'] || 'KG'} | ALM: ${item['Almacen'] || '-'} / ${item['Sub Almacen'] || '-'}`;
+                document.getElementById('modal-lote').innerText = item['Lote'] || '-';
+
+                const stockSap = parseFloat(item['Stock SAP'] || 0);
+                const elStockSap = document.getElementById('resumen-stock-sap');
+                if (elStockSap) elStockSap.dataset.valor = stockSap;
+
+                const ocultoParaOperador = configuracionApp.ocultar_stock_sap && (!currentUser || currentUser.role !== 'admin');
+                const avisoCiegas = document.getElementById('aviso-conteo-ciegas');
+                if (avisoCiegas) avisoCiegas.classList.toggle('hidden-view', !ocultoParaOperador);
+
+                const setVal = (id, val) => {
+                    const el = document.getElementById(id);
+                    if (el) el.value = val;
+                };
+
+                // Valores de campos de conteo Hilados
+                setVal('nro_conos', completado ? (item['Nro de Conos'] || 0) : '');
+                setVal('tipo_cono', item['Tipo de Cono'] || 'Cartón');
+                setVal('nro_bolsas', completado ? (item['Nro de Bolsas'] || 0) : '');
+                setVal('tipo_bolsa', item['Tipo de Bolsa'] || 'Delgada');
+                setVal('peso_bruto', completado ? (item['Peso Bruto'] || '') : '');
+                setVal('ubicacion', completado ? (item['Ubicación'] || '') : '');
+                setVal('observaciones', completado ? (item['Observaciones'] || '') : '');
+
+                onTipoConoChange();
+                onTipoBolsaChange();
+
+                const inputs = ['nro_conos', 'tipo_cono', 'tipo_cono_manual', 'nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones'];
+                const btnGuardar = document.getElementById('btnGuardar');
+                const btnModificar = document.getElementById('btnModificar');
+                const badgeEstado = document.getElementById('modal-estado-badge');
+
+                if (completado) {
+                    inputs.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.readOnly = true;
+                            el.disabled = (el.tagName === 'SELECT');
+                            el.classList.add('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
+                        }
+                    });
+                    if (btnGuardar) btnGuardar.classList.add('hidden-view');
+                    if (btnModificar) btnModificar.classList.remove('hidden-view');
+                    if (badgeEstado) badgeEstado.innerHTML = `<span class="bg-teal-100 text-teal-700 px-2 py-1 rounded border border-teal-200 text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-check-double mr-1"></i> Por ${esc(item.Inventariador || 'N/A')}</span>`;
+                } else {
+                    inputs.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) {
+                            el.readOnly = false;
+                            el.disabled = false;
+                            el.classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
+                        }
+                    });
+                    if (btnGuardar) {
+                        btnGuardar.classList.remove('hidden-view');
+                        btnGuardar.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Guardar Conteo';
+                    }
+                    if (btnModificar) btnModificar.classList.add('hidden-view');
+                    if (badgeEstado) badgeEstado.innerHTML = `<span class="bg-amber-100 text-amber-700 px-2 py-1 rounded border border-amber-200 text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-clock mr-1"></i> PENDIENTE</span>`;
+                }
+
+                calcTargetInput = completado ? null : document.getElementById('peso_bruto');
+                const disp = document.getElementById('calc-display');
+                if (disp) disp.innerText = '';
+                calcularModal();
+
+                const modal = document.getElementById('modal-conteo');
+                const content = document.getElementById('modal-content');
+                if (modal && content) {
+                    modal.classList.remove('hidden-view');
+                    void modal.offsetWidth;
+                    modal.classList.remove('opacity-0');
+                    modal.classList.add('opacity-100');
+                    content.classList.remove('translate-y-full');
+                }
+
+                if (!completado) {
+                    setTimeout(() => {
+                        const pb = document.getElementById('peso_bruto');
+                        if (pb) pb.focus();
+                    }, 300);
+                }
+            } catch (err) {
+                console.error("Error abriendo ficha de artículo:", err);
+                Swal.fire('Error', 'No se pudo abrir la ficha: ' + err.message, 'error');
+            }
+        }
 
         async function solicitarClaveModificacion() {
             const {
@@ -1498,23 +1556,21 @@
 
             if (!password) return;
 
-            // Guardamos la contraseña para enviarla junto con los datos al momento de
-            // guardar (así el servidor valida contraseña + datos en una sola operación
-            // atómica, evitando que alguien "desbloquee" y luego escriba por otra vía).
-            claveModificacionPendiente = password;
-
-            const inputs = ['reserva_inv', 'sin_reserva_inv', 'ubicacion', 'observaciones'];
+            const inputs = ['nro_conos', 'tipo_cono', 'tipo_cono_manual', 'nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones'];
             inputs.forEach(id => {
-                document.getElementById(id).readOnly = false;
-                document.getElementById(id).classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
-                if (id.includes('inv')) document.getElementById(id).classList.add('text-teal-700', 'bg-white');
+                const el = document.getElementById(id);
+                if (el) {
+                    el.readOnly = false;
+                    el.disabled = false;
+                    el.classList.remove('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
+                }
             });
 
             document.getElementById('btnGuardar').classList.remove('hidden-view');
             document.getElementById('btnGuardar').innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Actualizar Conteo';
             document.getElementById('btnModificar').classList.add('hidden-view');
 
-            calcTargetInput = document.getElementById('reserva_inv');
+            calcTargetInput = document.getElementById('peso_bruto');
             modoEdicionAutorizada = true;
 
             Swal.fire({
@@ -1544,25 +1600,22 @@
 
         function toggleCalculadora(inputId) {
             const panel = document.getElementById('panel-calculadora');
-            const inputElement = document.getElementById(inputId);
+            const target = inputId ? document.getElementById(inputId) : document.getElementById('peso_bruto');
 
-            // Si la calculadora ya está abierta y hacemos clic en el mismo input, la ocultamos
-            if (!panel.classList.contains('hidden-view') && calcTargetInput === inputElement) {
+            if (!panel.classList.contains('hidden-view') && calcTargetInput === target) {
                 panel.classList.add('hidden-view');
                 return;
             }
 
-            // Si no, la mostramos y activamos el input correspondiente
             panel.classList.remove('hidden-view');
-
-            if (inputElement && !inputElement.readOnly) {
-                inputElement.focus();
-                activarCalc(inputElement);
+            if (target && !target.readOnly) {
+                target.focus();
+                activarCalc(target);
             }
         }
 
         function activarCalc(element) {
-            if (element.readOnly) return;
+            if (!element || element.readOnly) return;
             calcTargetInput = element;
             document.getElementById('calc-display').innerText = element.value || '';
         }
@@ -1583,9 +1636,8 @@
                     let toEval = current.replace(/×/g, '*').replace(/÷/g, '/');
                     toEval = toEval.replace(/[^0-9+\-*/.]/g, "");
                     if (!toEval) return;
-                    // Evaluador propio (sin eval/Function) para no ejecutar código arbitrario
                     const res = evaluarExpresionSegura(toEval);
-                    const finalVal = res === undefined ? '' : parseFloat(res).toFixed(2);
+                    const finalVal = res === undefined ? '' : parseFloat(res).toFixed(3);
                     disp.innerText = finalVal;
                     calcTargetInput.value = finalVal;
                 } catch (e) {
@@ -1601,30 +1653,73 @@
         }
 
         function calcularModal() {
-            const r = parseFloat(document.getElementById('reserva_inv').value) || 0;
-            const sr = parseFloat(document.getElementById('sin_reserva_inv').value) || 0;
-            const sap = parseFloat(document.getElementById('modal-stock-sap').dataset.valor) || 0;
+            const nroConos = parseFloat(document.getElementById('nro_conos').value) || 0;
+            const tipoCono = document.getElementById('tipo_cono').value;
+            let taraConoUnit = TARA_VALORES_CONO[tipoCono] || 0;
+            if (tipoCono === 'Otro') {
+                taraConoUnit = parseFloat(document.getElementById('tipo_cono_manual').value) || 0;
+            }
+            const taraConos = nroConos * taraConoUnit;
 
-            const total = r + sr;
-            document.getElementById('modal-total-fisico').innerText = total.toFixed(2);
+            const nroBolsas = parseFloat(document.getElementById('nro_bolsas').value) || 0;
+            const tipoBolsa = document.getElementById('tipo_bolsa').value;
+            let taraBolsaUnit = TARA_VALORES_BOLSA[tipoBolsa] || 0;
+            if (tipoBolsa === 'Otro') {
+                taraBolsaUnit = parseFloat(document.getElementById('tipo_bolsa_manual').value) || 0;
+            }
+            const taraBolsa = nroBolsas * taraBolsaUnit;
 
-            const txtDiff = document.getElementById('modal-diferencia');
+            const pesoBruto = parseFloat(document.getElementById('peso_bruto').value) || 0;
+            let pesoNeto = 0;
+            if (pesoBruto > 0) {
+                pesoNeto = Math.max(0, pesoBruto - taraConos - taraBolsa);
+            }
+
+            const stockSap = parseFloat(document.getElementById('resumen-stock-sap').dataset.valor) || 0;
+            const diferencia = pesoNeto - stockSap;
+
+            document.getElementById('resumen-tara-conos').innerText = taraConos.toFixed(3);
+            document.getElementById('resumen-tara-bolsa').innerText = taraBolsa.toFixed(3);
+            document.getElementById('resumen-peso-neto').innerText = pesoNeto.toFixed(3);
+
+            const txtSap = document.getElementById('resumen-stock-sap');
+            const txtDiff = document.getElementById('resumen-diferencia');
+            const badgeClasif = document.getElementById('badge-clasificacion');
             const ocultoParaOperador = configuracionApp.ocultar_stock_sap && (!currentUser || currentUser.role !== 'admin');
 
             if (ocultoParaOperador) {
-                // La diferencia no se muestra (revelaría el stock SAP por deducción), pero
-                // igual se calcula y se guarda correctamente al momento de guardar el conteo.
+                txtSap.innerText = '•••';
                 txtDiff.innerText = '•••';
-                txtDiff.className = "px-4 py-3 text-right font-mono font-bold text-xl text-gray-500";
+                txtDiff.className = "px-3 py-2 text-right font-mono font-bold text-lg text-gray-400";
+                if (badgeClasif) badgeClasif.classList.add('hidden-view');
                 return;
             }
 
-            const diff = total - sap;
-            txtDiff.innerText = diff > 0 ? "+" + diff.toFixed(2) : diff.toFixed(2);
+            txtSap.innerText = stockSap.toFixed(3);
+            txtDiff.innerText = diferencia > 0 ? "+" + diferencia.toFixed(3) : diferencia.toFixed(3);
 
-            if (diff === 0) txtDiff.className = "px-4 py-3 text-right font-mono font-bold text-xl text-gray-300";
-            else if (diff < 0) txtDiff.className = "px-4 py-3 text-right font-mono font-bold text-xl text-red-400";
-            else txtDiff.className = "px-4 py-3 text-right font-mono font-bold text-xl text-teal-400";
+            if (Math.abs(diferencia) < 0.001) {
+                txtDiff.className = "px-3 py-2 text-right font-mono font-bold text-lg text-emerald-400";
+                if (badgeClasif) {
+                    badgeClasif.className = "text-[10px] px-2 py-1 rounded font-bold uppercase bg-emerald-100 text-emerald-800";
+                    badgeClasif.innerText = "Exacto";
+                    badgeClasif.classList.remove('hidden-view');
+                }
+            } else if (diferencia < 0) {
+                txtDiff.className = "px-3 py-2 text-right font-mono font-bold text-lg text-red-400";
+                if (badgeClasif) {
+                    badgeClasif.className = "text-[10px] px-2 py-1 rounded font-bold uppercase bg-red-100 text-red-800";
+                    badgeClasif.innerText = "Faltante: " + Math.abs(diferencia).toFixed(3) + " kg";
+                    badgeClasif.classList.remove('hidden-view');
+                }
+            } else {
+                txtDiff.className = "px-3 py-2 text-right font-mono font-bold text-lg text-teal-400";
+                if (badgeClasif) {
+                    badgeClasif.className = "text-[10px] px-2 py-1 rounded font-bold uppercase bg-teal-100 text-teal-800";
+                    badgeClasif.innerText = "Sobrante: +" + diferencia.toFixed(3) + " kg";
+                    badgeClasif.classList.remove('hidden-view');
+                }
+            }
         }
 
         async function guardarConteo() {
@@ -1634,7 +1729,17 @@
             if (calcTargetInput && !calcTargetInput.readOnly) calcAction('=');
             calcularModal();
 
-            // La ubicación fija es obligatoria para poder registrar el conteo.
+            const pesoBruto = parseFloat(document.getElementById('peso_bruto').value) || 0;
+            if (pesoBruto <= 0) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Peso Bruto requerido',
+                    text: 'Debes ingresar el peso bruto registrado en la báscula.'
+                });
+                document.getElementById('peso_bruto').focus();
+                return;
+            }
+
             const ubicacionValor = document.getElementById('ubicacion').value.trim();
             if (!ubicacionValor) {
                 Swal.fire({
@@ -1648,15 +1753,27 @@
 
             const btn = document.getElementById('btnGuardar');
             btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> ...';
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Guardando...';
 
-            const r = parseFloat(document.getElementById('reserva_inv').value) || 0;
-            const sr = parseFloat(document.getElementById('sin_reserva_inv').value) || 0;
-            // Se lee del atributo data-valor (el valor real), no del texto visible, que puede
-            // estar oculto ("•••") para el operador cuando el conteo a ciegas está activo.
-            const sap = parseFloat(document.getElementById('modal-stock-sap').dataset.valor) || 0;
+            const nroConos = parseFloat(document.getElementById('nro_conos').value) || 0;
+            const tipoCono = document.getElementById('tipo_cono').value;
+            let taraConoUnit = TARA_VALORES_CONO[tipoCono] || 0;
+            if (tipoCono === 'Otro') {
+                taraConoUnit = parseFloat(document.getElementById('tipo_cono_manual').value) || 0;
+            }
+            const taraConos = nroConos * taraConoUnit;
 
-            // FORMATO UNIVERSAL (Evita errores de Supabase/Postgres)
+            const nroBolsas = parseFloat(document.getElementById('nro_bolsas').value) || 0;
+            const tipoBolsa = document.getElementById('tipo_bolsa').value;
+            let taraBolsaUnit = TARA_VALORES_BOLSA[tipoBolsa] || 0;
+            if (tipoBolsa === 'Otro') {
+                taraBolsaUnit = parseFloat(document.getElementById('tipo_bolsa_manual').value) || 0;
+            }
+            const taraBolsa = nroBolsas * taraBolsaUnit;
+            const pesoNeto = Math.max(0, pesoBruto - taraConos - taraBolsa);
+            const sap = parseFloat(document.getElementById('resumen-stock-sap').dataset.valor) || 0;
+            const diferencia = pesoNeto - sap;
+
             const now = new Date();
             const d = String(now.getDate()).padStart(2, '0');
             const m = String(now.getMonth() + 1).padStart(2, '0');
@@ -1667,61 +1784,36 @@
             const fechaLocal = `${y}-${m}-${d} ${h}:${min}:${s}`;
 
             try {
-                let data, error;
+                const payload = {
+                    "Inventariador": (document.getElementById('inventariador').value || '').trim() || (currentUser ? currentUser.name : 'Operador'),
+                    "Grupo de Trabajo": (document.getElementById('grupo_trabajo').value || '').trim() || (currentUser ? currentUser.group : 'Grupo 1'),
+                    "Peso Bruto": pesoBruto,
+                    "Nro de Conos": nroConos,
+                    "Tipo de Cono": tipoCono,
+                    "Tara Conos": taraConos,
+                    "Tara Conos Inv": taraConos,
+                    "Nro de Bolsas": nroBolsas,
+                    "Tipo de Bolsa": tipoBolsa,
+                    "Tara Bolsa": taraBolsa,
+                    "Tara Bolsa Inv": taraBolsa,
+                    "Peso Neto": pesoNeto,
+                    "Peso Neto Inv": pesoNeto,
+                    "Diferencia": diferencia,
+                    "Ubicación": ubicacionValor,
+                    "Observaciones": document.getElementById('observaciones').value.trim(),
+                    "Registro": fechaLocal
+                };
 
-                if (modoEdicionAutorizada) {
-                    // Edición de un registro ya contado: pasa por la función segura del
-                    // servidor, que valida la contraseña (cifrada) antes de escribir nada.
-                    const resp = await _supabase.rpc('modificar_conteo', {
-                        p_id: registroId,
-                        p_password: claveModificacionPendiente,
-                        p_reserva: r,
-                        p_sin_reserva: sr,
-                        p_ubicacion: ubicacionValor,
-                        p_observaciones: document.getElementById('observaciones').value
-                    });
-                    data = resp.data ? [resp.data] : null;
-                    error = resp.error;
-                    claveModificacionPendiente = null;
-                } else {
-                    // Conteo inicial: la base de datos (no el navegador) es quien garantiza
-                    // que el artículo siga sin contar en ese instante (protección contra
-                    // doble conteo aplicada también del lado del servidor).
-                    const payload = {
-                        "Inventariador": document.getElementById('inventariador').value.trim(),
-                        "Grupo de Trabajo": document.getElementById('grupo_trabajo').value.trim(),
-                        "Reserva Inv": r,
-                        "Sin Reserva Inv": sr,
-                        "Total Inventario": r + sr,
-                        "Diferencia": (r + sr) - sap,
-                        "Ubicación": ubicacionValor,
-                        "Observaciones": document.getElementById('observaciones').value,
-                        "Registro": fechaLocal
-                    };
-                    const resp = await _supabase.from(NOMBRE_TABLA).update(payload).eq('id', registroId).select();
-                    data = resp.data;
-                    error = resp.error;
-                }
+                const resp = await _supabase.from(NOMBRE_TABLA).update(payload).eq('id', registroId).select();
+                if (resp.error) throw resp.error;
 
-                if (error) throw error;
-
-                if (!modoEdicionAutorizada && (!data || data.length === 0)) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Este artículo ya fue contado',
-                        text: 'Otro operador registró este conteo mientras tenías el formulario abierto. Tu registro no se guardó para no sobrescribirlo.'
-                    });
-                    cerrarModal();
-                    actualizarAvanceOperador();
-                    document.getElementById('buscador-articulos').dispatchEvent(new Event('input'));
-                    return;
-                }
+                const data = resp.data;
 
                 Swal.fire({
                     toast: true,
                     position: 'top',
                     icon: 'success',
-                    title: '¡Guardado!',
+                    title: '¡Conteo Guardado!',
                     showConfirmButton: false,
                     timer: 1200
                 });
@@ -1741,16 +1833,12 @@
                 document.getElementById('buscador-articulos').value = '';
                 document.getElementById('buscador-articulos').focus();
             } catch (error) {
-                const msg = error.message && error.message.includes('Contraseña incorrecta') ?
-                    'Contraseña incorrecta.' :
-                    error.message;
                 Swal.fire({
                     icon: 'error',
-                    title: 'Error',
-                    text: msg
+                    title: 'Error al guardar',
+                    text: error.message
                 });
             } finally {
-                // SOLUCIÓN AL BUG: Reactivar el botón de guardar siempre al terminar el proceso
                 btn.disabled = false;
                 btn.innerHTML = '<i class="fa-solid fa-check mr-2"></i> Guardar Conteo';
             }
@@ -1840,6 +1928,7 @@
                 filtrados = filtrados.filter(item =>
                     (item['Código de Item'] && item['Código de Item'].toLowerCase().includes(texto)) ||
                     (item['Descripción'] && item['Descripción'].toLowerCase().includes(texto)) ||
+                    (item['Lote'] && String(item['Lote']).toLowerCase().includes(texto)) ||
                     (item['Inventariador'] && item['Inventariador'].toLowerCase().includes(texto))
                 );
             }
@@ -2011,7 +2100,7 @@
             tbody.innerHTML = '';
 
             if (datos.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="8" class="text-center py-10 text-gray-500 font-medium">No hay registros que coincidan con los filtros.</td></tr>';
+                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-10 text-gray-500 font-medium">No hay registros que coincidan con los filtros.</td></tr>';
                 return;
             }
 
@@ -2030,7 +2119,7 @@
                     if (dif < 0) diffColor = "text-red-500 font-bold";
                 }
 
-                // Todos los campos de texto libre (Inventariador, Código, Descripción) se
+                // Todos los campos de texto libre (Inventariador, Código, Descripción, Lote) se
                 // escapan antes de insertarse como HTML, incluida la versión que va en "title".
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-gray-50 border-b border-gray-100 transition-colors";
@@ -2040,8 +2129,9 @@
                     <td class="py-2 px-3 font-semibold text-gray-700 text-[10px] truncate max-w-[100px]">${esc(item['Inventariador'] || '-')}</td>
                     <td class="py-2 px-3 text-teal-700 font-bold">${esc(item['Código de Item'] || '')}</td>
                     <td class="py-2 px-3 truncate max-w-[200px]" title="${esc(item['Descripción'] || '')}">${esc(item['Descripción'] || '')}</td>
+                    <td class="py-2 px-3 font-mono text-[10px] text-gray-600">${esc(item['Lote'] || '-')}</td>
                     <td class="py-2 px-3 text-right text-gray-400 font-mono">${parseFloat(item['Stock SAP']||0).toFixed(2)}</td>
-                    <td class="py-2 px-3 text-right font-mono font-bold text-gray-800">${completado ? parseFloat(item['Total Inventario']||0).toFixed(2) : '-'}</td>
+                    <td class="py-2 px-3 text-right font-mono font-bold text-gray-800">${completado ? parseFloat(item['Peso Neto'] || item['Peso Neto Inv'] || item['Total Inventario'] || 0).toFixed(2) : '-'}</td>
                     <td class="py-2 px-3 text-right font-mono ${diffColor}">${completado ? (dif > 0 ? '+'+dif.toFixed(2) : dif.toFixed(2)) : '-'}</td>
                 `;
                 tbody.appendChild(tr);
@@ -2049,7 +2139,7 @@
 
             if (datos.length > 500) {
                 const tr = document.createElement('tr');
-                tr.innerHTML = `<td colspan="8" class="text-center py-4 text-xs text-gray-400">Mostrando 500 de ${datos.length} registros filtrados. Exporta a PDF para ver todos.</td>`;
+                tr.innerHTML = `<td colspan="9" class="text-center py-4 text-xs text-gray-400">Mostrando 500 de ${datos.length} registros filtrados. Exporta a Excel o PDF para ver todos.</td>`;
                 tbody.appendChild(tr);
             }
         }
@@ -2068,12 +2158,9 @@
             };
         }
 
-        // Arma las filas de datos en el mismo orden de columnas para PDF y Excel:
-        // Inventariador | Grupo de Trabajo | # | Grupo de Artículos | Código de Item | Descripción |
-        // UM | Almacén | Sub Almacén | [Teórico SAP: Reserva | Sin Reserva | Stock SAP] | Ubicación |
-        // [Físico: Reserva | Sin Reserva] | Observaciones | Total Inventario | Diferencia | Registro
+        // Arma las filas de datos para Hilados:
         function armarFilasExport(formatoTexto) {
-            const num = formatoTexto ? (v) => parseFloat(v || 0).toFixed(2) : (v) => parseFloat(v || 0);
+            const num = formatoTexto ? (v) => parseFloat(v || 0).toFixed(3) : (v) => parseFloat(v || 0);
             return datosFiltradosParaExportar.map(e => [
                 e['Inventariador'] || '-',
                 e['Grupo de Trabajo'] || '-',
@@ -2081,18 +2168,22 @@
                 e['Grupo de Articulos'] || '-',
                 e['Código de Item'] || '',
                 e['Descripción'] || '',
+                e['Lote'] || '-',
                 e['Unidad de Medida'] || '',
                 e['Almacen'] || '',
                 e['Sub Almacen'] || '',
-                num(e['Reserva']),
-                num(e['Sin Reserva']),
                 num(e['Stock SAP']),
-                e['Ubicación'] || '-',
-                num(e['Reserva Inv']),
-                num(e['Sin Reserva Inv']),
-                e['Observaciones'] || '-',
-                num(e['Total Inventario']),
+                num(e['Peso Bruto']),
+                e['Nro de Conos'] || 0,
+                e['Tipo de Cono'] || '-',
+                num(e['Tara Conos'] || e['Tara Conos Inv']),
+                e['Nro de Bolsas'] || 0,
+                e['Tipo de Bolsa'] || '-',
+                num(e['Tara Bolsa'] || e['Tara Bolsa Inv']),
+                num(e['Peso Neto'] || e['Peso Neto Inv']),
                 num(e['Diferencia']),
+                e['Ubicación'] || '-',
+                e['Observaciones'] || '-',
                 e['Registro'] || '-'
             ]);
         }
@@ -2107,8 +2198,6 @@
             const pageWidth = doc.internal.pageSize.width;
             const generado = new Date().toLocaleString('es-PE');
 
-            // Encabezado que se repite en cada página del PDF (igual que el formato de referencia):
-            // fecha/hora de generación + roles a firmar a la derecha, luego empresa, título y filtros aplicados.
             function dibujarEncabezado() {
                 doc.setFont("helvetica", "normal");
                 doc.setFontSize(7.5);
@@ -2127,7 +2216,7 @@
 
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(14);
-                doc.text("TOMA DE INVENTARIO 2025", pageWidth / 2, 15, {
+                doc.text("TOMA DE INVENTARIO - HILADOS", pageWidth / 2, 15, {
                     align: "center"
                 });
 
@@ -2137,79 +2226,44 @@
             }
 
             const head = [
-                [{
-                        content: 'Inventariador',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Grupo de Trabajo',
-                        rowSpan: 2
-                    },
-                    {
-                        content: '#',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Grupo de Artículos',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Código de Item',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Descripción',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'UM',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Alm',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Sub Alm',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Teórico (SAP)',
-                        colSpan: 3,
-                        styles: {
-                            halign: 'center'
-                        }
-                    },
-                    {
-                        content: 'Ubicación',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Físico (Conteo)',
-                        colSpan: 2,
-                        styles: {
-                            halign: 'center'
-                        }
-                    },
-                    {
-                        content: 'Observaciones',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Total Inv.',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Diferencia',
-                        rowSpan: 2
-                    },
-                    {
-                        content: 'Registro',
-                        rowSpan: 2
-                    }
-                ],
-                ['Reserva', 'Sin Reserva', 'Stock SAP', 'Reserva', 'Sin Reserva']
+                [
+                    { content: 'Inventariador' },
+                    { content: 'Grupo' },
+                    { content: '#' },
+                    { content: 'Código' },
+                    { content: 'Descripción' },
+                    { content: 'Lote' },
+                    { content: 'UM' },
+                    { content: 'Alm' },
+                    { content: 'Stock SAP' },
+                    { content: 'Peso Bruto' },
+                    { content: 'Conos' },
+                    { content: 'Bolsas' },
+                    { content: 'Peso Neto' },
+                    { content: 'Diferencia' },
+                    { content: 'Ubicación' },
+                    { content: 'Registro' }
+                ]
             ];
+
+            const bodyFilas = datosFiltradosParaExportar.map(e => [
+                e['Inventariador'] || '-',
+                e['Grupo de Trabajo'] || '-',
+                e['Nro'] || '-',
+                e['Código de Item'] || '',
+                e['Descripción'] || '',
+                e['Lote'] || '-',
+                e['Unidad de Medida'] || '',
+                (e['Almacen'] || '-') + '/' + (e['Sub Almacen'] || '-'),
+                parseFloat(e['Stock SAP'] || 0).toFixed(3),
+                e.Registro ? parseFloat(e['Peso Bruto'] || 0).toFixed(3) : '-',
+                e.Registro ? `${e['Nro de Conos'] || 0} (${e['Tipo de Cono'] || ''})` : '-',
+                e.Registro ? `${e['Nro de Bolsas'] || 0} (${e['Tipo de Bolsa'] || ''})` : '-',
+                e.Registro ? parseFloat(e['Peso Neto'] || e['Peso Neto Inv'] || 0).toFixed(3) : '-',
+                e.Registro ? (parseFloat(e['Diferencia'] || 0) > 0 ? '+' : '') + parseFloat(e['Diferencia'] || 0).toFixed(3) : '-',
+                e['Ubicación'] || '-',
+                e['Registro'] || '-'
+            ]);
 
             doc.autoTable({
                 startY: 26,
@@ -2217,11 +2271,11 @@
                     top: 26
                 },
                 head: head,
-                body: armarFilasExport(true),
+                body: bodyFilas,
                 theme: 'striped',
                 styles: {
-                    fontSize: 5.8,
-                    cellPadding: 1.3,
+                    fontSize: 5.5,
+                    cellPadding: 1.2,
                     overflow: 'linebreak',
                     textColor: [30, 41, 59],
                     lineColor: [226, 232, 240],
@@ -2230,64 +2284,15 @@
                 headStyles: {
                     fillColor: [30, 41, 59],
                     textColor: 255,
-                    fontSize: 6,
+                    fontSize: 5.8,
                     fontStyle: 'bold',
                     halign: 'center',
                     valign: 'middle',
                     lineColor: [30, 41, 59]
                 },
-                alternateRowStyles: {
-                    fillColor: [248, 250, 252]
-                },
-                columnStyles: {
-                    2: {
-                        halign: 'center',
-                        cellWidth: 8
-                    }, // #
-                    5: {
-                        cellWidth: 32
-                    }, // Descripción
-                    6: {
-                        halign: 'center'
-                    }, // UM
-                    7: {
-                        halign: 'center'
-                    }, // Alm
-                    8: {
-                        halign: 'center'
-                    }, // Sub Alm
-                    9: {
-                        halign: 'right'
-                    }, // Reserva SAP
-                    10: {
-                        halign: 'right'
-                    }, // Sin Reserva SAP
-                    11: {
-                        halign: 'right',
-                        fontStyle: 'bold'
-                    }, // Stock SAP
-                    13: {
-                        halign: 'right'
-                    }, // Reserva Conteo
-                    14: {
-                        halign: 'right'
-                    }, // Sin Reserva Conteo
-                    15: {
-                        cellWidth: 18
-                    }, // Observaciones
-                    16: {
-                        halign: 'right',
-                        fontStyle: 'bold'
-                    }, // Total Inventario
-                    17: {
-                        halign: 'right',
-                        fontStyle: 'bold'
-                    } // Diferencia
-                },
                 didDrawPage: dibujarEncabezado
             });
 
-            // Numeración "Página X de Y": recién se sabe el total al terminar de dibujar la tabla
             const totalPaginas = doc.internal.getNumberOfPages();
             for (let i = 1; i <= totalPaginas; i++) {
                 doc.setPage(i);
@@ -2298,7 +2303,6 @@
                 });
             }
 
-            // Firmas finales (en la última página, con líneas para firmar)
             doc.setPage(totalPaginas);
             const finalY = doc.lastAutoTable.finalY || 40;
             const pageHeight = doc.internal.pageSize.height;
@@ -2329,10 +2333,10 @@
                 align: "center"
             });
 
-            doc.save(`Inventario_${new Date().toISOString().split('T')[0]}.pdf`);
+            doc.save(`Inventario_Hilado_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
-        // Exporta exactamente la misma data y el mismo orden de columnas que el PDF, en formato Excel.
+        // Exporta en formato Excel para Hilados
         function exportarExcel() {
             if (datosFiltradosParaExportar.length === 0) return Swal.fire('Vacío', 'No hay datos para exportar con los filtros actuales', 'info');
 
@@ -2341,12 +2345,13 @@
 
             const encabezado = [
                 ['ART ATLAS SRL - RUC: 20413770204'],
-                ['TOMA DE INVENTARIO 2025'],
+                ['TOMA DE INVENTARIO - HILADOS 2025'],
                 [`GRUPO: ${infoFiltros.grupo}    FILTRO: ${infoFiltros.filtro}    FECHA: ${infoFiltros.fecha}    Generado: ${generado}`],
                 [],
-                ['Inventariador', 'Grupo de Trabajo', '#', 'Grupo de Artículos', 'Código de Item', 'Descripción', 'UM', 'Almacén', 'Sub Almacén',
-                    'Reserva (SAP)', 'Sin Reserva (SAP)', 'Stock SAP', 'Ubicación', 'Reserva (Conteo)', 'Sin Reserva (Conteo)', 'Observaciones',
-                    'Total Inventario', 'Diferencia', 'Registro'
+                [
+                    'Inventariador', 'Grupo de Trabajo', '#', 'Grupo de Artículos', 'Código de Item', 'Descripción', 'Lote', 'UM', 'Almacén', 'Sub Almacén',
+                    'Stock SAP (kg)', 'Peso Bruto (kg)', 'Nro Conos', 'Tipo Cono', 'Tara Conos (kg)', 'Nro Bolsas', 'Tipo Bolsa', 'Tara Bolsa (kg)',
+                    'Peso Neto (kg)', 'Diferencia (kg)', 'Ubicación', 'Observaciones', 'Registro'
                 ]
             ];
 
@@ -2459,8 +2464,8 @@
 
             Papa.parse(file, {
                 header: true,
-                skipEmptyLines: true,
-                encoding: "ISO-8859-1",
+                skipEmptyLines: 'greedy',
+                delimitersToGuess: [';', ',', '\t', '|'],
                 complete: function(results) {
                     if (results.errors.length && results.data.length === 0) {
                         Swal.fire('Error', 'Archivo no válido.', 'error');
@@ -2498,21 +2503,25 @@
                         if (key) {
                             // Esto convierte "Cdigo de Item" o "Código" a "codigo de item"
                             let cleanKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, "").toLowerCase().trim();
-                            rowLimpio[cleanKey] = row[key];
+                            rowLimpio[cleanKey] = (row[key] !== undefined && row[key] !== null) ? String(row[key]).trim() : '';
                         }
                     }
 
-                    // 2. Mapeamos usando las cabeceras limpias (así ya no importan las tildes)
+                    // 2. Mapeamos usando las cabeceras limpias (así ya no importan las tildes ni separador decimal)
+                    let stockVal = rowLimpio["stock sap"] || rowLimpio["stock"] || '0';
+                    if (typeof stockVal === 'string') stockVal = stockVal.replace(',', '.');
+
                     return {
                         "id": crypto.randomUUID(),
                         "Nro": rowLimpio["nro"] || '',
                         "Código de Item": rowLimpio["codigo de item"] || rowLimpio["codigo"] || rowLimpio["item"] || '',
                         "Descripción": rowLimpio["descripcion"] || '',
                         "Grupo de Articulos": rowLimpio["grupo de articulos"] || rowLimpio["grupo"] || '',
+                        "Lote": rowLimpio["lote"] || rowLimpio["nro lote"] || rowLimpio["nro de lote"] || rowLimpio["numero de lote"] || rowLimpio["n lote"] || rowLimpio["no lote"] || rowLimpio["batch"] || rowLimpio["lot"] || '',
                         "Unidad de Medida": rowLimpio["unidad de medida"] || rowLimpio["um"] || '',
                         "Almacen": rowLimpio["almacen"] || '',
                         "Sub Almacen": rowLimpio["sub almacen"] || rowLimpio["subalmacen"] || '',
-                        "Stock SAP": parseFloat(rowLimpio["stock sap"]) || parseFloat(rowLimpio["stock"]) || 0,
+                        "Stock SAP": parseFloat(stockVal) || 0,
                         "Inventariador": null,
                         "Grupo de Trabajo": null,
                         "Diferencia": null,
@@ -2527,7 +2536,7 @@
 
                 // Si después de limpiar sigue en 0, mostramos un error claro
                 if (payloadValido.length === 0) {
-                    throw new Error("No se detectó la columna del código. Verifica que el archivo esté separado por comas.");
+                    throw new Error("No se detectó la columna del código (Código de Item). Verifica las cabeceras del archivo.");
                 }
 
                 const CHUNK_SIZE = 500;
