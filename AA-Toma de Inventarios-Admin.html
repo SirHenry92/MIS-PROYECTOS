@@ -222,7 +222,11 @@
                         </div>
                     </div>
 
-                    <div class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4 flex-shrink-0">
+                    <button type="button" onclick="toggleResumenGraficos()" id="btn-toggle-resumen" class="flex items-center gap-1.5 text-xs font-semibold text-gray-500 hover:text-teal-600 mb-3 flex-shrink-0 w-fit">
+                        <i class="fa-solid fa-chevron-right transition-transform" id="icon-toggle-resumen"></i>
+                        <span id="txt-toggle-resumen">Ver gráficos de avance</span>
+                    </button>
+                    <div id="dashboard-charts-wrap" class="grid grid-cols-1 lg:grid-cols-5 gap-4 mb-4 flex-shrink-0 hidden-view">
                         <div class="lg:col-span-3 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
                             <div class="flex items-center justify-between mb-2">
                                 <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider"><i class="fa-solid fa-chart-column mr-1"></i> Avance por Día</h3>
@@ -233,7 +237,7 @@
                                 <p id="msg-sin-avance-diario" class="hidden-view text-center text-xs text-gray-400 py-16">Aún no hay conteos registrados en este rango.</p>
                             </div>
                         </div>
-                        <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto" style="max-height: 26rem;">
+                        <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto" style="max-height: 20rem;">
                             <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-people-group mr-1"></i> Avance por Grupo</h3>
                             <div id="dashboard-grupos" class="grid grid-cols-1 sm:grid-cols-2 gap-x-4"></div>
                         </div>
@@ -270,7 +274,7 @@
                                     <p class="text-gray-600 font-medium text-sm">Descargando base completa...</p>
                                 </div>
                             </div>
-                            <table class="w-full text-left text-[11px] text-gray-600 whitespace-nowrap">
+                            <table class="w-full text-left text-[12.5px] text-gray-600 whitespace-nowrap">
                                 <thead class="bg-white sticky top-0 border-b border-gray-200 z-10 shadow-sm">
                                     <tr id="reportes-thead-row"></tr>
                                 </thead>
@@ -424,16 +428,25 @@
                     { label: 'Descripción', get: it => it['Descripción'] || '', truncate: true },
                 ],
                 getFisico: (it, completado) => completado ? parseFloat(it['Total Inventario'] || 0) : null,
-                exportExtra: [
+                // Orden pensado para lectura: identificación → ubicación en almacén → lo
+                // teórico de SAP → dónde está físicamente → lo contado → resultado → auditoría.
+                exportColumns: [
+                    { header: 'Código', get: it => it['Código de Item'] || '' },
+                    { header: 'Descripción', get: it => it['Descripción'] || '' },
                     { header: 'Grupo de Artículos', get: it => it['Grupo de Articulos'] || '-' },
                     { header: 'UM', get: it => it['Unidad de Medida'] || '' },
                     { header: 'Almacén', get: it => it['Almacen'] || '' },
                     { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
-                    { header: 'Reserva SAP', get: it => num3(it['Reserva']), num: true },
-                    { header: 'Sin Reserva SAP', get: it => num3(it['Sin Reserva']), num: true },
-                    { header: 'Reserva Conteo', get: (it, c) => c ? num3(it['Reserva Inv']) : '-', num: true },
-                    { header: 'Sin Reserva Conteo', get: (it, c) => c ? num3(it['Sin Reserva Inv']) : '-', num: true },
-                    { header: 'Total Inventariado', get: (it, c) => c ? num3(it['Total Inventario']) : '-', num: true },
+                    { header: 'Reserva SAP', get: it => num3(it['Reserva']) },
+                    { header: 'Sin Reserva SAP', get: it => num3(it['Sin Reserva']) },
+                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']) },
+                    { header: 'Ubicación', get: it => it['Ubicación'] || '-' },
+                    { header: 'Reserva Conteo', get: (it, c) => c ? num3(it['Reserva Inv']) : '-' },
+                    { header: 'Sin Reserva Conteo', get: (it, c) => c ? num3(it['Sin Reserva Inv']) : '-' },
+                    { header: 'Total Inventariado', get: (it, c) => c ? num3(it['Total Inventario']) : '-' },
+                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-' },
+                    { header: 'Observaciones', get: it => it['Observaciones'] || '-' },
+                    { header: 'Registro', get: it => fmtFecha(it['Registro']) },
                 ],
             },
             hilado: {
@@ -458,17 +471,26 @@
                 ],
                 getFisico: (it, completado) => completado ? parseFloat(it['Peso Neto'] ?? it['Peso Neto Inv'] ?? 0) : null,
                 tieneFoto: true,
-                exportExtra: [
+                // Orden: identificación → dónde está → lo teórico de SAP → cómo se pesó →
+                // resultado neto → diferencia → ubicación/observaciones/auditoría.
+                exportColumns: [
+                    { header: 'Código', get: it => it['Código de Item'] || '' },
+                    { header: 'Descripción', get: it => it['Descripción'] || '' },
                     { header: 'Lote', get: it => it['Lote'] || '-' },
                     { header: 'UM', get: it => it['Unidad de Medida'] || '' },
                     { header: 'Almacén', get: it => it['Almacen'] || '' },
                     { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
-                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-', num: true },
+                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']) },
+                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-' },
                     { header: 'Nro Conos', get: (it, c) => c ? `${it['Nro de Conos'] || 0} (${it['Tipo de Cono'] || ''})` : '-' },
-                    { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-', num: true },
+                    { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-' },
                     { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
-                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', num: true },
-                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-', num: true },
+                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-' },
+                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-' },
+                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-' },
+                    { header: 'Ubicación', get: it => it['Ubicación'] || '-' },
+                    { header: 'Observaciones', get: it => it['Observaciones'] || '-' },
+                    { header: 'Registro', get: it => fmtFecha(it['Registro']) },
                 ],
             },
             telas: {
@@ -495,16 +517,23 @@
                     { label: 'Lote', get: it => it['Lote'] || '-', mono: true },
                 ],
                 getFisico: (it, completado) => completado ? parseFloat(it['Peso Neto'] ?? it['Peso Neto Inv'] ?? 0) : null,
-                exportExtra: [
+                exportColumns: [
+                    { header: 'Código', get: it => it['Código de Item'] || '' },
                     { header: 'Diseño', get: it => it['Diseño'] || '-' },
+                    { header: 'Descripción', get: it => it['Descripción'] || '' },
                     { header: 'Lote', get: it => it['Lote'] || '-' },
                     { header: 'UM', get: it => it['Unidad de Medida'] || '' },
                     { header: 'Almacén', get: it => it['Almacen'] || '' },
                     { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
-                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-', num: true },
+                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']) },
+                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-' },
                     { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
-                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', num: true },
-                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-', num: true },
+                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-' },
+                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-' },
+                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-' },
+                    { header: 'Ubicación', get: it => it['Ubicación'] || '-' },
+                    { header: 'Observaciones', get: it => it['Observaciones'] || '-' },
+                    { header: 'Registro', get: it => fmtFecha(it['Registro']) },
                 ],
             },
             desperdicios: {
@@ -530,18 +559,25 @@
                     { label: 'Bloqueo', get: it => it['Bloqueo'] ? '<span class="bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[10px] font-bold">SÍ</span>' : '', html: true, center: true },
                 ],
                 getFisico: (it, completado) => completado ? parseFloat(it['Peso Neto'] ?? it['Peso Neto Inv'] ?? 0) : null,
-                exportExtra: [
+                exportColumns: [
+                    { header: 'Código', get: it => it['Código de Item'] || '' },
+                    { header: 'Descripción', get: it => it['Descripción'] || '' },
                     { header: 'Lote', get: it => it['Lote'] || '-' },
                     { header: 'UM', get: it => it['Unidad de Medida'] || '' },
                     { header: 'Almacén', get: it => it['Almacen'] || '' },
                     { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
-                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-', num: true },
+                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']) },
+                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-' },
                     { header: 'Nro Conos', get: (it, c) => c ? `${it['Nro de Conos'] || 0} (${it['Tipo de Cono'] || ''})` : '-' },
-                    { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-', num: true },
+                    { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-' },
                     { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
-                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', num: true },
-                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-', num: true },
+                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-' },
+                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-' },
                     { header: 'Bloqueo', get: it => it['Bloqueo'] ? 'SI' : 'NO' },
+                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-' },
+                    { header: 'Ubicación', get: it => it['Ubicación'] || '-' },
+                    { header: 'Observaciones', get: it => it['Observaciones'] || '-' },
+                    { header: 'Registro', get: it => fmtFecha(it['Registro']) },
                 ],
             },
         };
@@ -781,7 +817,7 @@
             document.getElementById('reportes-thead-row').innerHTML = cols.map((c, i) => {
                 const isRight = (c === 'SAP' || c === 'Físico' || c === 'Dif');
                 const isCenter = (c === 'Foto');
-                return `<th class="py-2 px-3 font-bold text-gray-500 uppercase ${isRight ? 'text-right' : ''} ${isCenter ? 'text-center' : ''}">${c}</th>`;
+                return `<th class="py-2.5 px-3 font-bold text-gray-500 uppercase ${isRight ? 'text-right' : ''} ${isCenter ? 'text-center' : ''}">${c}</th>`;
             }).join('');
             return cols.length;
         }
@@ -908,24 +944,24 @@
                 const fisico = app.getFisico(item, completado);
                 const mediasHtml = app.columnasMedias.map(c => {
                     const val = c.get(item);
-                    const cls = `py-2 px-3 ${c.truncate ? 'truncate max-w-[200px]' : ''} ${c.mono ? 'font-mono text-[10px] text-gray-600' : ''} ${c.class || ''} ${c.center ? 'text-center' : ''}`;
+                    const cls = `py-2.5 px-3 ${c.truncate ? 'truncate max-w-[260px]' : ''} ${c.mono ? 'font-mono text-[11px] text-gray-600' : ''} ${c.class || ''} ${c.center ? 'text-center' : ''}`;
                     return `<td class="${cls}" ${c.truncate ? `title="${esc(val)}"` : ''}>${c.html ? val : esc(val)}</td>`;
                 }).join('');
 
                 const fotoHtml = app.tieneFoto
-                    ? `<td class="py-2 px-3 text-center">${item['Foto Balanza'] ? `<button type="button" onclick="verFotoBalanza('${esc(item.id)}')" class="text-teal-600 hover:text-teal-800" title="Ver foto de la báscula"><i class="fa-solid fa-image"></i></button>` : '<span class="text-gray-300"><i class="fa-solid fa-image-slash"></i></span>'}</td>`
+                    ? `<td class="py-2.5 px-3 text-center">${item['Foto Balanza'] ? `<button type="button" onclick="verFotoBalanza('${esc(item.id)}')" class="text-teal-600 hover:text-teal-800" title="Ver foto de la báscula"><i class="fa-solid fa-image"></i></button>` : '<span class="text-gray-300"><i class="fa-solid fa-image-slash"></i></span>'}</td>`
                     : '';
 
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-gray-50 border-b border-gray-100 transition-colors";
                 tr.innerHTML = `
-                    <td class="py-2 px-3">${estadoBadge}</td>
-                    <td class="py-2 px-3 text-gray-500 font-mono text-[10px]">${esc(fmtFecha(item.Registro))}</td>
-                    <td class="py-2 px-3 font-semibold text-gray-700 text-[10px] truncate max-w-[100px]">${esc(item['Inventariador'] || '-')}</td>
+                    <td class="py-2.5 px-3">${estadoBadge}</td>
+                    <td class="py-2.5 px-3 text-gray-500 font-mono text-[11px]">${esc(fmtFecha(item.Registro))}</td>
+                    <td class="py-2.5 px-3 font-semibold text-gray-700 text-[11px] truncate max-w-[130px]">${esc(item['Inventariador'] || '-')}</td>
                     ${mediasHtml}
-                    <td class="py-2 px-3 text-right text-gray-400 font-mono">${parseFloat(item['Stock SAP'] || 0).toFixed(2)}</td>
-                    <td class="py-2 px-3 text-right font-mono font-bold text-gray-800">${fisico !== null ? fisico.toFixed(2) : '-'}</td>
-                    <td class="py-2 px-3 text-right font-mono ${diffColor}">${completado ? (dif > 0 ? '+' + dif.toFixed(2) : dif.toFixed(2)) : '-'}</td>
+                    <td class="py-2.5 px-3 text-right text-gray-400 font-mono">${parseFloat(item['Stock SAP'] || 0).toFixed(2)}</td>
+                    <td class="py-2.5 px-3 text-right font-mono font-bold text-gray-800">${fisico !== null ? fisico.toFixed(2) : '-'}</td>
+                    <td class="py-2.5 px-3 text-right font-mono ${diffColor}">${completado ? (dif > 0 ? '+' + dif.toFixed(2) : dif.toFixed(2)) : '-'}</td>
                     ${fotoHtml}
                 `;
                 tbody.appendChild(tr);
@@ -939,6 +975,22 @@
         }
 
         // --- 8. DASHBOARD (avance por día / por grupo) ---
+        // El detalle (tabla) es lo que más se usa para analizar, así que los gráficos de
+        // avance arrancan colapsados y le dejan casi toda la altura disponible a la tabla.
+        function toggleResumenGraficos() {
+            const wrap = document.getElementById('dashboard-charts-wrap');
+            const icon = document.getElementById('icon-toggle-resumen');
+            const label = document.getElementById('txt-toggle-resumen');
+            const mostrar = wrap.classList.contains('hidden-view');
+            wrap.classList.toggle('hidden-view', !mostrar);
+            icon.classList.toggle('fa-chevron-right', !mostrar);
+            icon.classList.toggle('fa-chevron-down', mostrar);
+            label.textContent = mostrar ? 'Ocultar gráficos de avance' : 'Ver gráficos de avance';
+            // Chart.js no calcula bien su tamaño mientras el canvas está oculto (display:none),
+            // así que se lo recalcula recién cuando el panel se vuelve a mostrar.
+            if (mostrar && chartAvanceDiario) setTimeout(() => chartAvanceDiario.resize(), 50);
+        }
+
         let chartAvanceDiario = null;
         function renderizarDashboard() {
             const completados = todosLosDatosReporte.filter(i => i.Registro != null);
@@ -1046,19 +1098,10 @@
                 doc.line(8, 24, pageWidth - 8, 24);
             }
 
-            const head = [['#', 'Código', 'Descripción', ...app.exportExtra.map(c => c.header), 'Stock SAP', 'Diferencia', 'Ubicación', 'Registro'].map(h => ({ content: h }))];
+            const head = [['#', ...app.exportColumns.map(c => c.header)].map(h => ({ content: h }))];
             const bodyFilas = datosFiltradosParaExportar.map(e => {
                 const completado = e.Registro != null;
-                return [
-                    e['Nro'] || '-',
-                    e['Código de Item'] || '',
-                    e['Descripción'] || '',
-                    ...app.exportExtra.map(c => c.get(e, completado)),
-                    parseFloat(e['Stock SAP'] || 0).toFixed(3),
-                    completado ? (parseFloat(e['Diferencia'] || 0) > 0 ? '+' : '') + parseFloat(e['Diferencia'] || 0).toFixed(3) : '-',
-                    e['Ubicación'] || '-',
-                    fmtFecha(e['Registro'])
-                ];
+                return [e['Nro'] || '-', ...app.exportColumns.map(c => c.get(e, completado))];
             });
 
             doc.autoTable({
@@ -1095,7 +1138,7 @@
 
             const infoFiltros = obtenerInfoFiltrosExport();
             const generado = new Date().toLocaleString('es-PE');
-            const encabezadoCols = ['Inventariador', 'Grupo de Trabajo', '#', 'Código de Item', 'Descripción', ...app.exportExtra.map(c => c.header), 'Stock SAP', 'Diferencia', 'Ubicación', 'Observaciones', 'Registro'];
+            const encabezadoCols = ['Inventariador', 'Grupo de Trabajo', '#', ...app.exportColumns.map(c => c.header)];
             const encabezado = [
                 ['ART ATLAS SRL - RUC: 20413770204'],
                 [`TOMA DE INVENTARIO - ${app.label.toUpperCase()} 2025`],
@@ -1110,14 +1153,7 @@
                     e['Inventariador'] || '-',
                     e['Grupo de Trabajo'] || '-',
                     e['Nro'] || '-',
-                    e['Código de Item'] || '',
-                    e['Descripción'] || '',
-                    ...app.exportExtra.map(c => c.get(e, completado)),
-                    parseFloat(e['Stock SAP'] || 0),
-                    parseFloat(e['Diferencia'] || 0),
-                    e['Ubicación'] || '-',
-                    e['Observaciones'] || '-',
-                    e['Registro'] || '-'
+                    ...app.exportColumns.map(c => c.get(e, completado))
                 ];
             });
 
