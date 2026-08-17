@@ -1,0 +1,1273 @@
+<!DOCTYPE html>
+<html lang="es">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Panel de Administración - Toma de Inventarios</title>
+
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+
+    <!-- SweetAlert2 -->
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Supabase -->
+    <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+
+    <!-- PapaParse -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+
+    <!-- jsPDF & AutoTable para exportar a PDF -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
+
+    <!-- SheetJS: exportar a Excel -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- Chart.js: gráfico de avance diario -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
+
+    <style>
+        body {
+            background-color: #f4f7f6;
+            color: #2d3748;
+            font-family: -apple-system, BlinkMacSystemFont, "Inter", sans-serif;
+        }
+
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #f1f1f1; }
+        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 3px; }
+
+        .hidden-view { display: none !important; }
+
+        .smart-input {
+            width: 100%;
+            border: 1px solid #e2e8f0;
+            border-radius: 6px;
+            padding: 8px 12px;
+            font-size: 14px;
+            outline: none;
+            transition: all 0.2s;
+            background: #fff;
+        }
+
+        .smart-input:focus {
+            border-color: #0d9488;
+            box-shadow: 0 0 0 3px rgba(13, 148, 136, 0.1);
+        }
+
+        .smart-label {
+            display: block;
+            font-size: 11px;
+            font-weight: 700;
+            color: #64748b;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .btn-primary {
+            background-color: #0d9488;
+            color: white;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-primary:hover:not(:disabled) { background-color: #0f766e; }
+        .btn-primary:disabled { opacity: 0.6; cursor: not-allowed; }
+
+        .btn-secondary {
+            background-color: #f1f5f9;
+            color: #475569;
+            border-radius: 6px;
+            padding: 8px 16px;
+            font-weight: 600;
+            transition: all 0.2s;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .btn-secondary:hover { background-color: #e2e8f0; }
+
+        .app-tab {
+            padding: 10px 18px;
+            font-size: 13px;
+            font-weight: 700;
+            border-radius: 10px 10px 0 0;
+            color: #64748b;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            transition: all 0.15s;
+            border: 1px solid transparent;
+        }
+        .app-tab:hover { color: #0f766e; background: #f0fdfa; }
+        .app-tab.active {
+            color: #0d9488;
+            background: white;
+            border-color: #e2e8f0;
+            border-bottom-color: white;
+        }
+
+        .sub-tab {
+            padding: 6px 14px;
+            font-size: 12.5px;
+            font-weight: 700;
+            border-radius: 8px;
+            color: #64748b;
+            transition: all 0.15s;
+        }
+        .sub-tab:hover { background: #f1f5f9; }
+        .sub-tab.active { background: #0d9488; color: white; }
+    </style>
+</head>
+
+<body class="flex flex-col h-screen overflow-hidden">
+
+    <!-- NAVBAR -->
+    <nav class="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center z-40 flex-shrink-0 shadow-sm">
+        <div class="flex items-center gap-3">
+            <div class="bg-gray-800 text-white p-2 rounded-lg">
+                <i class="fa-solid fa-shield-halved text-xl"></i>
+            </div>
+            <div>
+                <h1 class="font-bold text-gray-800 leading-none">Panel de Administración</h1>
+                <p class="text-[10px] text-gray-500 font-medium tracking-wide uppercase">Toma de Inventarios 2025</p>
+            </div>
+        </div>
+
+        <div id="nav-user-info" class="hidden items-center gap-4">
+            <div class="text-right hidden sm:block">
+                <div id="lbl-username" class="font-bold text-sm text-gray-800 leading-none">Usuario</div>
+                <div class="text-[11px] text-teal-600 font-bold uppercase mt-1">Administrador</div>
+            </div>
+            <button onclick="logout()" class="text-gray-400 hover:text-red-500 transition-colors bg-gray-50 hover:bg-red-50 w-9 h-9 rounded-full flex items-center justify-center border border-gray-200" title="Cerrar Sesión">
+                <i class="fa-solid fa-power-off"></i>
+            </button>
+        </div>
+    </nav>
+
+    <!-- LOGIN -->
+    <div id="view-login" class="flex-grow flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-gray-100">
+            <div class="text-center mb-8">
+                <div class="inline-block p-4 bg-gray-800 rounded-full mb-3 text-white">
+                    <i class="fa-solid fa-shield-halved text-3xl"></i>
+                </div>
+                <h2 class="text-2xl font-bold text-gray-800">Administración</h2>
+                <p class="text-sm text-gray-500 mt-1">Acceso único para las 4 tomas de inventario</p>
+            </div>
+            <form id="form-login-adm" onsubmit="loginAdmin(event)">
+                <div class="mb-4">
+                    <label class="smart-label text-left">Correo electrónico</label>
+                    <input type="email" id="login-adm-user" required class="smart-input" placeholder="correo@dominio.com" autocomplete="username">
+                </div>
+                <div class="mb-2">
+                    <label class="smart-label text-left">Contraseña</label>
+                    <input type="password" id="login-adm-pass" required class="smart-input" placeholder="••••••••" autocomplete="current-password">
+                </div>
+                <p id="login-adm-error" class="text-xs text-red-500 font-semibold mb-4 hidden-view"></p>
+                <button type="submit" id="btn-login-adm" class="w-full btn-primary bg-gray-800 hover:bg-gray-900 text-base py-3 mb-2 shadow-md hover:shadow-lg">
+                    Acceder Panel <i class="fa-solid fa-lock-open ml-1"></i>
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- PANEL PRINCIPAL -->
+    <div id="view-panel" class="hidden-view flex-grow flex flex-col w-full h-full overflow-hidden bg-gray-50">
+
+        <!-- SELECTOR DE APP -->
+        <div class="bg-gray-100 px-6 pt-3 flex gap-1 flex-shrink-0 border-b border-gray-200" id="app-tabs"></div>
+
+        <!-- SUB-TABS + CONTENIDO -->
+        <div class="flex-grow flex flex-col overflow-hidden bg-white">
+            <div class="bg-white border-b border-gray-200 px-6 py-2.5 flex gap-2 flex-shrink-0" id="sub-tabs">
+                <button onclick="switchSubTab('reportes')" id="tab-reportes" class="sub-tab active">Monitor &amp; Reportes</button>
+                <button onclick="switchSubTab('carga')" id="tab-carga" class="sub-tab">Carga CSV</button>
+                <button onclick="switchSubTab('personal')" id="tab-personal" class="sub-tab">Personal</button>
+                <button onclick="switchSubTab('config')" id="tab-config" class="sub-tab">Configuración</button>
+            </div>
+
+            <!-- SECCIÓN: REPORTES Y AVANCE -->
+            <div id="section-reportes" class="flex-col flex-grow overflow-hidden p-4 sm:p-6">
+                <div class="max-w-7xl mx-auto flex flex-col h-full">
+                    <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 flex-shrink-0">
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-blue-500">
+                            <p class="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Total Maestro SAP</p>
+                            <p class="text-2xl font-bold text-gray-800 font-mono" id="stat-total">0</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-teal-500">
+                            <p class="text-[10px] text-teal-600 uppercase font-bold tracking-wider mb-1">Inventariados</p>
+                            <p class="text-2xl font-bold text-teal-700 font-mono" id="stat-completados">0</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-400">
+                            <p class="text-[10px] text-red-500 uppercase font-bold tracking-wider mb-1">Faltantes</p>
+                            <p class="text-2xl font-bold text-red-600 font-mono" id="stat-faltantes">0</p>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-purple-500 relative overflow-hidden">
+                            <div class="absolute right-[-10px] bottom-[-10px] opacity-10"><i class="fa-solid fa-chart-pie text-6xl text-purple-600"></i></div>
+                            <p class="text-[10px] text-purple-600 uppercase font-bold tracking-wider mb-1">Avance Global</p>
+                            <p class="text-2xl font-bold text-purple-700 font-mono" id="stat-porcentaje">0.0%</p>
+                        </div>
+                    </div>
+
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 flex-shrink-0">
+                        <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
+                            <div class="flex items-center justify-between mb-2">
+                                <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider"><i class="fa-solid fa-chart-column mr-1"></i> Avance por Día</h3>
+                                <span class="text-[10px] text-gray-400 uppercase tracking-wide">Últimos 14 días</span>
+                            </div>
+                            <div class="h-44 relative">
+                                <canvas id="chart-avance-diario"></canvas>
+                                <p id="msg-sin-avance-diario" class="hidden-view text-center text-xs text-gray-400 py-16">Aún no hay conteos registrados en este rango.</p>
+                            </div>
+                        </div>
+                        <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto" style="max-height: 13.5rem;">
+                            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-people-group mr-1"></i> Avance por Grupo</h3>
+                            <div id="dashboard-grupos"></div>
+                        </div>
+                    </div>
+
+                    <div class="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col flex-grow overflow-hidden">
+                        <div class="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 flex-wrap gap-3">
+                            <div class="flex gap-2 w-full md:w-auto flex-grow items-center flex-wrap">
+                                <select id="filtro-estado" onchange="filtrarReportesTabla()" class="smart-input py-1.5 text-xs w-auto font-semibold text-gray-600 bg-white">
+                                    <option value="todos">Todos (Maestro)</option>
+                                    <option value="completados">Completados</option>
+                                    <option value="pendientes">Pendientes</option>
+                                    <option value="diferencias">Con Diferencias</option>
+                                </select>
+                                <select id="filtro-grupo" onchange="filtrarReportesTabla()" class="smart-input py-1.5 text-xs w-auto font-semibold text-gray-600 bg-white">
+                                    <option value="todos">Todos los Grupos</option>
+                                </select>
+                                <input type="date" id="filtro-fecha" onchange="filtrarReportesTabla()" class="smart-input py-1.5 text-xs w-auto text-gray-600 bg-white shadow-sm" title="Filtrar por fecha">
+                                <div class="relative flex-grow max-w-xs min-w-[150px]">
+                                    <i class="fa-solid fa-search absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
+                                    <input type="text" id="filtroReporte" placeholder="Buscar texto..." class="smart-input pl-8 py-1.5 text-xs w-full bg-white">
+                                </div>
+                            </div>
+                            <div class="flex gap-2 w-full md:w-auto justify-end">
+                                <button onclick="cargarReportesAdmin()" class="btn-secondary py-1.5 px-3 text-xs bg-white border border-gray-300 shadow-sm" title="Sincronizar DB"><i class="fa-solid fa-rotate mr-1"></i> Sync</button>
+                                <button onclick="exportarExcel()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-emerald-600 hover:bg-emerald-700 border border-emerald-700"><i class="fa-solid fa-file-excel mr-1"></i> Exportar Excel</button>
+                                <button onclick="exportarPDF()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-red-600 hover:bg-red-700 border border-red-700"><i class="fa-solid fa-file-pdf mr-1"></i> Imprimir PDF</button>
+                            </div>
+                        </div>
+                        <div class="flex-grow overflow-auto relative">
+                            <div id="loading-reports" class="absolute inset-0 bg-white/80 z-20 flex items-center justify-center hidden-view">
+                                <div class="text-center">
+                                    <i class="fa-solid fa-circle-notch fa-spin text-3xl text-teal-600 mb-2"></i>
+                                    <p class="text-gray-600 font-medium text-sm">Descargando base completa...</p>
+                                </div>
+                            </div>
+                            <table class="w-full text-left text-[11px] text-gray-600 whitespace-nowrap">
+                                <thead class="bg-white sticky top-0 border-b border-gray-200 z-10 shadow-sm">
+                                    <tr id="reportes-thead-row"></tr>
+                                </thead>
+                                <tbody id="cuerpoReportes" class="divide-y divide-gray-100">
+                                    <tr><td colspan="12" class="text-center py-10 text-gray-400">Cargando data...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN: CARGA MASIVA -->
+            <div id="section-carga" class="hidden-view flex-grow overflow-y-auto bg-gray-50 p-6">
+                <div class="max-w-3xl mx-auto bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden">
+                    <div class="p-6 border-b border-gray-100 bg-gray-50/50">
+                        <h2 class="text-xl font-bold text-gray-800">Importar Maestro SAP</h2>
+                        <p class="text-sm text-gray-500 mt-1" id="txt-carga-app">Sube el archivo CSV para cargar la base de artículos pendientes a contar.</p>
+                    </div>
+                    <div class="p-6">
+                        <div id="drop-area" class="border-2 border-dashed border-teal-300 p-8 flex flex-col items-center justify-center text-center cursor-pointer mb-4 h-48 bg-teal-50/30 hover:bg-teal-50 rounded-xl transition-colors">
+                            <i class="fa-solid fa-cloud-arrow-up text-4xl text-teal-600 mb-3"></i>
+                            <p class="text-sm font-semibold text-teal-800">Selecciona o arrastra el archivo CSV</p>
+                            <input type="file" id="file-sap" accept=".csv" class="hidden">
+                        </div>
+                        <div id="file-info" class="hidden mb-4 p-4 bg-gray-800 border border-gray-700 rounded-xl flex justify-between items-center text-white">
+                            <div class="flex items-center gap-3">
+                                <i class="fa-solid fa-file-csv text-2xl text-teal-400"></i>
+                                <div>
+                                    <p id="file-name" class="font-bold text-sm">archivo.csv</p>
+                                    <p id="file-rows" class="text-xs text-gray-400">0 filas detectadas</p>
+                                </div>
+                            </div>
+                            <button onclick="limpiarArchivo()" class="text-gray-400 hover:text-white p-2 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
+                        </div>
+                        <button id="btn-procesar-csv" onclick="subirASupabase()" disabled class="w-full btn-primary text-base py-3">
+                            <i class="fa-solid fa-database mr-2"></i> Importar a Base de Datos
+                        </button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN: PERSONAL -->
+            <div id="section-personal" class="hidden-view flex-grow overflow-y-auto bg-gray-50 p-6">
+                <div class="max-w-4xl mx-auto flex flex-col md:flex-row gap-6">
+                    <div class="w-full md:w-1/3">
+                        <div class="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+                            <h2 class="text-lg font-bold text-gray-800 mb-4" id="txt-personal-app">Nuevo Operador</h2>
+                            <form id="form-personal" onsubmit="guardarPersonal(event)">
+                                <div class="mb-4">
+                                    <label class="smart-label">Apellidos y Nombres</label>
+                                    <input type="text" id="nuevo_nombre" required class="smart-input text-sm">
+                                </div>
+                                <div class="mb-6">
+                                    <label class="smart-label">Grupo Asignado</label>
+                                    <div id="preview-siguiente-grupo" class="smart-input text-sm bg-gray-50 text-gray-500 font-semibold cursor-not-allowed">Grupo 1</div>
+                                    <p class="text-[10px] text-gray-400 mt-1">Se asigna automáticamente y en orden.</p>
+                                </div>
+                                <button type="submit" id="btn-guardar-personal" class="w-full btn-primary py-2 text-sm">Registrar</button>
+                            </form>
+                        </div>
+                    </div>
+                    <div class="w-full md:w-2/3">
+                        <div class="bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden">
+                            <div class="p-4 border-b border-gray-100 bg-gray-50/50">
+                                <h2 class="text-lg font-bold text-gray-800">Personal Registrado</h2>
+                            </div>
+                            <table class="w-full text-left text-sm text-gray-600">
+                                <thead class="bg-white border-b border-gray-100">
+                                    <tr>
+                                        <th class="py-3 px-4 font-bold text-gray-500 uppercase tracking-wider text-xs">Nombre</th>
+                                        <th class="py-3 px-4 font-bold text-gray-500 uppercase tracking-wider text-xs">Grupo</th>
+                                        <th class="py-3 px-4 text-center w-16"><i class="fa-solid fa-cog"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cuerpoPersonal" class="divide-y divide-gray-50">
+                                    <tr><td colspan="3" class="text-center py-8 text-gray-400">Cargando...</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECCIÓN: CONFIGURACIÓN -->
+            <div id="section-config" class="hidden-view flex-grow overflow-y-auto bg-gray-50 p-6">
+                <div class="max-w-2xl mx-auto flex flex-col gap-4">
+                    <div class="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
+                        <h2 class="text-lg font-bold text-gray-800 mb-1">Conteo a Ciegas</h2>
+                        <p class="text-sm text-gray-500 mb-4">Controla si los operadores ven el stock teórico SAP y la diferencia mientras cuentan.</p>
+                        <button onclick="toggleOcultarStockSap()" id="btn-toggle-sap" class="btn-secondary bg-white border border-gray-300 shadow-sm px-4 py-2.5 text-sm">
+                            <i class="fa-solid fa-circle-notch fa-spin mr-2"></i> <span id="txt-toggle-sap">Cargando...</span>
+                        </button>
+                    </div>
+
+                    <div id="card-foto-balanza" class="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 hidden-view">
+                        <h2 class="text-lg font-bold text-gray-800 mb-1">Foto de la Báscula</h2>
+                        <p class="text-sm text-gray-500 mb-4">Exige (o no) que el operador adjunte una foto del peso mostrado en la báscula antes de guardar cada conteo.</p>
+                        <button onclick="toggleExigirFotoBalanza()" id="btn-toggle-foto" class="btn-secondary bg-white border border-gray-300 shadow-sm px-4 py-2.5 text-sm">
+                            <i class="fa-solid fa-circle-notch fa-spin mr-2"></i> <span id="txt-toggle-foto">Cargando...</span>
+                        </button>
+                    </div>
+
+                    <div class="bg-white border border-red-200 shadow-sm rounded-2xl p-6">
+                        <h2 class="text-lg font-bold text-red-700 mb-1">Zona de Peligro</h2>
+                        <p class="text-sm text-gray-500 mb-4">Borra permanentemente todos los registros del maestro y los conteos de esta app. No afecta a las otras 3 apps.</p>
+                        <button onclick="vaciarTodaLaTabla()" class="btn-secondary bg-white text-red-600 border border-red-300 hover:bg-red-50 px-4 py-2.5 text-sm">
+                            <i class="fa-solid fa-triangle-exclamation mr-2"></i> Borrar Base de Datos
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- CÓDIGO JS PRINCIPAL -->
+    <script>
+        // --- 1. CONFIGURACIÓN SUPABASE (compartida por las 4 apps) ---
+        const SUPABASE_URL = 'https://ozyefhongybussdaxtex.supabase.co';
+        const SUPABASE_ANON_KEY = 'sb_publishable_m7D5FrIs7rqufPO0T-GA3g_gcZDVrRe';
+        const { createClient } = supabase;
+        const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+
+        // --- 2. METADATA DE LAS 4 APPS ---
+        // Cada app define su tabla, tabla de personal, tabla de configuración, las columnas que
+        // se importan del CSV maestro ("#"/"Nro" hasta "Stock SAP") y cómo armar las columnas
+        // de la tabla de reportes / Excel / PDF. Todo lo demás (fetch paginado, filtros, export,
+        // CSV, personal, config) es código genérico que solo lee esta metadata.
+        const num3 = (v) => parseFloat(v || 0).toFixed(3);
+        const fmtFecha = (v) => v ? String(v).replace('T', ' ').split('.')[0] : '-';
+
+        const APPS = {
+            avios: {
+                label: 'Avíos', icon: 'fa-solid fa-shapes',
+                tabla: 'avios', tablaPersonal: 'inventariadores_avios', tablaConfig: 'avios_config',
+                exigeFoto: false,
+                importFields: [
+                    { db: 'Nro', aliases: ['nro'] },
+                    { db: 'Grupo de Articulos', aliases: ['grupo de articulos', 'grupo'] },
+                    { db: 'Código de Item', aliases: ['codigo de item', 'codigo', 'item'], required: true },
+                    { db: 'Descripción', aliases: ['descripcion'] },
+                    { db: 'Unidad de Medida', aliases: ['unidad de medida', 'um'] },
+                    { db: 'Almacen', aliases: ['almacen'] },
+                    { db: 'Sub Almacen', aliases: ['sub almacen', 'subalmacen'] },
+                    { db: 'Reserva', aliases: ['reserva'], numeric: true },
+                    { db: 'Sin Reserva', aliases: ['sin reserva'], numeric: true },
+                    { db: 'Stock SAP', aliases: ['stock sap', 'stock'], numeric: true },
+                ],
+                columnasMedias: [
+                    { label: 'Código', get: it => it['Código de Item'] || '', class: 'text-teal-700 font-bold' },
+                    { label: 'Descripción', get: it => it['Descripción'] || '', truncate: true },
+                ],
+                getFisico: (it, completado) => completado ? parseFloat(it['Total Inventario'] || 0) : null,
+                exportExtra: [
+                    { header: 'Grupo de Artículos', get: it => it['Grupo de Articulos'] || '-' },
+                    { header: 'UM', get: it => it['Unidad de Medida'] || '' },
+                    { header: 'Almacén', get: it => it['Almacen'] || '' },
+                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
+                    { header: 'Reserva SAP', get: it => num3(it['Reserva']), num: true },
+                    { header: 'Sin Reserva SAP', get: it => num3(it['Sin Reserva']), num: true },
+                    { header: 'Reserva Conteo', get: (it, c) => c ? num3(it['Reserva Inv']) : '-', num: true },
+                    { header: 'Sin Reserva Conteo', get: (it, c) => c ? num3(it['Sin Reserva Inv']) : '-', num: true },
+                ],
+            },
+            hilado: {
+                label: 'Hilado', icon: 'fa-solid fa-boxes-stacked',
+                tabla: 'hilado', tablaPersonal: 'inventariadores_hilado', tablaConfig: 'hilado_config',
+                exigeFoto: true,
+                importFields: [
+                    { db: 'Nro', aliases: ['nro'] },
+                    { db: 'Grupo de Articulos', aliases: ['grupo de articulos', 'grupo'] },
+                    { db: 'Código de Item', aliases: ['codigo de item', 'codigo', 'item'], required: true },
+                    { db: 'Descripción', aliases: ['descripcion'] },
+                    { db: 'Lote', aliases: ['lote', 'nro lote', 'nro de lote', 'numero de lote', 'n lote', 'no lote', 'batch', 'lot'] },
+                    { db: 'Unidad de Medida', aliases: ['unidad de medida', 'um'] },
+                    { db: 'Almacen', aliases: ['almacen'] },
+                    { db: 'Sub Almacen', aliases: ['sub almacen', 'subalmacen'] },
+                    { db: 'Stock SAP', aliases: ['stock sap', 'stock'], numeric: true },
+                ],
+                columnasMedias: [
+                    { label: 'Código', get: it => it['Código de Item'] || '', class: 'text-teal-700 font-bold' },
+                    { label: 'Descripción', get: it => it['Descripción'] || '', truncate: true },
+                    { label: 'Lote', get: it => it['Lote'] || '-', mono: true },
+                ],
+                getFisico: (it, completado) => completado ? parseFloat(it['Peso Neto'] ?? it['Peso Neto Inv'] ?? 0) : null,
+                tieneFoto: true,
+                exportExtra: [
+                    { header: 'Lote', get: it => it['Lote'] || '-' },
+                    { header: 'UM', get: it => it['Unidad de Medida'] || '' },
+                    { header: 'Almacén', get: it => it['Almacen'] || '' },
+                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
+                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-', num: true },
+                    { header: 'Nro Conos', get: (it, c) => c ? `${it['Nro de Conos'] || 0} (${it['Tipo de Cono'] || ''})` : '-' },
+                    { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-', num: true },
+                    { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
+                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', num: true },
+                ],
+            },
+            telas: {
+                label: 'Telas', icon: 'fa-solid fa-shirt',
+                tabla: 'telas', tablaPersonal: 'inventariadores_telas', tablaConfig: 'telas_config',
+                exigeFoto: false,
+                importFields: [
+                    { db: '#', aliases: ['n', 'numero'] },
+                    { db: 'Nro', aliases: ['nro'] },
+                    { db: 'Grupo de Articulos', aliases: ['grupo de articulos', 'grupo'] },
+                    { db: 'Código de Item', aliases: ['codigo de item', 'codigo', 'item'], required: true },
+                    { db: 'Diseño', aliases: ['diseno'] },
+                    { db: 'Descripción', aliases: ['descripcion'] },
+                    { db: 'Lote', aliases: ['lote', 'nro lote', 'nro de lote', 'numero de lote', 'n lote', 'no lote', 'batch', 'lot'] },
+                    { db: 'Unidad de Medida', aliases: ['unidad de medida', 'um'] },
+                    { db: 'Almacen', aliases: ['almacen'] },
+                    { db: 'Sub Almacen', aliases: ['sub almacen', 'subalmacen'] },
+                    { db: 'Stock SAP', aliases: ['stock sap', 'stock'], numeric: true },
+                ],
+                columnasMedias: [
+                    { label: 'Código', get: it => it['Código de Item'] || '', class: 'text-teal-700 font-bold' },
+                    { label: 'Diseño', get: it => it['Diseño'] || '-', mono: true },
+                    { label: 'Descripción', get: it => it['Descripción'] || '', truncate: true },
+                    { label: 'Lote', get: it => it['Lote'] || '-', mono: true },
+                ],
+                getFisico: (it, completado) => completado ? parseFloat(it['Peso Neto'] ?? it['Peso Neto Inv'] ?? 0) : null,
+                exportExtra: [
+                    { header: 'Diseño', get: it => it['Diseño'] || '-' },
+                    { header: 'Lote', get: it => it['Lote'] || '-' },
+                    { header: 'UM', get: it => it['Unidad de Medida'] || '' },
+                    { header: 'Almacén', get: it => it['Almacen'] || '' },
+                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
+                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-', num: true },
+                    { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
+                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', num: true },
+                ],
+            },
+            desperdicios: {
+                label: 'Desperdicios', icon: 'fa-solid fa-recycle',
+                tabla: 'desperdicios', tablaPersonal: 'inventariadores_desperdicios', tablaConfig: 'desperdicios_config',
+                exigeFoto: false,
+                importFields: [
+                    { db: '#', aliases: ['n', 'numero'] },
+                    { db: 'Nro', aliases: ['nro'] },
+                    { db: 'Grupo de Articulos', aliases: ['grupo de articulos', 'grupo'] },
+                    { db: 'Código de Item', aliases: ['codigo de item', 'codigo', 'item'], required: true },
+                    { db: 'Descripción', aliases: ['descripcion'] },
+                    { db: 'Lote', aliases: ['lote', 'nro lote', 'nro de lote', 'numero de lote', 'n lote', 'no lote', 'batch', 'lot'] },
+                    { db: 'Unidad de Medida', aliases: ['unidad de medida', 'um'] },
+                    { db: 'Almacen', aliases: ['almacen'] },
+                    { db: 'Sub Almacen', aliases: ['sub almacen', 'subalmacen'] },
+                    { db: 'Stock SAP', aliases: ['stock sap', 'stock'], numeric: true },
+                ],
+                columnasMedias: [
+                    { label: 'Código', get: it => it['Código de Item'] || '', class: 'text-teal-700 font-bold' },
+                    { label: 'Descripción', get: it => it['Descripción'] || '', truncate: true },
+                    { label: 'Lote', get: it => it['Lote'] || '-', mono: true },
+                    { label: 'Bloqueo', get: it => it['Bloqueo'] ? '<span class="bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[10px] font-bold">SÍ</span>' : '', html: true, center: true },
+                ],
+                getFisico: (it, completado) => completado ? parseFloat(it['Peso Neto'] ?? it['Peso Neto Inv'] ?? 0) : null,
+                exportExtra: [
+                    { header: 'Lote', get: it => it['Lote'] || '-' },
+                    { header: 'UM', get: it => it['Unidad de Medida'] || '' },
+                    { header: 'Almacén', get: it => it['Almacen'] || '' },
+                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
+                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-', num: true },
+                    { header: 'Nro Conos', get: (it, c) => c ? `${it['Nro de Conos'] || 0} (${it['Tipo de Cono'] || ''})` : '-' },
+                    { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-', num: true },
+                    { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
+                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', num: true },
+                    { header: 'Bloqueo', get: it => it['Bloqueo'] ? 'SI' : 'NO' },
+                ],
+            },
+        };
+
+        let currentApp = 'avios';
+        let currentSubTab = 'reportes';
+        let todosLosDatosReporte = [];
+        let datosFiltradosParaExportar = [];
+        let datosPersonal = [];
+        let csvDataToUpload = [];
+        let configuracionApp = { ocultar_stock_sap: true, exigir_foto_balanza: false };
+
+        // --- 3. UTILIDADES COMPARTIDAS ---
+        function esc(valor) {
+            if (valor === null || valor === undefined) return '';
+            return String(valor)
+                .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;').replace(/'/g, '&#039;');
+        }
+
+        async function fetchAllSupabase(tableName, selectStr = '*') {
+            let allData = [];
+            let step = 1000, from = 0, to = step - 1, hasMore = true;
+            while (hasMore) {
+                const { data, error } = await _supabase.from(tableName).select(selectStr).range(from, to);
+                if (error) throw error;
+                if (data && data.length > 0) {
+                    allData = allData.concat(data);
+                    from += step; to += step;
+                }
+                if (!data || data.length < step) hasMore = false;
+            }
+            return allData;
+        }
+
+        // --- 4. LOGIN ADMIN (Supabase Auth, compartido por las 4 apps) ---
+        async function loginAdmin(e) {
+            e.preventDefault();
+            const errorEl = document.getElementById('login-adm-error');
+            errorEl.classList.add('hidden-view');
+            const btn = document.getElementById('btn-login-adm');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Verificando...';
+
+            const email = document.getElementById('login-adm-user').value.trim();
+            const pass = document.getElementById('login-adm-pass').value;
+            const { data, error } = await _supabase.auth.signInWithPassword({ email, password: pass });
+
+            document.getElementById('login-adm-pass').value = '';
+            btn.disabled = false;
+            btn.innerHTML = 'Acceder Panel <i class="fa-solid fa-lock-open ml-1"></i>';
+
+            if (error || !data.user) {
+                errorEl.textContent = 'Correo o contraseña incorrectos.';
+                errorEl.classList.remove('hidden-view');
+                return;
+            }
+            iniciarSesion(data.user.email);
+        }
+
+        async function restaurarSesionAdmin() {
+            const { data: { session } } = await _supabase.auth.getSession();
+            if (session && session.user) iniciarSesion(session.user.email);
+        }
+
+        function iniciarSesion(email) {
+            document.getElementById('view-login').classList.add('hidden-view');
+            document.getElementById('view-panel').classList.remove('hidden-view');
+            document.getElementById('nav-user-info').classList.remove('hidden');
+            document.getElementById('nav-user-info').style.display = 'flex';
+            document.getElementById('lbl-username').innerText = email;
+            renderizarAppTabs();
+            seleccionarApp(currentApp);
+        }
+
+        async function logout() {
+            await _supabase.auth.signOut();
+            document.getElementById('view-panel').classList.add('hidden-view');
+            document.getElementById('nav-user-info').style.display = 'none';
+            document.getElementById('form-login-adm').reset();
+            document.getElementById('view-login').classList.remove('hidden-view');
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            restaurarSesionAdmin();
+            const hoyStr = new Date().toISOString().split('T')[0];
+            document.getElementById('filtro-fecha').value = hoyStr;
+            configurarCargaCSV();
+        });
+
+        // --- 5. SELECTOR DE APP Y SUB-TABS ---
+        function renderizarAppTabs() {
+            const cont = document.getElementById('app-tabs');
+            cont.innerHTML = Object.keys(APPS).map(key => {
+                const app = APPS[key];
+                return `<button onclick="seleccionarApp('${key}')" id="apptab-${key}" class="app-tab"><i class="${app.icon}"></i> ${app.label}</button>`;
+            }).join('');
+        }
+
+        function seleccionarApp(key) {
+            currentApp = key;
+            Object.keys(APPS).forEach(k => {
+                document.getElementById('apptab-' + k).classList.toggle('active', k === key);
+            });
+            document.getElementById('txt-carga-app').textContent = `Sube el archivo CSV para cargar la base de artículos pendientes a contar (${APPS[key].label}).`;
+            document.getElementById('txt-personal-app').textContent = `Nuevo Operador (${APPS[key].label})`;
+            document.getElementById('card-foto-balanza').classList.toggle('hidden-view', !APPS[key].exigeFoto);
+            limpiarArchivo();
+            switchSubTab(currentSubTab);
+        }
+
+        function switchSubTab(tab) {
+            currentSubTab = tab;
+            ['reportes', 'carga', 'personal', 'config'].forEach(t => {
+                document.getElementById('tab-' + t).classList.toggle('active', t === tab);
+                document.getElementById('section-' + t).classList.toggle('hidden-view', t !== tab);
+            });
+            if (tab === 'reportes') cargarReportesAdmin();
+            else if (tab === 'personal') obtenerPersonalBaseDatos();
+            else if (tab === 'config') cargarConfiguracion();
+        }
+
+        // --- 6. CONFIGURACIÓN (ocultar SAP / exigir foto / vaciar BD) ---
+        async function cargarConfiguracion() {
+            const app = APPS[currentApp];
+            try {
+                const { data, error } = await _supabase.from(app.tablaConfig).select('*').eq('id', 1).single();
+                if (error) throw error;
+                if (data) configuracionApp = data;
+            } catch (e) {
+                configuracionApp = { ocultar_stock_sap: true, exigir_foto_balanza: false };
+            }
+            actualizarBotonToggleSap();
+            actualizarBotonToggleFoto();
+        }
+
+        function actualizarBotonToggleSap() {
+            const btn = document.getElementById('btn-toggle-sap');
+            const txt = document.getElementById('txt-toggle-sap');
+            if (!btn || !txt) return;
+            if (configuracionApp.ocultar_stock_sap) {
+                txt.innerHTML = 'Stock SAP: <b>Oculto</b> a operadores';
+                btn.querySelector('i').className = 'fa-solid fa-eye-slash mr-2';
+            } else {
+                txt.innerHTML = 'Stock SAP: <b>Visible</b> a operadores';
+                btn.querySelector('i').className = 'fa-solid fa-eye mr-2';
+            }
+        }
+
+        function actualizarBotonToggleFoto() {
+            const btn = document.getElementById('btn-toggle-foto');
+            const txt = document.getElementById('txt-toggle-foto');
+            if (!btn || !txt) return;
+            if (configuracionApp.exigir_foto_balanza) {
+                txt.innerHTML = 'Foto Báscula: <b>Obligatoria</b>';
+                btn.querySelector('i').className = 'fa-solid fa-camera mr-2';
+            } else {
+                txt.innerHTML = 'Foto Báscula: <b>Opcional</b>';
+                btn.querySelector('i').className = 'fa-solid fa-camera-slash mr-2';
+            }
+        }
+
+        async function toggleOcultarStockSap() {
+            const app = APPS[currentApp];
+            const nuevoValor = !configuracionApp.ocultar_stock_sap;
+            const accion = nuevoValor ? 'ocultar' : 'mostrar';
+            const result = await Swal.fire({
+                title: nuevoValor ? `¿Ocultar Stock SAP a operadores de ${app.label}?` : `¿Mostrar Stock SAP a operadores de ${app.label}?`,
+                text: nuevoValor ? 'Los operadores dejarán de ver el stock teórico y la diferencia mientras cuentan (conteo a ciegas).' : 'Los operadores volverán a ver el stock teórico SAP y la diferencia en tiempo real.',
+                icon: 'warning', showCancelButton: true, confirmButtonColor: '#0d9488',
+                confirmButtonText: `Sí, ${accion}`, cancelButtonText: 'Cancelar'
+            });
+            if (!result.isConfirmed) return;
+            try {
+                const { error } = await _supabase.from(app.tablaConfig).update({ ocultar_stock_sap: nuevoValor }).eq('id', 1);
+                if (error) throw error;
+                configuracionApp.ocultar_stock_sap = nuevoValor;
+                actualizarBotonToggleSap();
+                Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Actualizado', showConfirmButton: false, timer: 1200 });
+            } catch (error) {
+                Swal.fire('Error', error.message, 'error');
+            }
+        }
+
+        async function toggleExigirFotoBalanza() {
+            const app = APPS[currentApp];
+            const nuevoValor = !configuracionApp.exigir_foto_balanza;
+            const accion = nuevoValor ? 'exigir' : 'dejar de exigir';
+            const result = await Swal.fire({
+                title: nuevoValor ? '¿Exigir foto de la báscula?' : '¿Dejar de exigir la foto?',
+                text: nuevoValor ? 'Los operadores no podrán guardar un conteo sin adjuntar una foto del peso mostrado en la báscula.' : 'La foto de la báscula pasará a ser opcional para los operadores.',
+                icon: 'warning', showCancelButton: true, confirmButtonColor: '#0d9488',
+                confirmButtonText: `Sí, ${accion}`, cancelButtonText: 'Cancelar'
+            });
+            if (!result.isConfirmed) return;
+            try {
+                const { error } = await _supabase.from(app.tablaConfig).update({ exigir_foto_balanza: nuevoValor }).eq('id', 1);
+                if (error) throw error;
+                configuracionApp.exigir_foto_balanza = nuevoValor;
+                actualizarBotonToggleFoto();
+                Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Actualizado', showConfirmButton: false, timer: 1200 });
+            } catch (error) {
+                Swal.fire('Error', error.message, 'error');
+            }
+        }
+
+        async function vaciarTodaLaTabla() {
+            const app = APPS[currentApp];
+            const { value: confirmacion } = await Swal.fire({
+                title: `¿Limpiar toda la base de datos de ${app.label}?`,
+                html: "<b>ESTA ACCIÓN ES IRREVERSIBLE.</b><br>Se borrarán absolutamente todos los registros.<br><br>Escribe <b>BORRAR</b> para confirmar:",
+                icon: 'warning', input: 'text', inputPlaceholder: 'BORRAR', showCancelButton: true,
+                confirmButtonColor: '#ef4444', cancelButtonColor: '#64748b',
+                confirmButtonText: 'Sí, borrar todo permanentemente', cancelButtonText: 'Cancelar',
+                preConfirm: (valor) => {
+                    if (valor !== 'BORRAR') { Swal.showValidationMessage('Debes escribir exactamente BORRAR para continuar'); return false; }
+                    return valor;
+                }
+            });
+            if (confirmacion !== 'BORRAR') return;
+            try {
+                Swal.fire({ title: 'Borrando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                const { error } = await _supabase.from(app.tabla).delete().not('id', 'is', null);
+                if (error) throw error;
+                Swal.fire('¡Borrado!', 'La base de datos está completamente limpia.', 'success');
+                cargarReportesAdmin();
+            } catch (err) {
+                Swal.fire('Error', err.message, 'error');
+            }
+        }
+
+        // --- 7. REPORTES / MONITOR ---
+        function construirTheadReportes() {
+            const app = APPS[currentApp];
+            const cols = ['Estado', 'Fecha Reg.', 'Inventariador', ...app.columnasMedias.map(c => c.label), 'SAP', 'Físico', 'Dif'];
+            if (app.tieneFoto) cols.push('Foto');
+            document.getElementById('reportes-thead-row').innerHTML = cols.map((c, i) => {
+                const isRight = (c === 'SAP' || c === 'Físico' || c === 'Dif');
+                const isCenter = (c === 'Foto');
+                return `<th class="py-2 px-3 font-bold text-gray-500 uppercase ${isRight ? 'text-right' : ''} ${isCenter ? 'text-center' : ''}">${c}</th>`;
+            }).join('');
+            return cols.length;
+        }
+
+        function verFotoBalanza(url) {
+            Swal.fire({ imageUrl: url, imageAlt: 'Foto de la báscula', showConfirmButton: false, showCloseButton: true, width: 'min(90vw, 600px)', padding: '0.5rem' });
+        }
+
+        async function cargarReportesAdmin() {
+            const app = APPS[currentApp];
+            const nCols = construirTheadReportes();
+            try {
+                document.getElementById('loading-reports').classList.remove('hidden-view');
+                const allData = await fetchAllSupabase(app.tabla);
+                todosLosDatosReporte = allData;
+
+                const gruposUnicos = [...new Set(todosLosDatosReporte.filter(i => i['Grupo de Trabajo']).map(i => i['Grupo de Trabajo']))].sort();
+                const selGrupo = document.getElementById('filtro-grupo');
+                selGrupo.innerHTML = '<option value="todos">Todos los Grupos</option>' + gruposUnicos.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
+
+                filtrarReportesTabla();
+                renderizarDashboard();
+            } catch (error) {
+                document.getElementById('cuerpoReportes').innerHTML = `<tr><td colspan="${nCols}" class="text-center py-10 text-red-400">Error: ${esc(error.message)}</td></tr>`;
+            } finally {
+                document.getElementById('loading-reports').classList.add('hidden-view');
+            }
+        }
+
+        function filtrarReportesTabla() {
+            const estado = document.getElementById('filtro-estado').value;
+            const grupo = document.getElementById('filtro-grupo').value;
+            const fecha = document.getElementById('filtro-fecha').value;
+            const texto = document.getElementById('filtroReporte').value.toLowerCase().trim();
+
+            let datos = todosLosDatosReporte.filter(item => {
+                const completado = item.Registro != null;
+                if (estado === 'completados' && !completado) return false;
+                if (estado === 'pendientes' && completado) return false;
+                if (estado === 'diferencias' && (!completado || Math.abs(parseFloat(item['Diferencia'] || 0)) < 0.001)) return false;
+                if (grupo !== 'todos' && item['Grupo de Trabajo'] !== grupo) return false;
+                if (fecha && (!item.Registro || !String(item.Registro).startsWith(fecha))) return false;
+                if (texto) {
+                    const campos = [item['Código de Item'], item['Descripción'], item['Inventariador'], item['Lote'], item['Diseño']];
+                    if (!campos.some(c => (c || '').toLowerCase().includes(texto))) return false;
+                }
+                return true;
+            });
+
+            datosFiltradosParaExportar = datos;
+            renderizarReportesAdmin(datos);
+            actualizarStatsGlobales();
+        }
+
+        function actualizarStatsGlobales() {
+            const total = todosLosDatosReporte.length;
+            const completados = todosLosDatosReporte.filter(i => i.Registro != null).length;
+            const faltantes = total - completados;
+            const pct = total === 0 ? 0 : (completados / total * 100);
+            document.getElementById('stat-total').textContent = total;
+            document.getElementById('stat-completados').textContent = completados;
+            document.getElementById('stat-faltantes').textContent = faltantes;
+            document.getElementById('stat-porcentaje').textContent = pct.toFixed(1) + '%';
+        }
+
+        function renderizarReportesAdmin(datos) {
+            const app = APPS[currentApp];
+            const nCols = 8 + app.columnasMedias.length + (app.tieneFoto ? 1 : 0);
+            const tbody = document.getElementById('cuerpoReportes');
+            tbody.innerHTML = '';
+
+            if (datos.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="${nCols}" class="text-center py-10 text-gray-500 font-medium">No hay registros que coincidan con los filtros.</td></tr>`;
+                return;
+            }
+
+            const datosVisuales = datos.slice(0, 500);
+            datosVisuales.forEach((item) => {
+                const completado = item.Registro != null;
+                const estadoBadge = completado
+                    ? `<span class="bg-teal-100 text-teal-700 px-2 py-0.5 rounded text-[10px] font-bold">Hecho</span>`
+                    : `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold">Pendiente</span>`;
+
+                const dif = parseFloat(item['Diferencia'] || 0);
+                let diffColor = "text-gray-400";
+                if (completado) {
+                    if (dif > 0) diffColor = "text-teal-600 font-bold";
+                    if (dif < 0) diffColor = "text-red-500 font-bold";
+                }
+
+                const fisico = app.getFisico(item, completado);
+                const mediasHtml = app.columnasMedias.map(c => {
+                    const val = c.get(item);
+                    const cls = `py-2 px-3 ${c.truncate ? 'truncate max-w-[200px]' : ''} ${c.mono ? 'font-mono text-[10px] text-gray-600' : ''} ${c.class || ''} ${c.center ? 'text-center' : ''}`;
+                    return `<td class="${cls}" ${c.truncate ? `title="${esc(val)}"` : ''}>${c.html ? val : esc(val)}</td>`;
+                }).join('');
+
+                const fotoHtml = app.tieneFoto
+                    ? `<td class="py-2 px-3 text-center">${item['Foto Balanza'] ? `<button type="button" onclick="verFotoBalanza('${esc(item['Foto Balanza'])}')" class="text-teal-600 hover:text-teal-800" title="Ver foto de la báscula"><i class="fa-solid fa-image"></i></button>` : '<span class="text-gray-300"><i class="fa-solid fa-image-slash"></i></span>'}</td>`
+                    : '';
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-gray-50 border-b border-gray-100 transition-colors";
+                tr.innerHTML = `
+                    <td class="py-2 px-3">${estadoBadge}</td>
+                    <td class="py-2 px-3 text-gray-500 font-mono text-[10px]">${esc(fmtFecha(item.Registro))}</td>
+                    <td class="py-2 px-3 font-semibold text-gray-700 text-[10px] truncate max-w-[100px]">${esc(item['Inventariador'] || '-')}</td>
+                    ${mediasHtml}
+                    <td class="py-2 px-3 text-right text-gray-400 font-mono">${parseFloat(item['Stock SAP'] || 0).toFixed(2)}</td>
+                    <td class="py-2 px-3 text-right font-mono font-bold text-gray-800">${fisico !== null ? fisico.toFixed(2) : '-'}</td>
+                    <td class="py-2 px-3 text-right font-mono ${diffColor}">${completado ? (dif > 0 ? '+' + dif.toFixed(2) : dif.toFixed(2)) : '-'}</td>
+                    ${fotoHtml}
+                `;
+                tbody.appendChild(tr);
+            });
+
+            if (datos.length > 500) {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td colspan="${nCols}" class="text-center py-4 text-xs text-gray-400">Mostrando 500 de ${datos.length} registros filtrados. Exporta a Excel o PDF para ver todos.</td>`;
+                tbody.appendChild(tr);
+            }
+        }
+
+        // --- 8. DASHBOARD (avance por día / por grupo) ---
+        let chartAvanceDiario = null;
+        function renderizarDashboard() {
+            const completados = todosLosDatosReporte.filter(i => i.Registro != null);
+
+            const porDia = {};
+            const hoy = new Date();
+            for (let i = 13; i >= 0; i--) {
+                const d = new Date(hoy);
+                d.setDate(d.getDate() - i);
+                porDia[d.toISOString().split('T')[0]] = 0;
+            }
+            completados.forEach(item => {
+                const fecha = String(item.Registro || '').split('T')[0].split(' ')[0];
+                if (fecha in porDia) porDia[fecha]++;
+            });
+
+            const canvas = document.getElementById('chart-avance-diario');
+            const msg = document.getElementById('msg-sin-avance-diario');
+            const totalPeriodo = Object.values(porDia).reduce((a, b) => a + b, 0);
+            if (chartAvanceDiario) { chartAvanceDiario.destroy(); chartAvanceDiario = null; }
+
+            if (totalPeriodo === 0) {
+                canvas.classList.add('hidden-view');
+                msg.classList.remove('hidden-view');
+            } else {
+                canvas.classList.remove('hidden-view');
+                msg.classList.add('hidden-view');
+                chartAvanceDiario = new Chart(canvas, {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(porDia).map(f => f.slice(5).split('-').reverse().join('/')),
+                        datasets: [{ data: Object.values(porDia), backgroundColor: '#0d9488', borderRadius: 4 }]
+                    },
+                    options: {
+                        responsive: true, maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, ticks: { precision: 0 } } }
+                    }
+                });
+            }
+
+            const porGrupo = {};
+            todosLosDatosReporte.forEach(item => {
+                const g = item['Grupo de Trabajo'] || 'Sin Grupo';
+                if (!porGrupo[g]) porGrupo[g] = { total: 0, contados: 0 };
+                porGrupo[g].total++;
+                if (item.Registro != null) porGrupo[g].contados++;
+            });
+
+            const cont = document.getElementById('dashboard-grupos');
+            const grupos = Object.keys(porGrupo).sort();
+            if (grupos.length === 0) {
+                cont.innerHTML = '<p class="text-xs text-gray-400 text-center py-4">Sin datos aún.</p>';
+            } else {
+                cont.innerHTML = grupos.map(g => {
+                    const { total, contados } = porGrupo[g];
+                    const pct = total === 0 ? 0 : Math.round((contados / total) * 100);
+                    return `<div class="mb-2.5">
+                        <div class="flex justify-between text-[11px] mb-1"><span class="font-semibold text-gray-600 truncate">${esc(g)}</span><span class="font-mono text-gray-500">${contados}/${total}</span></div>
+                        <div class="w-full bg-gray-100 rounded-full h-1.5"><div class="bg-teal-500 h-1.5 rounded-full" style="width:${pct}%"></div></div>
+                    </div>`;
+                }).join('');
+            }
+        }
+
+        // --- 9. EXPORTACIÓN PDF Y EXCEL (genérico por app) ---
+        function obtenerInfoFiltrosExport() {
+            const estadoSel = document.getElementById('filtro-estado');
+            const grupoSel = document.getElementById('filtro-grupo');
+            const fechaVal = document.getElementById('filtro-fecha').value;
+            return {
+                grupo: (grupoSel.value === 'todos' ? 'Todos' : grupoSel.value).replace(/^Grupo\s*/i, ''),
+                filtro: estadoSel.options[estadoSel.selectedIndex].text,
+                fecha: fechaVal || 'Todas'
+            };
+        }
+
+        function exportarPDF() {
+            const app = APPS[currentApp];
+            if (datosFiltradosParaExportar.length === 0) return Swal.fire('Vacío', 'No hay datos para exportar con los filtros actuales', 'info');
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('landscape');
+            const pageWidth = doc.internal.pageSize.width;
+            const generado = new Date().toLocaleString('es-PE');
+            const infoFiltros = obtenerInfoFiltrosExport();
+            const inventariadoresUnicos = [...new Set(datosFiltradosParaExportar.map(e => e['Inventariador']).filter(Boolean))];
+            const inventariadorTxt = inventariadoresUnicos.length === 0 ? '-' : inventariadoresUnicos.length === 1 ? inventariadoresUnicos[0] : `Varios (${inventariadoresUnicos.length})`;
+
+            function dibujarEncabezado() {
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+                doc.text(`Generado: ${generado}`, 8, 8);
+                doc.setTextColor(15, 23, 42);
+                doc.setFont("helvetica", "bold"); doc.setFontSize(13);
+                doc.text("ART ATLAS SRL", 8, 15);
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+                doc.text("RUC: 20413770204", 8, 19.5);
+                doc.setTextColor(15, 23, 42);
+                doc.setFont("helvetica", "bold"); doc.setFontSize(14);
+                doc.text(`TOMA DE INVENTARIO - ${app.label.toUpperCase()}`, pageWidth / 2, 15, { align: "center" });
+                doc.setFont("helvetica", "normal"); doc.setFontSize(8); doc.setTextColor(71, 85, 105);
+                doc.text(`Grupo: ${infoFiltros.grupo}    Inventariador: ${inventariadorTxt}    Fecha: ${infoFiltros.fecha}`, pageWidth / 2, 20.5, { align: "center" });
+                doc.setTextColor(15, 23, 42);
+                doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.3);
+                doc.line(8, 24, pageWidth - 8, 24);
+            }
+
+            const head = [['#', ...app.exportExtra.map(c => c.header), 'Stock SAP', 'Diferencia', 'Ubicación', 'Registro'].map(h => ({ content: h }))];
+            const bodyFilas = datosFiltradosParaExportar.map(e => {
+                const completado = e.Registro != null;
+                return [
+                    e['Nro'] || '-',
+                    ...app.exportExtra.map(c => c.get(e, completado)),
+                    parseFloat(e['Stock SAP'] || 0).toFixed(3),
+                    completado ? (parseFloat(e['Diferencia'] || 0) > 0 ? '+' : '') + parseFloat(e['Diferencia'] || 0).toFixed(3) : '-',
+                    e['Ubicación'] || '-',
+                    fmtFecha(e['Registro'])
+                ];
+            });
+
+            doc.autoTable({
+                startY: 30, margin: { top: 30 }, head, body: bodyFilas, theme: 'striped',
+                styles: { fontSize: 5.5, cellPadding: 1.2, overflow: 'linebreak', textColor: [30, 41, 59], lineColor: [226, 232, 240], lineWidth: 0.1 },
+                headStyles: { fillColor: [30, 41, 59], textColor: 255, fontSize: 5.8, fontStyle: 'bold', halign: 'center', valign: 'middle', lineColor: [30, 41, 59] },
+                didDrawPage: dibujarEncabezado
+            });
+
+            const totalPaginas = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= totalPaginas; i++) {
+                doc.setPage(i);
+                doc.setFont("helvetica", "normal"); doc.setFontSize(7.5);
+                doc.text(`Página ${i} de ${totalPaginas}`, pageWidth - 8, 8, { align: "right" });
+            }
+
+            doc.setPage(totalPaginas);
+            const finalY = doc.lastAutoTable.finalY || 40;
+            const pageHeight = doc.internal.pageSize.height;
+            let sigY = finalY + 20;
+            if (sigY > pageHeight - 20) { doc.addPage(); dibujarEncabezado(); sigY = 45; }
+
+            doc.setLineWidth(0.5); doc.setFontSize(9); doc.setFont("helvetica", "bold");
+            doc.line(30, sigY, 90, sigY); doc.text("INVENTARIADOR", 60, sigY + 5, { align: "center" });
+            doc.line(115, sigY, 180, sigY); doc.text("SUPERVISOR DE ALMACEN", 147.5, sigY + 5, { align: "center" });
+            doc.line(205, sigY, 270, sigY); doc.text("SUPERVISOR DE INVENTARIO", 237.5, sigY + 5, { align: "center" });
+
+            doc.save(`Inventario_${app.label}_${new Date().toISOString().split('T')[0]}.pdf`);
+        }
+
+        function exportarExcel() {
+            const app = APPS[currentApp];
+            if (datosFiltradosParaExportar.length === 0) return Swal.fire('Vacío', 'No hay datos para exportar con los filtros actuales', 'info');
+
+            const infoFiltros = obtenerInfoFiltrosExport();
+            const generado = new Date().toLocaleString('es-PE');
+            const encabezadoCols = ['Inventariador', 'Grupo de Trabajo', '#', ...app.exportExtra.map(c => c.header), 'Stock SAP', 'Diferencia', 'Ubicación', 'Observaciones', 'Registro'];
+            const encabezado = [
+                ['ART ATLAS SRL - RUC: 20413770204'],
+                [`TOMA DE INVENTARIO - ${app.label.toUpperCase()} 2025`],
+                [`GRUPO: ${infoFiltros.grupo}    FILTRO: ${infoFiltros.filtro}    FECHA: ${infoFiltros.fecha}    Generado: ${generado}`],
+                [],
+                encabezadoCols
+            ];
+
+            const filas = datosFiltradosParaExportar.map(e => {
+                const completado = e.Registro != null;
+                return [
+                    e['Inventariador'] || '-',
+                    e['Grupo de Trabajo'] || '-',
+                    e['Nro'] || '-',
+                    ...app.exportExtra.map(c => c.get(e, completado)),
+                    parseFloat(e['Stock SAP'] || 0),
+                    parseFloat(e['Diferencia'] || 0),
+                    e['Ubicación'] || '-',
+                    e['Observaciones'] || '-',
+                    e['Registro'] || '-'
+                ];
+            });
+
+            const hoja = XLSX.utils.aoa_to_sheet([...encabezado, ...filas]);
+            const ultimaCol = encabezadoCols.length - 1;
+            hoja['!merges'] = [0, 1, 2].map(r => ({ s: { r, c: 0 }, e: { r, c: ultimaCol } }));
+            hoja['!cols'] = encabezadoCols.map(() => ({ wch: 16 }));
+
+            const libro = XLSX.utils.book_new();
+            XLSX.utils.book_append_sheet(libro, hoja, 'Toma de Inventario');
+            XLSX.writeFile(libro, `Inventario_${app.label}_${new Date().toISOString().split('T')[0]}.xlsx`);
+        }
+
+        // --- 10. CARGA MASIVA CSV (genérico por app) ---
+        function configurarCargaCSV() {
+            const dropArea = document.getElementById('drop-area');
+            const fileInput = document.getElementById('file-sap');
+            dropArea.addEventListener('click', () => fileInput.click());
+            dropArea.addEventListener('dragover', (e) => { e.preventDefault(); dropArea.classList.add('dragover'); });
+            dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
+            dropArea.addEventListener('drop', (e) => {
+                e.preventDefault(); dropArea.classList.remove('dragover');
+                if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; procesarArchivoCSV(); }
+            });
+            fileInput.addEventListener('change', procesarArchivoCSV);
+        }
+
+        function procesarArchivoCSV() {
+            const file = document.getElementById('file-sap').files[0];
+            if (!file) return;
+            Papa.parse(file, {
+                header: true, skipEmptyLines: 'greedy', delimitersToGuess: [';', ',', '\t', '|'],
+                complete: function (results) {
+                    if (results.errors.length && results.data.length === 0) {
+                        Swal.fire('Error', 'Archivo no válido.', 'error');
+                        return;
+                    }
+                    csvDataToUpload = results.data;
+                    document.getElementById('drop-area').classList.add('hidden');
+                    document.getElementById('file-info').classList.remove('hidden');
+                    document.getElementById('file-name').innerText = file.name;
+                    document.getElementById('file-rows').innerText = `${csvDataToUpload.length} artículos detectados`;
+                    document.getElementById('btn-procesar-csv').disabled = false;
+                }
+            });
+        }
+
+        function limpiarArchivo() {
+            const fileInput = document.getElementById('file-sap');
+            if (fileInput) fileInput.value = '';
+            csvDataToUpload = [];
+            document.getElementById('drop-area').classList.remove('hidden');
+            document.getElementById('file-info').classList.add('hidden');
+            document.getElementById('btn-procesar-csv').disabled = true;
+        }
+
+        function limpiarCabeceraCSV(key) {
+            return key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, "").toLowerCase().trim();
+        }
+
+        async function subirASupabase() {
+            const app = APPS[currentApp];
+            if (csvDataToUpload.length === 0) return;
+            const btn = document.getElementById('btn-procesar-csv');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Procesando...';
+
+            try {
+                const payload = csvDataToUpload.map(row => {
+                    const rowLimpio = {};
+                    for (let key in row) {
+                        if (key) rowLimpio[limpiarCabeceraCSV(key)] = (row[key] !== undefined && row[key] !== null) ? String(row[key]).trim() : '';
+                    }
+                    // El "#" no sobrevive la limpieza de cabecera (se queda vacío), así que se lee
+                    // directo del objeto original de PapaParse en vez de la versión limpiada.
+                    const registro = { id: crypto.randomUUID() };
+                    app.importFields.forEach(f => {
+                        let val;
+                        if (f.db === '#') {
+                            val = (row['#'] !== undefined && row['#'] !== null) ? String(row['#']).trim() : '';
+                        } else {
+                            val = f.aliases.map(a => rowLimpio[a]).find(v => v) || '';
+                        }
+                        if (f.numeric) val = parseFloat(String(val).replace(',', '.')) || 0;
+                        registro[f.db] = val;
+                    });
+                    return registro;
+                });
+
+                const payloadValido = payload.filter(item => (item['Código de Item'] || '') !== '');
+                if (payloadValido.length === 0) {
+                    throw new Error("No se detectó la columna del código (Código de Item). Verifica las cabeceras del archivo.");
+                }
+
+                const CHUNK_SIZE = 500;
+                let insertados = 0;
+                for (let i = 0; i < payloadValido.length; i += CHUNK_SIZE) {
+                    const chunk = payloadValido.slice(i, i + CHUNK_SIZE);
+                    const { error } = await _supabase.from(app.tabla).insert(chunk);
+                    if (error) throw error;
+                    insertados += chunk.length;
+                }
+
+                Swal.fire('¡Base Actualizada!', `Se han cargado ${insertados} artículos listos para la toma física.`, 'success');
+                limpiarArchivo();
+            } catch (error) {
+                Swal.fire({ icon: 'error', title: 'Error de carga', text: error.message });
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-database mr-2"></i> Importar a Base de Datos';
+            }
+        }
+
+        // --- 11. GESTIÓN DE PERSONAL (genérico por app) ---
+        async function obtenerPersonalBaseDatos() {
+            const app = APPS[currentApp];
+            try {
+                const data = await fetchAllSupabase(app.tablaPersonal);
+                datosPersonal = data.sort((a, b) => (a.nombre || '').toLowerCase().localeCompare((b.nombre || '').toLowerCase()));
+                renderizarTablaPersonal();
+            } catch (err) {
+                document.getElementById('cuerpoPersonal').innerHTML = '<tr><td colspan="3" class="text-center py-8 text-red-400">Error de conexión</td></tr>';
+            }
+        }
+
+        function siguienteNumeroGrupo() {
+            let maxN = 0;
+            datosPersonal.forEach(p => {
+                const match = /(\d+)/.exec(p.grupo || '');
+                if (match) maxN = Math.max(maxN, parseInt(match[1], 10));
+            });
+            return maxN + 1;
+        }
+
+        function renderizarTablaPersonal() {
+            document.getElementById('preview-siguiente-grupo').textContent = `Grupo ${siguienteNumeroGrupo()}`;
+            const tbody = document.getElementById('cuerpoPersonal');
+            tbody.innerHTML = '';
+            if (datosPersonal.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="3" class="text-center py-8 text-gray-400">Sin personal registrado.</td></tr>';
+                return;
+            }
+            datosPersonal.forEach(p => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `
+                    <td class="py-2.5 px-4 font-semibold text-gray-700">${esc(p.nombre)}</td>
+                    <td class="py-2.5 px-4 text-gray-500">${esc(p.grupo)}</td>
+                    <td class="py-2.5 px-4 text-center">
+                        <button onclick="eliminarPersonal(${p.id})" class="text-gray-400 hover:text-red-500"><i class="fa-solid fa-trash-can"></i></button>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        async function guardarPersonal(e) {
+            e.preventDefault();
+            const app = APPS[currentApp];
+            const nombre = document.getElementById('nuevo_nombre').value.trim();
+            if (!nombre) return;
+            const btn = document.getElementById('btn-guardar-personal');
+            btn.disabled = true;
+            try {
+                const grupo = `Grupo ${siguienteNumeroGrupo()}`;
+                const { error } = await _supabase.from(app.tablaPersonal).insert([{ nombre, grupo }]);
+                if (error) throw error;
+                document.getElementById('form-personal').reset();
+                await obtenerPersonalBaseDatos();
+                Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Operador registrado', showConfirmButton: false, timer: 1200 });
+            } catch (error) {
+                Swal.fire('Error', error.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function eliminarPersonal(id) {
+            const app = APPS[currentApp];
+            const result = await Swal.fire({
+                title: '¿Eliminar operador?', icon: 'warning', showCancelButton: true,
+                confirmButtonColor: '#ef4444', confirmButtonText: 'Sí, eliminar', cancelButtonText: 'Cancelar'
+            });
+            if (!result.isConfirmed) return;
+            try {
+                const { error } = await _supabase.from(app.tablaPersonal).delete().eq('id', id);
+                if (error) throw error;
+                await obtenerPersonalBaseDatos();
+            } catch (error) {
+                Swal.fire('Error', error.message, 'error');
+            }
+        }
+    </script>
+</body>
+
+</html>

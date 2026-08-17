@@ -18,18 +18,9 @@
     <!-- Supabase -->
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 
-    <!-- PapaParse -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 
-    <!-- jsPDF & AutoTable para exportar a PDF -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
-    <!-- SheetJS: exportar a Excel -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <!-- Chart.js: gráfico de avance diario -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
 
     <!-- html5-qrcode: Escáner de código de barras/QR usando la cámara -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
@@ -283,33 +274,9 @@
         </div>
     </nav>
 
-    <!-- ADMIN TABS -->
-    <div id="admin-tabs" class="bg-white border-b border-gray-200 px-6 py-2.5 hidden-view flex gap-2 overflow-x-auto flex-shrink-0 justify-between items-center">
-        <div class="flex gap-2">
-            <button onclick="switchAdminTab('reportes')" id="tab-reportes" class="px-4 py-1.5 text-sm font-semibold rounded-lg bg-teal-600 text-white transition-colors">Monitor & Reportes</button>
-            <button onclick="switchAdminTab('carga')" id="tab-carga" class="px-4 py-1.5 text-sm font-semibold rounded-lg text-gray-600 hover:bg-gray-100 transition-colors">Carga CSV</button>
-            <button onclick="switchAdminTab('personal')" id="tab-personal" class="px-4 py-1.5 text-sm font-semibold rounded-lg text-gray-600 hover:bg-gray-100 transition-colors">Personal</button>
-        </div>
-
-        <!-- Botón Reset Alejado para evitar clics accidentales -->
-        <div class="flex items-center gap-2">
-            <button onclick="toggleOcultarStockSap()" id="btn-toggle-sap" class="text-gray-500 hover:text-white hover:bg-amber-500 border border-gray-200 rounded-lg px-3 py-1.5 text-xs font-bold transition-colors" title="Controla si los operadores ven el stock teórico SAP mientras cuentan">
-                <i class="fa-solid fa-circle-notch fa-spin mr-1"></i> <span id="txt-toggle-sap">Cargando...</span>
-            </button>
-            <button onclick="vaciarTodaLaTabla()" class="text-gray-400 hover:text-white hover:bg-red-600 border border-transparent rounded-lg px-3 py-1.5 text-xs font-bold transition-colors">
-                <i class="fa-solid fa-triangle-exclamation mr-1"></i> Borrar BD
-            </button>
-        </div>
-    </div>
-
     <!-- PANTALLA DE LOGIN -->
     <div id="view-login" class="flex-grow flex items-center justify-center p-4">
-        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-gray-100 relative">
-            <button onclick="toggleLoginMode('admin')" id="btn-show-admin" class="absolute top-4 right-4 text-gray-300 hover:text-teal-600 transition-colors" title="Acceso Admin">
-                <i class="fa-solid fa-gear text-lg"></i>
-            </button>
-
-            <!-- Vista Operador -->
+        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-gray-100">
             <div id="login-operador-container">
                 <div class="text-center mb-8">
                     <div class="inline-block p-4 bg-teal-50 rounded-full mb-3 text-teal-600">
@@ -327,35 +294,6 @@
                     <button type="submit" id="btn-login-op" disabled class="w-full btn-primary text-base py-3 shadow-md hover:shadow-lg">
                         Entrar a Toma Física <i class="fa-solid fa-arrow-right ml-2"></i>
                     </button>
-                </form>
-            </div>
-
-            <!-- Vista Admin -->
-            <div id="login-admin-container" class="hidden-view">
-                <div class="text-center mb-8">
-                    <div class="inline-block p-4 bg-gray-800 rounded-full mb-3 text-white">
-                        <i class="fa-solid fa-shield-halved text-3xl"></i>
-                    </div>
-                    <h2 class="text-2xl font-bold text-gray-800">Administración</h2>
-                </div>
-                <form id="form-login-adm" onsubmit="loginAdmin(event)">
-                    <div class="mb-4">
-                        <label class="smart-label text-left">Correo electrónico</label>
-                        <input type="email" id="login-adm-user" required class="smart-input" placeholder="correo@dominio.com" autocomplete="username">
-                    </div>
-                    <div class="mb-2">
-                        <label class="smart-label text-left">Contraseña</label>
-                        <input type="password" id="login-adm-pass" required class="smart-input" placeholder="••••••••" autocomplete="current-password">
-                    </div>
-                    <p id="login-adm-error" class="text-xs text-red-500 font-semibold mb-4 hidden-view"></p>
-                    <button type="submit" id="btn-login-adm" class="w-full btn-primary bg-gray-800 hover:bg-gray-900 text-base py-3 mb-4 shadow-md hover:shadow-lg">
-                        Acceder Panel <i class="fa-solid fa-lock-open ml-1"></i>
-                    </button>
-                    <div class="text-center">
-                        <button type="button" onclick="toggleLoginMode('operador')" class="text-sm text-gray-500 hover:text-teal-600 font-medium">
-                            <i class="fa-solid fa-arrow-left mr-1"></i> Volver a Portal Operativo
-                        </button>
-                    </div>
                 </form>
             </div>
         </div>
@@ -489,6 +427,21 @@
                                 </div>
                             </div>
 
+                            <!-- Foto de la báscula (control) -->
+                            <div class="border border-gray-200 rounded-lg p-3 bg-gray-50">
+                                <label class="smart-label text-[10px] text-gray-500 mb-1 flex items-center gap-1">
+                                    <i class="fa-solid fa-camera"></i> Foto de la Báscula <span id="foto-balanza-obligatoria" class="text-red-500 hidden-view">*</span>
+                                </label>
+                                <input type="file" id="foto_balanza_input" accept="image/*" capture="environment" onchange="onFotoBalanzaSeleccionada(event)" class="hidden">
+                                <div id="foto-balanza-preview-wrap" class="hidden-view mb-2">
+                                    <img id="foto-balanza-preview" class="w-full max-h-40 object-contain rounded border border-gray-200 bg-white" src="">
+                                </div>
+                                <button type="button" id="btn-foto-balanza" onclick="document.getElementById('foto_balanza_input').click()" class="btn-secondary w-full py-2 text-xs bg-white border border-gray-300">
+                                    <i class="fa-solid fa-camera mr-1"></i> <span id="txt-btn-foto-balanza">Tomar / Adjuntar Foto</span>
+                                </button>
+                                <p id="foto-balanza-status" class="text-[10px] text-gray-400 mt-1"></p>
+                            </div>
+
                             <!-- Resumen calculado -->
                             <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                                 <table class="w-full text-sm">
@@ -604,190 +557,6 @@
         </div>
     </div>
 
-    <!-- VISTAS DEL ADMINISTRADOR -->
-    <div id="view-admin" class="hidden-view flex-grow flex flex-col w-full h-full overflow-hidden bg-gray-50">
-
-        <!-- SECCIÓN: REPORTES Y AVANCE -->
-        <div id="section-reportes" class="flex-col h-full overflow-hidden p-4 sm:p-6">
-            <div class="max-w-7xl mx-auto flex flex-col h-full">
-
-                <!-- KPI Dashboard General -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4 mb-4 flex-shrink-0">
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-blue-500">
-                        <p class="text-[10px] text-gray-500 uppercase font-bold tracking-wider mb-1">Total Maestro SAP</p>
-                        <p class="text-2xl font-bold text-gray-800 font-mono" id="stat-total">0</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-teal-500">
-                        <p class="text-[10px] text-teal-600 uppercase font-bold tracking-wider mb-1">Inventariados</p>
-                        <p class="text-2xl font-bold text-teal-700 font-mono" id="stat-completados">0</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-red-400">
-                        <p class="text-[10px] text-red-500 uppercase font-bold tracking-wider mb-1">Faltantes</p>
-                        <p class="text-2xl font-bold text-red-600 font-mono" id="stat-faltantes">0</p>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 border-l-4 border-l-purple-500 relative overflow-hidden">
-                        <div class="absolute right-[-10px] bottom-[-10px] opacity-10"><i class="fa-solid fa-chart-pie text-6xl text-purple-600"></i></div>
-                        <p class="text-[10px] text-purple-600 uppercase font-bold tracking-wider mb-1">Avance Global</p>
-                        <p class="text-2xl font-bold text-purple-700 font-mono" id="stat-porcentaje">0.0%</p>
-                    </div>
-                </div>
-
-                <!-- Avance por Día y por Grupo -->
-                <div class="grid grid-cols-1 lg:grid-cols-3 gap-4 mb-4 flex-shrink-0">
-                    <div class="lg:col-span-2 bg-white p-4 rounded-xl shadow-sm border border-gray-200">
-                        <div class="flex items-center justify-between mb-2">
-                            <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider"><i class="fa-solid fa-chart-column mr-1"></i> Avance por Día</h3>
-                            <span class="text-[10px] text-gray-400 uppercase tracking-wide">Últimos 14 días</span>
-                        </div>
-                        <div class="h-44 relative">
-                            <canvas id="chart-avance-diario"></canvas>
-                            <p id="msg-sin-avance-diario" class="hidden-view text-center text-xs text-gray-400 py-16">Aún no hay conteos registrados en este rango.</p>
-                        </div>
-                    </div>
-                    <div class="bg-white p-4 rounded-xl shadow-sm border border-gray-200 overflow-y-auto" style="max-height: 13.5rem;">
-                        <h3 class="text-xs font-bold text-gray-500 uppercase tracking-wider mb-3"><i class="fa-solid fa-people-group mr-1"></i> Avance por Grupo</h3>
-                        <div id="dashboard-grupos">
-                            <!-- Se llena dinámicamente -->
-                        </div>
-                    </div>
-                </div>
-
-                <!-- Tabla de Reportes -->
-                <div class="bg-white border border-gray-200 rounded-xl shadow-sm flex flex-col flex-grow overflow-hidden">
-                    <div class="p-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 flex-wrap gap-3">
-                        <div class="flex gap-2 w-full md:w-auto flex-grow items-center flex-wrap">
-                            <select id="filtro-estado" onchange="filtrarReportesTabla()" class="smart-input py-1.5 text-xs w-auto font-semibold text-gray-600 bg-white">
-                                <option value="todos">Todos (Maestro)</option>
-                                <option value="completados">Completados</option>
-                                <option value="pendientes">Pendientes</option>
-                                <option value="diferencias">Con Diferencias</option>
-                            </select>
-
-                            <select id="filtro-grupo" onchange="filtrarReportesTabla()" class="smart-input py-1.5 text-xs w-auto font-semibold text-gray-600 bg-white">
-                                <option value="todos">Todos los Grupos</option>
-                            </select>
-
-                            <input type="date" id="filtro-fecha" onchange="filtrarReportesTabla()" class="smart-input py-1.5 text-xs w-auto text-gray-600 bg-white shadow-sm" title="Filtrar por fecha">
-
-                            <div class="relative flex-grow max-w-xs min-w-[150px]">
-                                <i class="fa-solid fa-search absolute left-2.5 top-1/2 transform -translate-y-1/2 text-gray-400 text-xs"></i>
-                                <input type="text" id="filtroReporte" placeholder="Buscar texto..." class="smart-input pl-8 py-1.5 text-xs w-full bg-white">
-                            </div>
-                        </div>
-                        <div class="flex gap-2 w-full md:w-auto justify-end">
-                            <button onclick="cargarReportesAdmin()" class="btn-secondary py-1.5 px-3 text-xs bg-white border border-gray-300 shadow-sm" title="Sincronizar DB"><i class="fa-solid fa-rotate mr-1"></i> Sync</button>
-                            <button onclick="exportarExcel()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-emerald-600 hover:bg-emerald-700 border border-emerald-700"><i class="fa-solid fa-file-excel mr-1"></i> Exportar Excel</button>
-                            <button onclick="exportarPDF()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-red-600 hover:bg-red-700 border border-red-700"><i class="fa-solid fa-file-pdf mr-1"></i> Imprimir PDF</button>
-                        </div>
-                    </div>
-
-                    <div class="flex-grow overflow-auto relative">
-                        <div id="loading-reports" class="absolute inset-0 bg-white/80 z-20 flex items-center justify-center hidden-view">
-                            <div class="text-center">
-                                <i class="fa-solid fa-circle-notch fa-spin text-3xl text-teal-600 mb-2"></i>
-                                <p class="text-gray-600 font-medium text-sm">Descargando base completa...</p>
-                            </div>
-                        </div>
-                        <table class="w-full text-left text-[11px] text-gray-600 whitespace-nowrap">
-                            <thead class="bg-white sticky top-0 border-b border-gray-200 z-10 shadow-sm">
-                                <tr>
-                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Estado</th>
-                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Fecha Reg.</th>
-                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Inventariador</th>
-                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Código</th>
-                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Descripción</th>
-                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase">Lote</th>
-                                    <th class="py-2 px-3 font-bold text-gray-400 uppercase text-right">SAP</th>
-                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase text-right">Físico</th>
-                                    <th class="py-2 px-3 font-bold text-gray-500 uppercase text-right">Dif</th>
-                                </tr>
-                            </thead>
-                            <tbody id="cuerpoReportes" class="divide-y divide-gray-100">
-                                <tr>
-                                    <td colspan="9" class="text-center py-10 text-gray-400">Cargando data...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-
-        <!-- SECCIÓN: CARGA MASIVA -->
-        <div id="section-carga" class="hidden-view h-full overflow-y-auto bg-gray-50 p-6">
-            <div class="max-w-3xl mx-auto bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden">
-                <div class="p-6 border-b border-gray-100 bg-gray-50/50">
-                    <h2 class="text-xl font-bold text-gray-800">Importar Maestro SAP</h2>
-                    <p class="text-sm text-gray-500 mt-1">Sube el archivo CSV para cargar la base de artículos pendientes a contar.</p>
-                </div>
-                <div class="p-6">
-                    <div id="drop-area" class="border-2 border-dashed border-teal-300 p-8 flex flex-col items-center justify-center text-center cursor-pointer mb-4 h-48 bg-teal-50/30 hover:bg-teal-50 rounded-xl transition-colors">
-                        <i class="fa-solid fa-cloud-arrow-up text-4xl text-teal-600 mb-3"></i>
-                        <p class="text-sm font-semibold text-teal-800">Selecciona o arrastra el archivo CSV</p>
-                        <input type="file" id="file-sap" accept=".csv" class="hidden">
-                    </div>
-                    <div id="file-info" class="hidden mb-4 p-4 bg-gray-800 border border-gray-700 rounded-xl flex justify-between items-center text-white">
-                        <div class="flex items-center gap-3">
-                            <i class="fa-solid fa-file-csv text-2xl text-teal-400"></i>
-                            <div>
-                                <p id="file-name" class="font-bold text-sm">archivo.csv</p>
-                                <p id="file-rows" class="text-xs text-gray-400">0 filas detectadas</p>
-                            </div>
-                        </div>
-                        <button onclick="limpiarArchivo()" class="text-gray-400 hover:text-white p-2 transition-colors"><i class="fa-solid fa-xmark text-lg"></i></button>
-                    </div>
-                    <button id="btn-procesar-csv" onclick="subirASupabase()" disabled class="w-full btn-primary text-base py-3">
-                        <i class="fa-solid fa-database mr-2"></i> Importar a Base de Datos
-                    </button>
-                </div>
-            </div>
-        </div>
-
-        <!-- SECCIÓN: PERSONAL -->
-        <div id="section-personal" class="hidden-view h-full overflow-y-auto bg-gray-50 p-6">
-            <div class="max-w-4xl mx-auto flex flex-col md:flex-row gap-6">
-                <div class="w-full md:w-1/3">
-                    <div class="bg-white border border-gray-200 shadow-sm rounded-2xl p-6">
-                        <h2 class="text-lg font-bold text-gray-800 mb-4">Nuevo Operador</h2>
-                        <form id="form-personal" onsubmit="guardarPersonal(event)">
-                            <div class="mb-4">
-                                <label class="smart-label">Apellidos y Nombres</label>
-                                <input type="text" id="nuevo_nombre" required class="smart-input text-sm">
-                            </div>
-                            <div class="mb-6">
-                                <label class="smart-label">Grupo Asignado</label>
-                                <div id="preview-siguiente-grupo" class="smart-input text-sm bg-gray-50 text-gray-500 font-semibold cursor-not-allowed">Grupo 1</div>
-                                <p class="text-[10px] text-gray-400 mt-1">Se asigna automáticamente y en orden.</p>
-                            </div>
-                            <button type="submit" id="btn-guardar-personal" class="w-full btn-primary py-2 text-sm">Registrar</button>
-                        </form>
-                    </div>
-                </div>
-                <div class="w-full md:w-2/3">
-                    <div class="bg-white border border-gray-200 shadow-sm rounded-2xl overflow-hidden">
-                        <div class="p-4 border-b border-gray-100 bg-gray-50/50">
-                            <h2 class="text-lg font-bold text-gray-800">Personal Registrado</h2>
-                        </div>
-                        <table class="w-full text-left text-sm text-gray-600">
-                            <thead class="bg-white border-b border-gray-100">
-                                <tr>
-                                    <th class="py-3 px-4 font-bold text-gray-500 uppercase tracking-wider text-xs">Nombre</th>
-                                    <th class="py-3 px-4 font-bold text-gray-500 uppercase tracking-wider text-xs">Grupo</th>
-                                    <th class="py-3 px-4 text-center w-16"><i class="fa-solid fa-cog"></i></th>
-                                </tr>
-                            </thead>
-                            <tbody id="cuerpoPersonal" class="divide-y divide-gray-50">
-                                <tr>
-                                    <td colspan="3" class="text-center py-8 text-gray-400">Cargando...</td>
-                                </tr>
-                            </tbody>
-                        </table>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
     <!-- CÓDIGO JS PRINCIPAL -->
     <script>
         // --- 1. CONFIGURACIÓN SUPABASE ---
@@ -810,11 +579,8 @@
         } = supabase;
         const _supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-        let todosLosDatosReporte = [];
-        let datosFiltradosParaExportar = [];
         let datosPersonal = [];
         let currentUser = null;
-        let csvDataToUpload = [];
 
         // Variables Buscador Operador
         let debounceTimer;
@@ -827,11 +593,18 @@
         // nunca en el navegador: solo se sabe si acertó por el resultado que responde Supabase.
         let claveModificacionPendiente = null;
 
-        // Configuración global de la app (se guarda en la tabla hilado_config de Supabase).
-        // ocultar_stock_sap: si es true, los operadores NO ven el stock teórico SAP ni la
-        // diferencia mientras cuentan (conteo "a ciegas"). El administrador ve todo siempre.
+        // Foto de la báscula: fotoBalanzaBlob es la imagen ya comprimida lista para subir (null si
+        // el operador no tomó una foto nueva). fotoBalanzaUrlActual es la URL que ya tenía el
+        // registro (si se está editando uno ya contado), para no perderla si no se cambia la foto.
+        let fotoBalanzaBlob = null;
+        let fotoBalanzaUrlActual = null;
+
+        // Configuración de la app (tabla hilado_config), administrada desde el Panel de
+        // Administrador centralizado. Aquí solo se LEE: el operador no puede cambiarla, solo
+        // ve si el conteo a ciegas y la foto obligatoria de la báscula están activos.
         let configuracionApp = {
-            ocultar_stock_sap: true
+            ocultar_stock_sap: true,
+            exigir_foto_balanza: false
         };
 
         async function cargarConfiguracion() {
@@ -845,66 +618,14 @@
             } catch (e) {
                 // Si falla, se mantiene el valor por defecto (oculto), la opción más segura.
             }
-            actualizarBotonToggleSap();
+            const asterisco = document.getElementById('foto-balanza-obligatoria');
+            if (asterisco) asterisco.classList.toggle('hidden-view', !configuracionApp.exigir_foto_balanza);
             return configuracionApp;
-        }
-
-        function actualizarBotonToggleSap() {
-            const btn = document.getElementById('btn-toggle-sap');
-            const txt = document.getElementById('txt-toggle-sap');
-            if (!btn || !txt) return;
-            if (configuracionApp.ocultar_stock_sap) {
-                txt.innerHTML = 'Stock SAP: <b>Oculto</b> a operadores';
-                btn.querySelector('i').className = 'fa-solid fa-eye-slash mr-1';
-            } else {
-                txt.innerHTML = 'Stock SAP: <b>Visible</b> a operadores';
-                btn.querySelector('i').className = 'fa-solid fa-eye mr-1';
-            }
-        }
-
-        // Solo el administrador puede cambiar esto (protegido también por política RLS en Supabase)
-        async function toggleOcultarStockSap() {
-            const nuevoValor = !configuracionApp.ocultar_stock_sap;
-            const accion = nuevoValor ? 'ocultar' : 'mostrar';
-
-            const result = await Swal.fire({
-                title: nuevoValor ? '¿Ocultar Stock SAP a operadores?' : '¿Mostrar Stock SAP a operadores?',
-                text: nuevoValor ?
-                    'Los operadores dejarán de ver el stock teórico y la diferencia mientras cuentan (conteo a ciegas). Esto se mantiene así hasta que vuelvas a activarlo.' : 'Los operadores volverán a ver el stock teórico SAP y la diferencia en tiempo real.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#0d9488',
-                confirmButtonText: `Sí, ${accion}`,
-                cancelButtonText: 'Cancelar'
-            });
-            if (!result.isConfirmed) return;
-
-            try {
-                const {
-                    error
-                } = await _supabase.from('hilado_config').update({
-                    ocultar_stock_sap: nuevoValor
-                }).eq('id', 1);
-                if (error) throw error;
-                configuracionApp.ocultar_stock_sap = nuevoValor;
-                actualizarBotonToggleSap();
-                Swal.fire({
-                    toast: true,
-                    position: 'top',
-                    icon: 'success',
-                    title: 'Actualizado',
-                    showConfirmButton: false,
-                    timer: 1200
-                });
-            } catch (error) {
-                Swal.fire('Error', error.message, 'error');
-            }
         }
 
         document.addEventListener('DOMContentLoaded', () => {
             obtenerPersonalBaseDatos();
             setupSearchListener();
-            restaurarSesionAdmin();
             cargarConfiguracion();
 
             // Prevenir Enter submiteo del form
@@ -916,10 +637,6 @@
                     }
                 }
             }, true);
-
-            // Establecer fecha de hoy en el filtro de reportes
-            const hoyStr = new Date().toISOString().split('T')[0];
-            document.getElementById('filtro-fecha').value = hoyStr;
         });
 
         // --- UTILIDADES DE SEGURIDAD ---
@@ -1008,7 +725,6 @@
                     return nombreA.localeCompare(nombreB);
                 });
                 renderizarSelectPersonal();
-                renderizarTablaPersonal();
             } catch (err) {
                 const select = document.getElementById('login-op-user');
                 if (select) select.innerHTML = `<option value="" disabled selected>Error de conexión</option>`;
@@ -1036,23 +752,8 @@
             document.getElementById('btn-login-op').disabled = false;
         }
 
-        // --- 3. LOGIN Y VISTAS ---
-        function toggleLoginMode(mode) {
-            const contOp = document.getElementById('login-operador-container');
-            const contAdm = document.getElementById('login-admin-container');
-            const btnGear = document.getElementById('btn-show-admin');
-
-            if (mode === 'operador') {
-                contOp.classList.remove('hidden-view');
-                contAdm.classList.add('hidden-view');
-                btnGear.classList.remove('hidden-view');
-            } else {
-                contAdm.classList.remove('hidden-view');
-                contOp.classList.add('hidden-view');
-                btnGear.classList.add('hidden-view');
-            }
-        }
-
+        // --- 3. LOGIN Y VISTAS (solo operador; la administración vive en el Panel de
+        // Administrador centralizado, AA-Panel-Administrador.html) ---
         function loginOperador(e) {
             e.preventDefault();
             const val = document.getElementById('login-op-user').value;
@@ -1063,77 +764,14 @@
 
             const dataParsed = JSON.parse(val);
             currentUser = {
-                role: 'operador',
                 name: dataParsed.nombre,
                 group: dataParsed.grupo
             };
             iniciarSesion();
         }
 
-        // Login real de administrador contra Supabase Auth. La contraseña ya NO vive en
-        // este archivo: viaja cifrada al servidor de Supabase, que la compara y devuelve
-        // una sesión válida solo si es correcta. Los permisos de admin (borrar todo,
-        // importar CSV, gestionar personal) están controlados del lado de la base de datos
-        // (tabla admins + políticas RLS), no por esta pantalla — esta pantalla es ahora
-        // solo la puerta de entrada, la cerradura de verdad está en Supabase.
-        async function loginAdmin(e) {
-            e.preventDefault();
-            const errorEl = document.getElementById('login-adm-error');
-            errorEl.classList.add('hidden-view');
-            const btn = document.getElementById('btn-login-adm');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Verificando...';
-
-            const email = document.getElementById('login-adm-user').value.trim();
-            const pass = document.getElementById('login-adm-pass').value;
-
-            const {
-                data,
-                error
-            } = await _supabase.auth.signInWithPassword({
-                email,
-                password: pass
-            });
-
-            document.getElementById('login-adm-pass').value = '';
-            btn.disabled = false;
-            btn.innerHTML = 'Acceder Panel <i class="fa-solid fa-lock-open ml-1"></i>';
-
-            if (error || !data.user) {
-                errorEl.textContent = 'Correo o contraseña incorrectos.';
-                errorEl.classList.remove('hidden-view');
-                return;
-            }
-
-            currentUser = {
-                role: 'admin',
-                name: data.user.email,
-                group: 'Control'
-            };
-            iniciarSesion();
-        }
-
-        // Al cargar la página, si ya había una sesión de administrador activa (Supabase la
-        // guarda de forma segura en el navegador), se restaura automáticamente sin pedir
-        // el correo/contraseña de nuevo.
-        async function restaurarSesionAdmin() {
-            const {
-                data: {
-                    session
-                }
-            } = await _supabase.auth.getSession();
-            if (session && session.user) {
-                currentUser = {
-                    role: 'admin',
-                    name: session.user.email,
-                    group: 'Control'
-                };
-                iniciarSesion();
-            }
-        }
-
         function iniciarSesion() {
-            cargarConfiguracion(); // Refresca el estado de "ocultar Stock SAP" por si cambió desde otra sesión
+            cargarConfiguracion(); // Refresca el estado de "ocultar Stock SAP" / "foto obligatoria" por si cambió
             document.getElementById('view-login').classList.add('hidden-view');
             document.getElementById('nav-user-info').classList.remove('hidden');
             document.getElementById('nav-user-info').style.display = 'flex';
@@ -1144,33 +782,19 @@
             const initials = currentUser.name.split(' ').map(n => n[0]).join('').substring(0, 2).toUpperCase();
             document.getElementById('user-avatar').src = `https://ui-avatars.com/api/?name=${encodeURIComponent(initials)}&background=0d9488&color=fff&size=36`;
 
-            if (currentUser.role === 'admin') {
-                document.getElementById('view-admin').classList.remove('hidden-view');
-                document.getElementById('admin-tabs').classList.remove('hidden-view');
-                document.getElementById('nav-role-text').innerText = "Panel de Control";
-                switchAdminTab('reportes');
-            } else {
-                document.getElementById('view-operador').classList.remove('hidden-view');
-                document.getElementById('inventariador').value = currentUser.name;
-                document.getElementById('grupo_trabajo').value = currentUser.group;
-                document.getElementById('nav-role-text').innerText = "Portal Operativo";
-                actualizarAvanceOperador();
-                setTimeout(() => document.getElementById('buscador-articulos').focus(), 100);
-            }
+            document.getElementById('view-operador').classList.remove('hidden-view');
+            document.getElementById('inventariador').value = currentUser.name;
+            document.getElementById('grupo_trabajo').value = currentUser.group;
+            actualizarAvanceOperador();
+            setTimeout(() => document.getElementById('buscador-articulos').focus(), 100);
         }
 
-        async function logout() {
-            if (currentUser && currentUser.role === 'admin') {
-                await _supabase.auth.signOut();
-            }
+        function logout() {
             currentUser = null;
-            document.getElementById('view-admin').classList.add('hidden-view');
             document.getElementById('view-operador').classList.add('hidden-view');
-            document.getElementById('admin-tabs').classList.add('hidden-view');
             document.getElementById('nav-user-info').style.display = 'none';
 
             document.getElementById('form-login-op').reset();
-            document.getElementById('form-login-adm').reset();
             document.getElementById('buscador-articulos').value = '';
             document.getElementById('resultados-busqueda').innerHTML = `
                 <div class="text-center py-10 px-4 bg-white rounded-2xl border border-gray-200 border-dashed">
@@ -1181,7 +805,6 @@
                 </div>`;
 
             document.getElementById('view-login').classList.remove('hidden-view');
-            toggleLoginMode('operador');
             cerrarModal();
         }
 
@@ -1445,12 +1068,102 @@
             activarCalc(document.getElementById('peso_bruto'));
         }
 
+        // --- FOTO DE LA BÁSCULA (control) ---
+        // El plan gratuito de Supabase Storage tiene solo 1GB, así que la foto se redimensiona
+        // y recomprime en el propio navegador (canvas + JPEG) antes de subirla: de varios MB que
+        // entrega la cámara del celular se baja a ~100-300KB sin perder legibilidad del número.
+        function comprimirImagenBascula(file) {
+            return new Promise((resolve, reject) => {
+                const MAX_LADO = 1280;
+                const img = new Image();
+                const url = URL.createObjectURL(file);
+                img.onload = () => {
+                    URL.revokeObjectURL(url);
+                    let { width, height } = img;
+                    if (width > MAX_LADO || height > MAX_LADO) {
+                        if (width >= height) {
+                            height = Math.round(height * (MAX_LADO / width));
+                            width = MAX_LADO;
+                        } else {
+                            width = Math.round(width * (MAX_LADO / height));
+                            height = MAX_LADO;
+                        }
+                    }
+                    const canvas = document.createElement('canvas');
+                    canvas.width = width;
+                    canvas.height = height;
+                    canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+                    canvas.toBlob((blob) => {
+                        if (!blob) return reject(new Error('No se pudo procesar la imagen'));
+                        resolve(blob);
+                    }, 'image/jpeg', 0.72);
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('No se pudo leer la imagen'));
+                };
+                img.src = url;
+            });
+        }
+
+        async function onFotoBalanzaSeleccionada(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            const status = document.getElementById('foto-balanza-status');
+            const txtBtn = document.getElementById('txt-btn-foto-balanza');
+            status.textContent = 'Comprimiendo imagen...';
+
+            try {
+                const blob = await comprimirImagenBascula(file);
+                fotoBalanzaBlob = blob;
+
+                const preview = document.getElementById('foto-balanza-preview');
+                preview.src = URL.createObjectURL(blob);
+                document.getElementById('foto-balanza-preview-wrap').classList.remove('hidden-view');
+
+                const kb = (blob.size / 1024).toFixed(0);
+                status.textContent = `Lista para subir (${kb} KB)`;
+                txtBtn.textContent = 'Cambiar Foto';
+            } catch (err) {
+                status.textContent = '';
+                Swal.fire('Error', 'No se pudo procesar la foto: ' + err.message, 'error');
+            } finally {
+                event.target.value = '';
+            }
+        }
+
+        // Sube la foto ya comprimida a Storage y devuelve su URL pública. registroId se usa
+        // como parte del nombre de archivo para poder identificar a qué conteo pertenece.
+        async function subirFotoBalanza(blob, registroId) {
+            const nombreArchivo = `${registroId}-${Date.now()}.jpg`;
+            const { error } = await _supabase.storage
+                .from('fotos-balanza-hilado')
+                .upload(nombreArchivo, blob, { contentType: 'image/jpeg', upsert: false });
+            if (error) throw error;
+            const { data } = _supabase.storage.from('fotos-balanza-hilado').getPublicUrl(nombreArchivo);
+            return data.publicUrl;
+        }
+
+        function resetFotoBalanzaModal() {
+            fotoBalanzaBlob = null;
+            fotoBalanzaUrlActual = null;
+            document.getElementById('foto-balanza-preview').src = '';
+            document.getElementById('foto-balanza-preview-wrap').classList.add('hidden-view');
+            document.getElementById('foto-balanza-status').textContent = '';
+            document.getElementById('txt-btn-foto-balanza').textContent = 'Tomar / Adjuntar Foto';
+            document.getElementById('foto_balanza_input').disabled = false;
+            document.getElementById('btn-foto-balanza').disabled = false;
+            document.getElementById('btn-foto-balanza').classList.remove('opacity-50', 'cursor-not-allowed');
+        }
+
         function abrirModalConteo(index) {
             try {
                 const item = busquedaActual[index];
                 if (!item) return;
                 const completado = item.Registro != null;
                 modoEdicionAutorizada = false; // Reinicia el modo edición cada vez que se abre un artículo
+                resetFotoBalanzaModal();
 
                 document.getElementById('registro_id').value = item.id || '';
                 document.getElementById('modal-nro').innerText = `Nro: ${item['Nro'] || '-'}`;
@@ -1463,7 +1176,7 @@
                 const elStockSap = document.getElementById('resumen-stock-sap');
                 if (elStockSap) elStockSap.dataset.valor = stockSap;
 
-                const ocultoParaOperador = configuracionApp.ocultar_stock_sap && (!currentUser || currentUser.role !== 'admin');
+                const ocultoParaOperador = configuracionApp.ocultar_stock_sap;
                 const avisoCiegas = document.getElementById('aviso-conteo-ciegas');
                 if (avisoCiegas) avisoCiegas.classList.toggle('hidden-view', !ocultoParaOperador);
 
@@ -1480,6 +1193,21 @@
                 setVal('peso_bruto', completado ? (item['Peso Bruto'] || '') : '');
                 setVal('ubicacion', completado ? (item['Ubicación'] || '') : '');
                 setVal('observaciones', completado ? (item['Observaciones'] || '') : '');
+
+                // Foto de la báscula: si el registro ya tiene una, se muestra de una vez.
+                fotoBalanzaUrlActual = item['Foto Balanza'] || null;
+                if (fotoBalanzaUrlActual) {
+                    document.getElementById('foto-balanza-preview').src = fotoBalanzaUrlActual;
+                    document.getElementById('foto-balanza-preview-wrap').classList.remove('hidden-view');
+                    document.getElementById('foto-balanza-status').textContent = completado ? 'Foto registrada al momento del conteo' : '';
+                }
+                if (completado) {
+                    document.getElementById('foto_balanza_input').disabled = true;
+                    const btnFoto = document.getElementById('btn-foto-balanza');
+                    btnFoto.disabled = true;
+                    btnFoto.classList.add('opacity-50', 'cursor-not-allowed');
+                    document.getElementById('txt-btn-foto-balanza').textContent = fotoBalanzaUrlActual ? 'Foto ya registrada' : 'Sin foto registrada';
+                }
 
                 onTipoConoChange();
                 onTipoBolsaChange();
@@ -1578,6 +1306,13 @@
             document.getElementById('btnGuardar').classList.remove('hidden-view');
             document.getElementById('btnGuardar').innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Actualizar Conteo';
             document.getElementById('btnModificar').classList.add('hidden-view');
+
+            // También se habilita el reemplazo de la foto de la báscula durante la edición.
+            document.getElementById('foto_balanza_input').disabled = false;
+            const btnFoto = document.getElementById('btn-foto-balanza');
+            btnFoto.disabled = false;
+            btnFoto.classList.remove('opacity-50', 'cursor-not-allowed');
+            document.getElementById('txt-btn-foto-balanza').textContent = 'Cambiar Foto';
 
             calcTargetInput = document.getElementById('peso_bruto');
             modoEdicionAutorizada = true;
@@ -1694,7 +1429,7 @@
             const txtSap = document.getElementById('resumen-stock-sap');
             const txtDiff = document.getElementById('resumen-diferencia');
             const badgeClasif = document.getElementById('badge-clasificacion');
-            const ocultoParaOperador = configuracionApp.ocultar_stock_sap && (!currentUser || currentUser.role !== 'admin');
+            const ocultoParaOperador = configuracionApp.ocultar_stock_sap;
 
             if (ocultoParaOperador) {
                 txtSap.innerText = '•••';
@@ -1760,6 +1495,15 @@
                 return;
             }
 
+            if (configuracionApp.exigir_foto_balanza && !fotoBalanzaBlob && !fotoBalanzaUrlActual) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Falta la foto de la báscula',
+                    text: 'El administrador exige adjuntar una foto del peso mostrado en la báscula antes de guardar.'
+                });
+                return;
+            }
+
             const btn = document.getElementById('btnGuardar');
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Guardando...';
@@ -1795,6 +1539,16 @@
             try {
                 let data, error;
 
+                // Si el operador tomó una foto nueva, se sube recién en este momento (no antes,
+                // para no llenar Storage con fotos de conteos que al final no se guardaron).
+                // Si no tomó una nueva, se conserva la que ya tenía el registro (o null).
+                let fotoBalanzaUrlFinal = fotoBalanzaUrlActual;
+                if (fotoBalanzaBlob) {
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Subiendo foto...';
+                    fotoBalanzaUrlFinal = await subirFotoBalanza(fotoBalanzaBlob, registroId);
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Guardando...';
+                }
+
                 if (modoEdicionAutorizada) {
                     // Edición de un registro ya contado: pasa por la función segura del
                     // servidor, que valida la contraseña (cifrada) antes de escribir nada.
@@ -1806,7 +1560,8 @@
                         p_tipo_cono: tipoCono,
                         p_nro_bolsas: nroBolsas,
                         p_tipo_bolsa: tipoBolsa,
-                        p_ubicacion: ubicacionValor
+                        p_ubicacion: ubicacionValor,
+                        p_foto_balanza: fotoBalanzaUrlFinal
                     });
                     data = resp.data ? [resp.data] : null;
                     error = resp.error;
@@ -1829,6 +1584,7 @@
                         "Diferencia": diferencia,
                         "Ubicación": ubicacionValor,
                         "Observaciones": document.getElementById('observaciones').value.trim(),
+                        "Foto Balanza": fotoBalanzaUrlFinal,
                         "Registro": fechaLocal
                     };
 
@@ -1886,872 +1642,6 @@
             }
         }
 
-        // --- 6. VISTAS Y LÓGICA ADMINISTRADOR (Dashboard Reportes) ---
-        function switchAdminTab(tab) {
-            const btns = ['tab-reportes', 'tab-carga', 'tab-personal'];
-            const secs = ['section-reportes', 'section-carga', 'section-personal'];
-
-            btns.forEach(id => {
-                const b = document.getElementById(id);
-                if (b) {
-                    b.classList.remove('bg-teal-600', 'text-white');
-                    b.classList.add('text-gray-600');
-                }
-            });
-            const activeBtn = document.getElementById('tab-' + tab);
-            if (activeBtn) {
-                activeBtn.classList.remove('text-gray-600');
-                activeBtn.classList.add('bg-teal-600', 'text-white');
-            }
-
-            secs.forEach(id => document.getElementById(id).classList.add('hidden-view'));
-
-            if (tab === 'reportes') {
-                document.getElementById('section-reportes').classList.remove('hidden-view');
-                cargarReportesAdmin();
-            } else if (tab === 'carga') {
-                document.getElementById('section-carga').classList.remove('hidden-view');
-            } else if (tab === 'personal') {
-                document.getElementById('section-personal').classList.remove('hidden-view');
-            }
-        }
-
-        async function cargarReportesAdmin() {
-            try {
-                document.getElementById('loading-reports').classList.remove('hidden-view');
-
-                const allData = await fetchAllSupabase(NOMBRE_TABLA);
-                todosLosDatosReporte = allData;
-
-                const gruposUnicos = [...new Set(todosLosDatosReporte.filter(i => i['Grupo de Trabajo']).map(i => i['Grupo de Trabajo']))].sort();
-                const selGrupo = document.getElementById('filtro-grupo');
-                selGrupo.innerHTML = '<option value="todos">Todos los Grupos</option>' + gruposUnicos.map(g => `<option value="${esc(g)}">${esc(g)}</option>`).join('');
-
-                filtrarReportesTabla();
-            } catch (error) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error',
-                    text: error.message
-                });
-            } finally {
-                document.getElementById('loading-reports').classList.add('hidden-view');
-            }
-        }
-
-        function filtrarReportesTabla() {
-            const estado = document.getElementById('filtro-estado').value;
-            const grupoFil = document.getElementById('filtro-grupo').value;
-            const texto = document.getElementById('filtroReporte').value.toLowerCase();
-            const fechaFiltroStr = document.getElementById('filtro-fecha').value;
-
-            let filtrados = todosLosDatosReporte;
-
-            if (fechaFiltroStr) {
-                filtrados = filtrados.filter(i => {
-                    if (!i.Registro) return false;
-                    let dbDate = i.Registro;
-                    let datePart = dbDate.split('T')[0].split(' ')[0];
-
-                    if (datePart.includes('/')) {
-                        const p = datePart.split('/');
-                        if (p.length === 3) datePart = `${p[2]}-${p[1]}-${p[0]}`;
-                    }
-                    return datePart === fechaFiltroStr;
-                });
-            }
-
-            if (estado === 'completados') filtrados = filtrados.filter(i => i.Registro != null);
-            if (estado === 'pendientes') filtrados = filtrados.filter(i => i.Registro == null);
-            if (estado === 'diferencias') filtrados = filtrados.filter(i => i.Registro != null && parseFloat(i.Diferencia) !== 0);
-            if (grupoFil !== 'todos') filtrados = filtrados.filter(i => i['Grupo de Trabajo'] === grupoFil);
-
-            if (texto) {
-                filtrados = filtrados.filter(item =>
-                    (item['Código de Item'] && item['Código de Item'].toLowerCase().includes(texto)) ||
-                    (item['Descripción'] && item['Descripción'].toLowerCase().includes(texto)) ||
-                    (item['Lote'] && String(item['Lote']).toLowerCase().includes(texto)) ||
-                    (item['Inventariador'] && item['Inventariador'].toLowerCase().includes(texto))
-                );
-            }
-
-            datosFiltradosParaExportar = filtrados;
-
-            renderizarReportesAdmin(filtrados);
-            actualizarEstadisticasAdmin(todosLosDatosReporte);
-        }
-
-        let chartAvanceDiario = null;
-
-        // Cuenta cuántos artículos se registraron cada uno de los últimos 14 días
-        // (incluye días sin actividad, para que se note la tendencia y los huecos).
-        function calcularAvancePorDia(dataGlobal) {
-            const hoy = new Date();
-            const dias = [];
-            for (let i = 13; i >= 0; i--) {
-                const d = new Date(hoy);
-                d.setDate(d.getDate() - i);
-                dias.push(d.toISOString().split('T')[0]);
-            }
-            const conteoPorDia = {};
-            dias.forEach(d => conteoPorDia[d] = 0);
-
-            dataGlobal.filter(i => i.Registro != null).forEach(item => {
-                const fecha = String(item.Registro).split('T')[0].split(' ')[0];
-                if (conteoPorDia.hasOwnProperty(fecha)) conteoPorDia[fecha]++;
-            });
-
-            return {
-                etiquetas: dias.map(d => {
-                    const [, m, dd] = d.split('-');
-                    return `${dd}/${m}`;
-                }),
-                valores: dias.map(d => conteoPorDia[d])
-            };
-        }
-
-        function renderizarGraficoDiario(dataGlobal) {
-            const canvas = document.getElementById('chart-avance-diario');
-            const msgVacio = document.getElementById('msg-sin-avance-diario');
-
-            if (typeof Chart === 'undefined') {
-                // La librería del gráfico no cargó (p.ej. sin conexión a internet en ese momento).
-                // El resto del panel de administración sigue funcionando con normalidad.
-                canvas.classList.add('hidden-view');
-                msgVacio.textContent = 'No se pudo cargar el gráfico (sin conexión al CDN). El resto del panel funciona normalmente.';
-                msgVacio.classList.remove('hidden-view');
-                return;
-            }
-
-            const {
-                etiquetas,
-                valores
-            } = calcularAvancePorDia(dataGlobal);
-            const totalEnRango = valores.reduce((a, b) => a + b, 0);
-
-            if (totalEnRango === 0) {
-                canvas.classList.add('hidden-view');
-                msgVacio.classList.remove('hidden-view');
-                return;
-            }
-            canvas.classList.remove('hidden-view');
-            msgVacio.classList.add('hidden-view');
-
-            if (chartAvanceDiario) chartAvanceDiario.destroy();
-            chartAvanceDiario = new Chart(canvas, {
-                type: 'bar',
-                data: {
-                    labels: etiquetas,
-                    datasets: [{
-                        label: 'Artículos contados',
-                        data: valores,
-                        backgroundColor: '#0d9488',
-                        borderRadius: 4,
-                        maxBarThickness: 26
-                    }]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    plugins: {
-                        legend: {
-                            display: false
-                        },
-                        tooltip: {
-                            intersect: false
-                        }
-                    },
-                    scales: {
-                        y: {
-                            beginAtZero: true,
-                            ticks: {
-                                precision: 0,
-                                font: {
-                                    size: 9
-                                }
-                            },
-                            grid: {
-                                color: '#f1f5f9'
-                            }
-                        },
-                        x: {
-                            grid: {
-                                display: false
-                            },
-                            ticks: {
-                                font: {
-                                    size: 8.5
-                                }
-                            }
-                        }
-                    }
-                }
-            });
-        }
-
-        // Avance acumulado por grupo, con una barra de progreso relativa al grupo que más ha avanzado
-        function renderizarAvancePorGrupo(dataGlobal) {
-            const gruposContainer = document.getElementById('dashboard-grupos');
-            gruposContainer.innerHTML = '';
-
-            const gruposData = {};
-            dataGlobal.filter(i => i.Registro != null).forEach(item => {
-                const g = item['Grupo de Trabajo'] || 'Sin Grupo';
-                gruposData[g] = (gruposData[g] || 0) + 1;
-            });
-
-            const entradas = Object.entries(gruposData).sort((a, b) => b[1] - a[1]);
-            if (entradas.length === 0) {
-                gruposContainer.innerHTML = '<div class="text-xs text-gray-400 italic">Aún no hay conteos registrados.</div>';
-                return;
-            }
-            const maxValor = Math.max(...entradas.map(e => e[1]));
-
-            entradas.forEach(([g, total]) => {
-                const pct = Math.round((total / maxValor) * 100);
-                gruposContainer.innerHTML += `
-                    <div class="mb-3 last:mb-0">
-                        <div class="flex justify-between text-[11px] font-semibold text-gray-600 mb-1">
-                            <span class="truncate pr-2">${esc(g)}</span><span class="font-mono text-gray-800">${total}</span>
-                        </div>
-                        <div class="w-full bg-gray-100 rounded-full h-1.5">
-                            <div class="bg-teal-500 h-1.5 rounded-full" style="width:${pct}%"></div>
-                        </div>
-                    </div>
-                `;
-            });
-        }
-
-        function actualizarEstadisticasAdmin(dataGlobal) {
-            const total = dataGlobal.length;
-            const completados = dataGlobal.filter(i => i.Registro != null).length;
-            const faltantes = total - completados;
-            const pct = total === 0 ? 0 : ((completados / total) * 100).toFixed(1);
-
-            document.getElementById('stat-total').innerText = total;
-            document.getElementById('stat-completados').innerText = completados;
-            document.getElementById('stat-faltantes').innerText = faltantes;
-            document.getElementById('stat-porcentaje').innerText = pct + '%';
-
-            renderizarGraficoDiario(dataGlobal);
-            renderizarAvancePorGrupo(dataGlobal);
-        }
-
-        function renderizarReportesAdmin(datos) {
-            const tbody = document.getElementById('cuerpoReportes');
-            tbody.innerHTML = '';
-
-            if (datos.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="9" class="text-center py-10 text-gray-500 font-medium">No hay registros que coincidan con los filtros.</td></tr>';
-                return;
-            }
-
-            const datosVisuales = datos.slice(0, 500);
-
-            datosVisuales.forEach((item) => {
-                const completado = item.Registro != null;
-                let estadoBadge = completado ? `<span class="bg-teal-100 text-teal-700 px-2 py-0.5 rounded text-[10px] font-bold">Hecho</span>` : `<span class="bg-gray-100 text-gray-500 px-2 py-0.5 rounded text-[10px] font-bold">Pendiente</span>`;
-
-                const fechaStr = item.Registro || '-';
-                const dif = parseFloat(item['Diferencia'] || 0);
-
-                let diffColor = "text-gray-400";
-                if (completado) {
-                    if (dif > 0) diffColor = "text-teal-600 font-bold";
-                    if (dif < 0) diffColor = "text-red-500 font-bold";
-                }
-
-                // Todos los campos de texto libre (Inventariador, Código, Descripción, Lote) se
-                // escapan antes de insertarse como HTML, incluida la versión que va en "title".
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-gray-50 border-b border-gray-100 transition-colors";
-                tr.innerHTML = `
-                    <td class="py-2 px-3">${estadoBadge}</td>
-                    <td class="py-2 px-3 text-gray-500 font-mono text-[10px]">${esc(fechaStr)}</td>
-                    <td class="py-2 px-3 font-semibold text-gray-700 text-[10px] truncate max-w-[100px]">${esc(item['Inventariador'] || '-')}</td>
-                    <td class="py-2 px-3 text-teal-700 font-bold">${esc(item['Código de Item'] || '')}</td>
-                    <td class="py-2 px-3 truncate max-w-[200px]" title="${esc(item['Descripción'] || '')}">${esc(item['Descripción'] || '')}</td>
-                    <td class="py-2 px-3 font-mono text-[10px] text-gray-600">${esc(item['Lote'] || '-')}</td>
-                    <td class="py-2 px-3 text-right text-gray-400 font-mono">${parseFloat(item['Stock SAP']||0).toFixed(2)}</td>
-                    <td class="py-2 px-3 text-right font-mono font-bold text-gray-800">${completado ? parseFloat(item['Peso Neto'] || item['Peso Neto Inv'] || item['Total Inventario'] || 0).toFixed(2) : '-'}</td>
-                    <td class="py-2 px-3 text-right font-mono ${diffColor}">${completado ? (dif > 0 ? '+'+dif.toFixed(2) : dif.toFixed(2)) : '-'}</td>
-                `;
-                tbody.appendChild(tr);
-            });
-
-            if (datos.length > 500) {
-                const tr = document.createElement('tr');
-                tr.innerHTML = `<td colspan="9" class="text-center py-4 text-xs text-gray-400">Mostrando 500 de ${datos.length} registros filtrados. Exporta a Excel o PDF para ver todos.</td>`;
-                tbody.appendChild(tr);
-            }
-        }
-
-        // --- EXPORTACIÓN PDF Y EXCEL ---
-
-        // Info de filtros actualmente aplicados, para mostrarla en el encabezado de ambos exports
-        function obtenerInfoFiltrosExport() {
-            const estadoSel = document.getElementById('filtro-estado');
-            const grupoSel = document.getElementById('filtro-grupo');
-            const fechaVal = document.getElementById('filtro-fecha').value;
-            return {
-                grupo: grupoSel.value === 'todos' ? 'Todos' : grupoSel.value,
-                filtro: estadoSel.options[estadoSel.selectedIndex].text,
-                fecha: fechaVal || 'Todas'
-            };
-        }
-
-        // Arma las filas de datos para Hilados:
-        function armarFilasExport(formatoTexto) {
-            const num = formatoTexto ? (v) => parseFloat(v || 0).toFixed(3) : (v) => parseFloat(v || 0);
-            return datosFiltradosParaExportar.map(e => [
-                e['Inventariador'] || '-',
-                e['Grupo de Trabajo'] || '-',
-                e['Nro'] || '-',
-                e['Grupo de Articulos'] || '-',
-                e['Código de Item'] || '',
-                e['Descripción'] || '',
-                e['Lote'] || '-',
-                e['Unidad de Medida'] || '',
-                e['Almacen'] || '',
-                e['Sub Almacen'] || '',
-                num(e['Stock SAP']),
-                num(e['Peso Bruto']),
-                e['Nro de Conos'] || 0,
-                e['Tipo de Cono'] || '-',
-                num(e['Tara Conos'] || e['Tara Conos Inv']),
-                e['Nro de Bolsas'] || 0,
-                e['Tipo de Bolsa'] || '-',
-                num(e['Tara Bolsa'] || e['Tara Bolsa Inv']),
-                num(e['Peso Neto'] || e['Peso Neto Inv']),
-                num(e['Diferencia']),
-                e['Ubicación'] || '-',
-                e['Observaciones'] || '-',
-                e['Registro'] || '-'
-            ]);
-        }
-
-        function exportarPDF() {
-            if (datosFiltradosParaExportar.length === 0) return Swal.fire('Vacío', 'No hay datos para exportar con los filtros actuales', 'info');
-
-            const {
-                jsPDF
-            } = window.jspdf;
-            const doc = new jsPDF('landscape');
-            const pageWidth = doc.internal.pageSize.width;
-            const generado = new Date().toLocaleString('es-PE');
-            const infoFiltros = obtenerInfoFiltrosExport();
-            const inventariadoresUnicos = [...new Set(datosFiltradosParaExportar.map(e => e['Inventariador']).filter(Boolean))];
-            const inventariadorTxt = inventariadoresUnicos.length === 0 ? '-' : inventariadoresUnicos.length === 1 ? inventariadoresUnicos[0] : `Varios (${inventariadoresUnicos.length})`;
-            const fmtFecha = (v) => v ? String(v).replace('T', ' ').split('.')[0] : '-';
-
-            function dibujarEncabezado() {
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(7.5);
-                doc.setTextColor(107, 114, 128);
-                doc.text(`Generado: ${generado}`, 8, 8);
-                doc.setTextColor(15, 23, 42);
-
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(13);
-                doc.text("ART ATLAS SRL", 8, 15);
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(7.5);
-                doc.setTextColor(107, 114, 128);
-                doc.text("RUC: 20413770204", 8, 19.5);
-                doc.setTextColor(15, 23, 42);
-
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(8);
-                doc.setTextColor(71, 85, 105);
-                doc.text(`Grupo: ${infoFiltros.grupo}    Inventariador: ${inventariadorTxt}    Filtro: ${infoFiltros.filtro}    Fecha: ${infoFiltros.fecha}`, pageWidth / 2, 20.5, { align: "center" });
-                doc.setTextColor(15, 23, 42);
-
-                doc.setFont("helvetica", "bold");
-                doc.setFontSize(14);
-                doc.text("TOMA DE INVENTARIO - HILADOS", pageWidth / 2, 15, {
-                    align: "center"
-                });
-
-                doc.setDrawColor(203, 213, 225);
-                doc.setLineWidth(0.3);
-                doc.line(8, 24, pageWidth - 8, 24);
-            }
-
-            const head = [
-                [
-                    { content: '#' },
-                    { content: 'Código' },
-                    { content: 'Descripción' },
-                    { content: 'Lote' },
-                    { content: 'UM' },
-                    { content: 'Alm' },
-                    { content: 'Stock SAP' },
-                    { content: 'Peso Bruto' },
-                    { content: 'Conos' },
-                    { content: 'Tara Conos' },
-                    { content: 'Bolsas' },
-                    { content: 'Tara Bolsa' },
-                    { content: 'Peso Neto' },
-                    { content: 'Diferencia' },
-                    { content: 'Ubicación' },
-                    { content: 'Registro' }
-                ]
-            ];
-
-            const bodyFilas = datosFiltradosParaExportar.map(e => [
-                e['Nro'] || '-',
-                e['Código de Item'] || '',
-                e['Descripción'] || '',
-                e['Lote'] || '-',
-                e['Unidad de Medida'] || '',
-                (e['Almacen'] || '-') + '/' + (e['Sub Almacen'] || '-'),
-                parseFloat(e['Stock SAP'] || 0).toFixed(3),
-                e.Registro ? parseFloat(e['Peso Bruto'] || 0).toFixed(3) : '-',
-                e.Registro ? `${e['Nro de Conos'] || 0} (${e['Tipo de Cono'] || ''})` : '-',
-                e.Registro ? parseFloat(e['Tara Conos'] || e['Tara Conos Inv'] || 0).toFixed(3) : '-',
-                e.Registro ? `${e['Nro de Bolsas'] || 0} (${e['Tipo de Bolsa'] || ''})` : '-',
-                e.Registro ? parseFloat(e['Tara Bolsa'] || e['Tara Bolsa Inv'] || 0).toFixed(3) : '-',
-                e.Registro ? parseFloat(e['Peso Neto'] || e['Peso Neto Inv'] || 0).toFixed(3) : '-',
-                e.Registro ? (parseFloat(e['Diferencia'] || 0) > 0 ? '+' : '') + parseFloat(e['Diferencia'] || 0).toFixed(3) : '-',
-                e['Ubicación'] || '-',
-                fmtFecha(e['Registro'])
-            ]);
-
-            doc.autoTable({
-                startY: 30,
-                margin: {
-                    top: 30
-                },
-                head: head,
-                body: bodyFilas,
-                theme: 'striped',
-                styles: {
-                    fontSize: 5.5,
-                    cellPadding: 1.2,
-                    overflow: 'linebreak',
-                    textColor: [30, 41, 59],
-                    lineColor: [226, 232, 240],
-                    lineWidth: 0.1
-                },
-                headStyles: {
-                    fillColor: [30, 41, 59],
-                    textColor: 255,
-                    fontSize: 5.8,
-                    fontStyle: 'bold',
-                    halign: 'center',
-                    valign: 'middle',
-                    lineColor: [30, 41, 59]
-                },
-                didDrawPage: dibujarEncabezado
-            });
-
-            const totalPaginas = doc.internal.getNumberOfPages();
-            for (let i = 1; i <= totalPaginas; i++) {
-                doc.setPage(i);
-                doc.setFont("helvetica", "normal");
-                doc.setFontSize(7.5);
-                doc.text(`Página ${i} de ${totalPaginas}`, pageWidth - 8, 8, {
-                    align: "right"
-                });
-            }
-
-            doc.setPage(totalPaginas);
-            const finalY = doc.lastAutoTable.finalY || 40;
-            const pageHeight = doc.internal.pageSize.height;
-            let sigY = finalY + 20;
-
-            if (sigY > pageHeight - 20) {
-                doc.addPage();
-                dibujarEncabezado();
-                sigY = 45;
-            }
-
-            doc.setLineWidth(0.5);
-            doc.setFontSize(9);
-            doc.setFont("helvetica", "bold");
-
-            doc.line(30, sigY, 90, sigY);
-            doc.text("INVENTARIADOR", 60, sigY + 5, {
-                align: "center"
-            });
-
-            doc.line(115, sigY, 180, sigY);
-            doc.text("SUPERVISOR DE ALMACEN", 147.5, sigY + 5, {
-                align: "center"
-            });
-
-            doc.line(205, sigY, 270, sigY);
-            doc.text("SUPERVISOR DE INVENTARIO", 237.5, sigY + 5, {
-                align: "center"
-            });
-
-            doc.save(`Inventario_Hilado_${new Date().toISOString().split('T')[0]}.pdf`);
-        }
-
-        // Exporta en formato Excel para Hilados
-        function exportarExcel() {
-            if (datosFiltradosParaExportar.length === 0) return Swal.fire('Vacío', 'No hay datos para exportar con los filtros actuales', 'info');
-
-            const infoFiltros = obtenerInfoFiltrosExport();
-            const generado = new Date().toLocaleString('es-PE');
-
-            const encabezado = [
-                ['ART ATLAS SRL - RUC: 20413770204'],
-                ['TOMA DE INVENTARIO - HILADOS 2025'],
-                [`GRUPO: ${infoFiltros.grupo}    FILTRO: ${infoFiltros.filtro}    FECHA: ${infoFiltros.fecha}    Generado: ${generado}`],
-                [],
-                [
-                    'Inventariador', 'Grupo de Trabajo', '#', 'Grupo de Artículos', 'Código de Item', 'Descripción', 'Lote', 'UM', 'Almacén', 'Sub Almacén',
-                    'Stock SAP (kg)', 'Peso Bruto (kg)', 'Nro Conos', 'Tipo Cono', 'Tara Conos (kg)', 'Nro Bolsas', 'Tipo Bolsa', 'Tara Bolsa (kg)',
-                    'Peso Neto (kg)', 'Diferencia (kg)', 'Ubicación', 'Observaciones', 'Registro'
-                ]
-            ];
-
-            const filas = armarFilasExport(false);
-            const hoja = XLSX.utils.aoa_to_sheet([...encabezado, ...filas]);
-
-            const ultimaCol = encabezado[4].length - 1;
-            hoja['!merges'] = [{
-                    s: {
-                        r: 0,
-                        c: 0
-                    },
-                    e: {
-                        r: 0,
-                        c: ultimaCol
-                    }
-                },
-                {
-                    s: {
-                        r: 1,
-                        c: 0
-                    },
-                    e: {
-                        r: 1,
-                        c: ultimaCol
-                    }
-                },
-                {
-                    s: {
-                        r: 2,
-                        c: 0
-                    },
-                    e: {
-                        r: 2,
-                        c: ultimaCol
-                    }
-                }
-            ];
-
-            hoja['!cols'] = [{
-                    wch: 24
-                }, {
-                    wch: 14
-                }, {
-                    wch: 8
-                }, {
-                    wch: 16
-                }, {
-                    wch: 20
-                }, {
-                    wch: 45
-                }, {
-                    wch: 8
-                }, {
-                    wch: 6
-                }, {
-                    wch: 8
-                },
-                {
-                    wch: 10
-                }, {
-                    wch: 12
-                }, {
-                    wch: 10
-                }, {
-                    wch: 16
-                }, {
-                    wch: 10
-                }, {
-                    wch: 12
-                }, {
-                    wch: 22
-                }, {
-                    wch: 12
-                }, {
-                    wch: 10
-                }, {
-                    wch: 18
-                }
-            ];
-
-            const libro = XLSX.utils.book_new();
-            XLSX.utils.book_append_sheet(libro, hoja, 'Toma de Inventario');
-            XLSX.writeFile(libro, `Inventario_${new Date().toISOString().split('T')[0]}.xlsx`);
-        }
-
-        // --- 7. CARGA MASIVA CSV Y RESET DB (ADMIN) ---
-        const dropArea = document.getElementById('drop-area');
-        const fileInput = document.getElementById('file-sap');
-
-        dropArea.addEventListener('click', () => fileInput.click());
-        dropArea.addEventListener('dragover', (e) => {
-            e.preventDefault();
-            dropArea.classList.add('dragover');
-        });
-        dropArea.addEventListener('dragleave', () => dropArea.classList.remove('dragover'));
-        dropArea.addEventListener('drop', (e) => {
-            e.preventDefault();
-            dropArea.classList.remove('dragover');
-            if (e.dataTransfer.files.length) {
-                fileInput.files = e.dataTransfer.files;
-                procesarArchivoCSV();
-            }
-        });
-        fileInput.addEventListener('change', procesarArchivoCSV);
-
-        function procesarArchivoCSV() {
-            const file = fileInput.files[0];
-            if (!file) return;
-
-            Papa.parse(file, {
-                header: true,
-                skipEmptyLines: 'greedy',
-                delimitersToGuess: [';', ',', '\t', '|'],
-                complete: function(results) {
-                    if (results.errors.length && results.data.length === 0) {
-                        Swal.fire('Error', 'Archivo no válido.', 'error');
-                        return;
-                    }
-                    csvDataToUpload = results.data;
-                    document.getElementById('drop-area').classList.add('hidden');
-                    document.getElementById('file-info').classList.remove('hidden');
-                    document.getElementById('file-name').innerText = file.name;
-                    document.getElementById('file-rows').innerText = `${csvDataToUpload.length} artículos detectados`;
-                    document.getElementById('btn-procesar-csv').disabled = false;
-                }
-            });
-        }
-
-        function limpiarArchivo() {
-            fileInput.value = '';
-            csvDataToUpload = [];
-            document.getElementById('drop-area').classList.remove('hidden');
-            document.getElementById('file-info').classList.add('hidden');
-            document.getElementById('btn-procesar-csv').disabled = true;
-        }
-
-        async function subirASupabase() {
-            if (csvDataToUpload.length === 0) return;
-            const btn = document.getElementById('btn-procesar-csv');
-            btn.disabled = true;
-            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Procesando...';
-
-            try {
-                const payload = csvDataToUpload.map(row => {
-                    // 1. Limpiamos todas las cabeceras del CSV (quitamos tildes, símbolos raros y mayúsculas)
-                    const rowLimpio = {};
-                    for (let key in row) {
-                        if (key) {
-                            // Esto convierte "Cdigo de Item" o "Código" a "codigo de item"
-                            let cleanKey = key.normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-zA-Z0-9 ]/g, "").toLowerCase().trim();
-                            rowLimpio[cleanKey] = (row[key] !== undefined && row[key] !== null) ? String(row[key]).trim() : '';
-                        }
-                    }
-
-                    // 2. Mapeamos usando las cabeceras limpias (así ya no importan las tildes ni separador decimal)
-                    let stockVal = rowLimpio["stock sap"] || rowLimpio["stock"] || '0';
-                    if (typeof stockVal === 'string') stockVal = stockVal.replace(',', '.');
-
-                    return {
-                        "id": crypto.randomUUID(),
-                        "Nro": rowLimpio["nro"] || '',
-                        "Código de Item": rowLimpio["codigo de item"] || rowLimpio["codigo"] || rowLimpio["item"] || '',
-                        "Descripción": rowLimpio["descripcion"] || '',
-                        "Grupo de Articulos": rowLimpio["grupo de articulos"] || rowLimpio["grupo"] || '',
-                        "Lote": rowLimpio["lote"] || rowLimpio["nro lote"] || rowLimpio["nro de lote"] || rowLimpio["numero de lote"] || rowLimpio["n lote"] || rowLimpio["no lote"] || rowLimpio["batch"] || rowLimpio["lot"] || '',
-                        "Unidad de Medida": rowLimpio["unidad de medida"] || rowLimpio["um"] || '',
-                        "Almacen": rowLimpio["almacen"] || '',
-                        "Sub Almacen": rowLimpio["sub almacen"] || rowLimpio["subalmacen"] || '',
-                        "Stock SAP": parseFloat(stockVal) || 0,
-                        "Inventariador": null,
-                        "Grupo de Trabajo": null,
-                        "Diferencia": null,
-                        "Ubicación": null,
-                        "Observaciones": null,
-                        "Registro": null
-                    };
-                });
-
-                // 3. Filtramos los que sí tengan un código válido
-                const payloadValido = payload.filter(item => item["Código de Item"] !== '');
-
-                // Si después de limpiar sigue en 0, mostramos un error claro
-                if (payloadValido.length === 0) {
-                    throw new Error("No se detectó la columna del código (Código de Item). Verifica las cabeceras del archivo.");
-                }
-
-                const CHUNK_SIZE = 500;
-                let insertados = 0;
-
-                for (let i = 0; i < payloadValido.length; i += CHUNK_SIZE) {
-                    const chunk = payloadValido.slice(i, i + CHUNK_SIZE);
-                    const { error } = await _supabase.from(NOMBRE_TABLA).insert(chunk);
-                    if (error) throw error;
-                    insertados += chunk.length;
-                }
-
-                Swal.fire('¡Base Actualizada!', `Se han cargado ${insertados} artículos listos para la toma física.`, 'success');
-                limpiarArchivo();
-            } catch (error) {
-                Swal.fire({
-                    icon: 'error',
-                    title: 'Error de carga',
-                    text: error.message
-                });
-            } finally {
-                btn.disabled = false;
-                btn.innerHTML = '<i class="fa-solid fa-database mr-2"></i> Importar a Base de Datos';
-            }
-        }
-
-        async function vaciarTodaLaTabla() {
-            // Confirmación reforzada: además del diálogo de advertencia, exige escribir
-            // la palabra BORRAR para reducir el riesgo de un clic accidental en una acción irreversible.
-            const {
-                value: confirmacion
-            } = await Swal.fire({
-                title: '¿Limpiar Toda la Base de Datos?',
-                html: "<b>ESTA ACCIÓN ES IRREVERSIBLE.</b><br>Se borrarán absolutamente todos los registros.<br><br>Escribe <b>BORRAR</b> para confirmar:",
-                icon: 'warning',
-                input: 'text',
-                inputPlaceholder: 'BORRAR',
-                showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#64748b',
-                confirmButtonText: 'Sí, borrar todo permanentemente',
-                cancelButtonText: 'Cancelar',
-                preConfirm: (valor) => {
-                    if (valor !== 'BORRAR') {
-                        Swal.showValidationMessage('Debes escribir exactamente BORRAR para continuar');
-                        return false;
-                    }
-                    return valor;
-                }
-            });
-
-            if (confirmacion === 'BORRAR') {
-                try {
-                    Swal.fire({
-                        title: 'Borrando...',
-                        allowOutsideClick: false,
-                        didOpen: () => Swal.showLoading()
-                    });
-                    const {
-                        error
-                    } = await _supabase.from(NOMBRE_TABLA).delete().not('id', 'is', null);
-                    if (error) throw error;
-                    Swal.fire('¡Borrado!', 'La base de datos está completamente limpia.', 'success');
-                    cargarReportesAdmin();
-                } catch (err) {
-                    Swal.fire('Error', err.message, 'error');
-                }
-            }
-        }
-
-        // --- 8. GESTIÓN DEL PERSONAL (ADMIN) ---
-        // Calcula el siguiente número de grupo disponible (Grupo 1, Grupo 2, ...) según el
-        // número más alto ya usado en el personal registrado. Así, si se elimina a alguien
-        // a la mitad, el siguiente operador no repite un número de grupo ya usado.
-        function siguienteNumeroGrupo() {
-            let maxN = 0;
-            datosPersonal.forEach(p => {
-                const g = p.grupo || p.Grupo || '';
-                const match = /(\d+)/.exec(g);
-                if (match) {
-                    const n = parseInt(match[1], 10);
-                    if (n > maxN) maxN = n;
-                }
-            });
-            return maxN + 1;
-        }
-
-        function actualizarPreviewGrupo() {
-            const el = document.getElementById('preview-siguiente-grupo');
-            if (el) el.textContent = `Grupo ${siguienteNumeroGrupo()}`;
-        }
-
-        function renderizarTablaPersonal() {
-            actualizarPreviewGrupo();
-            const tbody = document.getElementById('cuerpoPersonal');
-            tbody.innerHTML = '';
-
-            if (datosPersonal.length === 0) {
-                tbody.innerHTML = '<tr><td colspan="3" class="text-center py-6 text-gray-500">Agrega personal usando el formulario.</td></tr>';
-                return;
-            }
-
-            datosPersonal.forEach(p => {
-                const tr = document.createElement('tr');
-                tr.className = "hover:bg-gray-50 transition-colors";
-                const n = p.nombre || p.Nombre || 'Desconocido';
-                const g = p.grupo || p.Grupo || 'Sin Grupo';
-                tr.innerHTML = `
-                    <td class="py-3 px-4 font-bold text-gray-700">${esc(n)}</td>
-                    <td class="py-3 px-4 text-gray-500">${esc(g)}</td>
-                    <td class="py-3 px-4 text-center">
-                        <button onclick="eliminarPersonal(${p.id})" class="text-gray-400 hover:text-red-500 bg-gray-50 hover:bg-red-50 w-8 h-8 rounded-full transition-colors" title="Borrar">
-                            <i class="fa-solid fa-trash-can"></i>
-                        </button>
-                    </td>
-                `;
-                tbody.appendChild(tr);
-            });
-        }
-
-        async function guardarPersonal(e) {
-            e.preventDefault();
-            const btn = document.getElementById('btn-guardar-personal');
-            btn.disabled = true;
-            try {
-                const grupoAsignado = `Grupo ${siguienteNumeroGrupo()}`;
-                const {
-                    error
-                } = await _supabase.from(TABLA_PERSONAL).insert([{
-                    nombre: document.getElementById('nuevo_nombre').value.trim(),
-                    grupo: grupoAsignado
-                }]);
-                if (error) throw error;
-                document.getElementById('form-personal').reset();
-                obtenerPersonalBaseDatos();
-            } catch (error) {
-                Swal.fire('Error', error.message, 'error');
-            } finally {
-                btn.disabled = false;
-            }
-        }
-
-        async function eliminarPersonal(id) {
-            // Se reemplazó el confirm() nativo del navegador por un diálogo SweetAlert,
-            // consistente con el resto de la interfaz.
-            const result = await Swal.fire({
-                title: '¿Retirar este operador?',
-                text: 'Ya no aparecerá en la lista de login de operadores.',
-                icon: 'warning',
-                showCancelButton: true,
-                confirmButtonColor: '#ef4444',
-                cancelButtonColor: '#64748b',
-                confirmButtonText: 'Sí, retirar',
-                cancelButtonText: 'Cancelar'
-            });
-            if (!result.isConfirmed) return;
-
-            const {
-                error
-            } = await _supabase.from(TABLA_PERSONAL).delete().eq('id', id);
-            if (!error) obtenerPersonalBaseDatos();
-            else Swal.fire('Error', error.message, 'error');
-        }
     </script>
 </body>
 
