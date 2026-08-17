@@ -593,7 +593,7 @@
     <script>
         // --- 1. CONFIGURACIÓN SUPABASE ---
         const NOMBRE_TABLA = 'avios'; 
-        const TABLA_PERSONAL = 'inventariadores1'; 
+        const TABLA_PERSONAL = 'inventariadores_avios';
         
         const SUPABASE_URL = 'https://ozyefhongybussdaxtex.supabase.co';
         // NOTA DE SEGURIDAD: esta clave "anon" es pública por diseño (viaja en el HTML,
@@ -623,14 +623,14 @@
         // Se usa para no volver a exigir "nadie más lo contó" cuando es una edición autorizada.
         let modoEdicionAutorizada = false;
 
-        // Configuración global de la app (se guarda en la tabla app_config de Supabase).
+        // Configuración global de la app (se guarda en la tabla avios_config de Supabase).
         // ocultar_stock_sap: si es true, los operadores NO ven el stock teórico SAP ni la
         // diferencia mientras cuentan (conteo "a ciegas"). El administrador ve todo siempre.
         let configuracionApp = { ocultar_stock_sap: true };
 
         async function cargarConfiguracion() {
             try {
-                const { data, error } = await _supabase.from('app_config').select('*').eq('id', 1).single();
+                const { data, error } = await _supabase.from('avios_config').select('*').eq('id', 1).single();
                 if (error) throw error;
                 if (data) configuracionApp = data;
             } catch (e) {
@@ -672,7 +672,7 @@
             if (!result.isConfirmed) return;
 
             try {
-                const { error } = await _supabase.from('app_config').update({ ocultar_stock_sap: nuevoValor }).eq('id', 1);
+                const { error } = await _supabase.from('avios_config').update({ ocultar_stock_sap: nuevoValor }).eq('id', 1);
                 if (error) throw error;
                 configuracionApp.ocultar_stock_sap = nuevoValor;
                 actualizarBotonToggleSap();
@@ -931,14 +931,16 @@
         // --- 4. TOMA DE INVENTARIO: BUSCADOR OPERADOR ---
         async function actualizarAvanceOperador() {
             try {
-                const data = await fetchAllSupabase(NOMBRE_TABLA, 'Registro');
-                if(data) {
-                    const total = data.length;
-                    const contados = data.filter(i => i.Registro != null).length;
-                    const faltan = total - contados;
-                    const pct = total === 0 ? 0 : Math.round((contados/total)*100);
-                    document.getElementById('op-stats').innerHTML = `<i class="fa-solid fa-chart-pie mr-1 text-teal-600"></i> Progreso Global: <b class="text-teal-700">${contados}</b> contados — Faltan: <b>${faltan}</b> (${pct}%)`;
-                }
+                // Conteos con head:true: no descarga filas, solo el número en el header.
+                // Evita traer la tabla completa en cada guardado (ahorra egress de Supabase).
+                const [{ count: total, error: e1 }, { count: contados, error: e2 }] = await Promise.all([
+                    _supabase.from(NOMBRE_TABLA).select('id', { count: 'exact', head: true }),
+                    _supabase.from(NOMBRE_TABLA).select('id', { count: 'exact', head: true }).not('Registro', 'is', null)
+                ]);
+                if (e1 || e2) throw (e1 || e2);
+                const faltan = total - contados;
+                const pct = total === 0 ? 0 : Math.round((contados/total)*100);
+                document.getElementById('op-stats').innerHTML = `<i class="fa-solid fa-chart-pie mr-1 text-teal-600"></i> Progreso Global: <b class="text-teal-700">${contados}</b> contados — Faltan: <b>${faltan}</b> (${pct}%)`;
             } catch(e) {}
         }
 

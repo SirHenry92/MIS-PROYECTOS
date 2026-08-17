@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Inventario Hilados - Portal Especializado</title>
+    <title>Inventario Desperdicios - Portal Especializado</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -263,10 +263,10 @@
     <nav class="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center z-40 flex-shrink-0 shadow-sm">
         <div class="flex items-center gap-3">
             <div class="bg-teal-600 text-white p-2 rounded-lg">
-                <i class="fa-solid fa-boxes-stacked text-xl"></i>
+                <i class="fa-solid fa-recycle text-xl"></i>
             </div>
             <div>
-                <h1 class="font-bold text-gray-800 leading-none">Inventario Hilados</h1>
+                <h1 class="font-bold text-gray-800 leading-none">Inventario Desperdicios</h1>
                 <p class="text-[10px] text-gray-500 font-medium tracking-wide uppercase" id="nav-role-text">Portal Operativo</p>
             </div>
         </div>
@@ -531,6 +531,12 @@
                                 <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i> Observaciones (Opcional)</label>
                                 <input type="text" id="observaciones" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Cono dañado, lote mixto, etc.">
                             </div>
+
+                            <!-- Bloqueo -->
+                            <label class="flex items-center gap-2 bg-gray-50 p-3 rounded-lg border border-gray-100 cursor-pointer select-none">
+                                <input type="checkbox" id="bloqueo" class="w-4 h-4 accent-red-500">
+                                <span class="text-xs font-semibold text-gray-600"><i class="fa-solid fa-lock text-red-400 mr-1"></i> Marcar como Bloqueado (material no disponible / observado)</span>
+                            </label>
                         </div>
 
                         <!-- Lado Derecho: Calculadora Lateral (atada al Peso Bruto) -->
@@ -791,8 +797,8 @@
     <!-- CÓDIGO JS PRINCIPAL -->
     <script>
         // --- 1. CONFIGURACIÓN SUPABASE ---
-        const NOMBRE_TABLA = 'hilado';
-        const TABLA_PERSONAL = 'inventariadores_hilado';
+        const NOMBRE_TABLA = 'desperdicios';
+        const TABLA_PERSONAL = 'inventariadores_desperdicios';
 
         const SUPABASE_URL = 'https://ozyefhongybussdaxtex.supabase.co';
         // NOTA DE SEGURIDAD: esta clave "anon" es pública por diseño (viaja en el HTML,
@@ -823,11 +829,11 @@
         // Indica si el registro actual fue desbloqueado con la clave de modificación.
         // Se usa para no volver a exigir "nadie más lo contó" cuando es una edición autorizada.
         let modoEdicionAutorizada = false;
-        // La contraseña de modificación se valida en el servidor (función modificar_conteo_hilado),
+        // La contraseña de modificación se valida en el servidor (función modificar_conteo_desperdicios),
         // nunca en el navegador: solo se sabe si acertó por el resultado que responde Supabase.
         let claveModificacionPendiente = null;
 
-        // Configuración global de la app (se guarda en la tabla hilado_config de Supabase).
+        // Configuración global de la app (se guarda en la tabla desperdicios_config de Supabase).
         // ocultar_stock_sap: si es true, los operadores NO ven el stock teórico SAP ni la
         // diferencia mientras cuentan (conteo "a ciegas"). El administrador ve todo siempre.
         let configuracionApp = {
@@ -839,7 +845,7 @@
                 const {
                     data,
                     error
-                } = await _supabase.from('hilado_config').select('*').eq('id', 1).single();
+                } = await _supabase.from('desperdicios_config').select('*').eq('id', 1).single();
                 if (error) throw error;
                 if (data) configuracionApp = data;
             } catch (e) {
@@ -882,7 +888,7 @@
             try {
                 const {
                     error
-                } = await _supabase.from('hilado_config').update({
+                } = await _supabase.from('desperdicios_config').update({
                     ocultar_stock_sap: nuevoValor
                 }).eq('id', 1);
                 if (error) throw error;
@@ -1403,7 +1409,7 @@
             setTimeout(() => modal.classList.add('hidden-view'), 300);
         }
 
-        // --- 5. MODAL WIDGET GRID Y CALCULADORA (OPERADOR HILADOS) ---
+        // --- 5. MODAL WIDGET GRID Y CALCULADORA (OPERADOR DESPERDICIOS) ---
         const TARA_VALORES_CONO = {
             'Cartón': 0.040,
             'Plástico': 0.035,
@@ -1472,7 +1478,7 @@
                     if (el) el.value = val;
                 };
 
-                // Valores de campos de conteo Hilados
+                // Valores de campos de conteo Desperdicios
                 setVal('nro_conos', completado ? (item['Nro de Conos'] || 0) : '');
                 setVal('tipo_cono', item['Tipo de Cono'] || 'Cartón');
                 setVal('nro_bolsas', completado ? (item['Nro de Bolsas'] || 0) : '');
@@ -1480,11 +1486,12 @@
                 setVal('peso_bruto', completado ? (item['Peso Bruto'] || '') : '');
                 setVal('ubicacion', completado ? (item['Ubicación'] || '') : '');
                 setVal('observaciones', completado ? (item['Observaciones'] || '') : '');
+                document.getElementById('bloqueo').checked = completado ? !!item['Bloqueo'] : false;
 
                 onTipoConoChange();
                 onTipoBolsaChange();
 
-                const inputs = ['nro_conos', 'tipo_cono', 'tipo_cono_manual', 'nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones'];
+                const inputs = ['nro_conos', 'tipo_cono', 'tipo_cono_manual', 'nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones', 'bloqueo'];
                 const btnGuardar = document.getElementById('btnGuardar');
                 const btnModificar = document.getElementById('btnModificar');
                 const badgeEstado = document.getElementById('modal-estado-badge');
@@ -1494,7 +1501,7 @@
                         const el = document.getElementById(id);
                         if (el) {
                             el.readOnly = true;
-                            el.disabled = (el.tagName === 'SELECT');
+                            el.disabled = (el.tagName === 'SELECT' || el.type === 'checkbox');
                             el.classList.add('bg-gray-100', 'cursor-not-allowed', 'text-gray-500');
                         }
                     });
@@ -1562,10 +1569,10 @@
             if (!password) return;
 
             // Se guarda para enviarla junto con los datos al guardar: el servidor valida
-            // contraseña + datos en una sola operación atómica (función modificar_conteo_hilado).
+            // contraseña + datos en una sola operación atómica (función modificar_conteo_desperdicios).
             claveModificacionPendiente = password;
 
-            const inputs = ['nro_conos', 'tipo_cono', 'tipo_cono_manual', 'nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones'];
+            const inputs = ['nro_conos', 'tipo_cono', 'tipo_cono_manual', 'nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones', 'bloqueo'];
             inputs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
@@ -1792,13 +1799,15 @@
             const s = String(now.getSeconds()).padStart(2, '0');
             const fechaLocal = `${y}-${m}-${d} ${h}:${min}:${s}`;
 
+            const bloqueoValor = document.getElementById('bloqueo').checked;
+
             try {
                 let data, error;
 
                 if (modoEdicionAutorizada) {
                     // Edición de un registro ya contado: pasa por la función segura del
                     // servidor, que valida la contraseña (cifrada) antes de escribir nada.
-                    const resp = await _supabase.rpc('modificar_conteo_hilado', {
+                    const resp = await _supabase.rpc('modificar_conteo_desperdicios', {
                         p_id: registroId,
                         p_password: claveModificacionPendiente,
                         p_peso_bruto: pesoBruto,
@@ -1806,7 +1815,8 @@
                         p_tipo_cono: tipoCono,
                         p_nro_bolsas: nroBolsas,
                         p_tipo_bolsa: tipoBolsa,
-                        p_ubicacion: ubicacionValor
+                        p_ubicacion: ubicacionValor,
+                        p_bloqueo: bloqueoValor
                     });
                     data = resp.data ? [resp.data] : null;
                     error = resp.error;
@@ -1829,6 +1839,7 @@
                         "Diferencia": diferencia,
                         "Ubicación": ubicacionValor,
                         "Observaciones": document.getElementById('observaciones').value.trim(),
+                        "Bloqueo": bloqueoValor,
                         "Registro": fechaLocal
                     };
 
@@ -2200,7 +2211,7 @@
             };
         }
 
-        // Arma las filas de datos para Hilados:
+        // Arma las filas de datos para Desperdicios:
         function armarFilasExport(formatoTexto) {
             const num = formatoTexto ? (v) => parseFloat(v || 0).toFixed(3) : (v) => parseFloat(v || 0);
             return datosFiltradosParaExportar.map(e => [
@@ -2224,6 +2235,7 @@
                 num(e['Tara Bolsa'] || e['Tara Bolsa Inv']),
                 num(e['Peso Neto'] || e['Peso Neto Inv']),
                 num(e['Diferencia']),
+                e['Bloqueo'] ? 'SI' : 'NO',
                 e['Ubicación'] || '-',
                 e['Observaciones'] || '-',
                 e['Registro'] || '-'
@@ -2258,7 +2270,7 @@
 
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(14);
-                doc.text("TOMA DE INVENTARIO - HILADOS", pageWidth / 2, 15, {
+                doc.text("TOMA DE INVENTARIO - DESPERDICIOS", pageWidth / 2, 15, {
                     align: "center"
                 });
 
@@ -2375,10 +2387,10 @@
                 align: "center"
             });
 
-            doc.save(`Inventario_Hilado_${new Date().toISOString().split('T')[0]}.pdf`);
+            doc.save(`Inventario_Desperdicios_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
-        // Exporta en formato Excel para Hilados
+        // Exporta en formato Excel para Desperdicios
         function exportarExcel() {
             if (datosFiltradosParaExportar.length === 0) return Swal.fire('Vacío', 'No hay datos para exportar con los filtros actuales', 'info');
 
@@ -2387,13 +2399,13 @@
 
             const encabezado = [
                 ['ART ATLAS SRL - RUC: 20413770204'],
-                ['TOMA DE INVENTARIO - HILADOS 2025'],
+                ['TOMA DE INVENTARIO - DESPERDICIOS 2025'],
                 [`GRUPO: ${infoFiltros.grupo}    FILTRO: ${infoFiltros.filtro}    FECHA: ${infoFiltros.fecha}    Generado: ${generado}`],
                 [],
                 [
                     'Inventariador', 'Grupo de Trabajo', '#', 'Grupo de Artículos', 'Código de Item', 'Descripción', 'Lote', 'UM', 'Almacén', 'Sub Almacén',
                     'Stock SAP (kg)', 'Peso Bruto (kg)', 'Nro Conos', 'Tipo Cono', 'Tara Conos (kg)', 'Nro Bolsas', 'Tipo Bolsa', 'Tara Bolsa (kg)',
-                    'Peso Neto (kg)', 'Diferencia (kg)', 'Ubicación', 'Observaciones', 'Registro'
+                    'Peso Neto (kg)', 'Diferencia (kg)', 'Bloqueo', 'Ubicación', 'Observaciones', 'Registro'
                 ]
             ];
 
@@ -2471,13 +2483,15 @@
                 }, {
                     wch: 10
                 }, {
+                    wch: 8
+                }, {
                     wch: 18
                 }
             ];
 
             const libro = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(libro, hoja, 'Toma de Inventario');
-            XLSX.writeFile(libro, `Inventario_${new Date().toISOString().split('T')[0]}.xlsx`);
+            XLSX.writeFile(libro, `Inventario_Desperdicios_${new Date().toISOString().split('T')[0]}.xlsx`);
         }
 
         // --- 7. CARGA MASIVA CSV Y RESET DB (ADMIN) ---
@@ -2555,6 +2569,7 @@
 
                     return {
                         "id": crypto.randomUUID(),
+                        "#": (row["#"] !== undefined && row["#"] !== null) ? String(row["#"]).trim() : '',
                         "Nro": rowLimpio["nro"] || '',
                         "Código de Item": rowLimpio["codigo de item"] || rowLimpio["codigo"] || rowLimpio["item"] || '',
                         "Descripción": rowLimpio["descripcion"] || '',

@@ -4,7 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Inventario Hilados - Portal Especializado</title>
+    <title>Inventario Telas - Portal Especializado</title>
 
     <!-- Tailwind CSS -->
     <script src="https://cdn.tailwindcss.com"></script>
@@ -263,10 +263,10 @@
     <nav class="bg-white border-b border-gray-200 px-6 py-3 flex justify-between items-center z-40 flex-shrink-0 shadow-sm">
         <div class="flex items-center gap-3">
             <div class="bg-teal-600 text-white p-2 rounded-lg">
-                <i class="fa-solid fa-boxes-stacked text-xl"></i>
+                <i class="fa-solid fa-shirt text-xl"></i>
             </div>
             <div>
-                <h1 class="font-bold text-gray-800 leading-none">Inventario Hilados</h1>
+                <h1 class="font-bold text-gray-800 leading-none">Inventario Telas</h1>
                 <p class="text-[10px] text-gray-500 font-medium tracking-wide uppercase" id="nav-role-text">Portal Operativo</p>
             </div>
         </div>
@@ -445,24 +445,13 @@
                         <!-- Lado Izquierdo: Campos de conteo -->
                         <div class="flex-grow flex flex-col gap-3">
 
-                            <div class="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-xs text-gray-600 flex items-center gap-2">
-                                <i class="fa-solid fa-tag text-gray-400"></i> Lote: <span class="font-mono font-bold text-gray-700" id="modal-lote">-</span>
+                            <div class="bg-gray-50 border border-gray-100 rounded-lg px-3 py-2 text-xs text-gray-600 flex items-center gap-4">
+                                <span><i class="fa-solid fa-tag text-gray-400"></i> Lote: <span class="font-mono font-bold text-gray-700" id="modal-lote">-</span></span>
+                                <span><i class="fa-solid fa-swatchbook text-gray-400"></i> Diseño: <span class="font-mono font-bold text-gray-700" id="modal-diseno">-</span></span>
                             </div>
 
-                            <!-- Conos y Bolsas -->
-                            <div class="grid grid-cols-2 gap-3 inv-grid">
-                                <div class="border border-gray-200 rounded-lg p-3">
-                                    <label class="smart-label text-[10px]">Nro de Conos</label>
-                                    <input type="number" step="1" min="0" id="nro_conos" oninput="calcularModal()" class="smart-input font-mono font-bold text-teal-700 mb-2" placeholder="0">
-                                    <label class="smart-label text-[10px]">Tipo de Cono</label>
-                                    <select id="tipo_cono" onchange="onTipoConoChange(); calcularModal();" class="smart-input text-xs mb-1">
-                                        <option value="Cartón">Cartón</option>
-                                        <option value="Plástico">Plástico</option>
-                                        <option value="Otro">Otro (tara manual)</option>
-                                        <option value="">Sin cono</option>
-                                    </select>
-                                    <input type="number" step="0.001" min="0" id="tipo_cono_manual" oninput="calcularModal()" class="smart-input text-xs hidden-view" placeholder="Tara x cono (kg)">
-                                </div>
+                            <!-- Bolsas -->
+                            <div class="grid grid-cols-1 gap-3 inv-grid">
                                 <div class="border border-gray-200 rounded-lg p-3">
                                     <label class="smart-label text-[10px]">Nro de Bolsas</label>
                                     <input type="number" step="1" min="0" id="nro_bolsas" oninput="calcularModal()" class="smart-input font-mono font-bold text-teal-700 mb-2" placeholder="0">
@@ -493,10 +482,6 @@
                             <div class="border border-gray-200 rounded-lg overflow-hidden shadow-sm">
                                 <table class="w-full text-sm">
                                     <tbody class="divide-y divide-gray-100">
-                                        <tr>
-                                            <td class="px-3 py-2 text-xs text-gray-500">Tara Conos</td>
-                                            <td class="px-3 py-2 text-right font-mono text-gray-700" id="resumen-tara-conos">0.000</td>
-                                        </tr>
                                         <tr>
                                             <td class="px-3 py-2 text-xs text-gray-500">Tara Bolsa</td>
                                             <td class="px-3 py-2 text-right font-mono text-gray-700" id="resumen-tara-bolsa">0.000</td>
@@ -529,7 +514,7 @@
                             <!-- Observaciones -->
                             <div class="bg-gray-50 p-3 rounded-lg border border-gray-100">
                                 <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i> Observaciones (Opcional)</label>
-                                <input type="text" id="observaciones" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Cono dañado, lote mixto, etc.">
+                                <input type="text" id="observaciones" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Bolsa dañada, lote mixto, etc.">
                             </div>
                         </div>
 
@@ -791,8 +776,8 @@
     <!-- CÓDIGO JS PRINCIPAL -->
     <script>
         // --- 1. CONFIGURACIÓN SUPABASE ---
-        const NOMBRE_TABLA = 'hilado';
-        const TABLA_PERSONAL = 'inventariadores_hilado';
+        const NOMBRE_TABLA = 'telas';
+        const TABLA_PERSONAL = 'inventariadores_telas';
 
         const SUPABASE_URL = 'https://ozyefhongybussdaxtex.supabase.co';
         // NOTA DE SEGURIDAD: esta clave "anon" es pública por diseño (viaja en el HTML,
@@ -823,11 +808,11 @@
         // Indica si el registro actual fue desbloqueado con la clave de modificación.
         // Se usa para no volver a exigir "nadie más lo contó" cuando es una edición autorizada.
         let modoEdicionAutorizada = false;
-        // La contraseña de modificación se valida en el servidor (función modificar_conteo_hilado),
+        // La contraseña de modificación se valida en el servidor (función modificar_conteo_telas),
         // nunca en el navegador: solo se sabe si acertó por el resultado que responde Supabase.
         let claveModificacionPendiente = null;
 
-        // Configuración global de la app (se guarda en la tabla hilado_config de Supabase).
+        // Configuración global de la app (se guarda en la tabla telas_config de Supabase).
         // ocultar_stock_sap: si es true, los operadores NO ven el stock teórico SAP ni la
         // diferencia mientras cuentan (conteo "a ciegas"). El administrador ve todo siempre.
         let configuracionApp = {
@@ -839,7 +824,7 @@
                 const {
                     data,
                     error
-                } = await _supabase.from('hilado_config').select('*').eq('id', 1).single();
+                } = await _supabase.from('telas_config').select('*').eq('id', 1).single();
                 if (error) throw error;
                 if (data) configuracionApp = data;
             } catch (e) {
@@ -882,7 +867,7 @@
             try {
                 const {
                     error
-                } = await _supabase.from('hilado_config').update({
+                } = await _supabase.from('telas_config').update({
                     ocultar_stock_sap: nuevoValor
                 }).eq('id', 1);
                 if (error) throw error;
@@ -1292,6 +1277,10 @@
                     ? `<span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-gray-200 flex-shrink-0"><i class="fa-solid fa-tag text-[9px] mr-1 text-gray-400"></i>${esc(item['Lote'])}</span>`
                     : '';
 
+                const disenoBadge = (item['Diseño'] && item['Diseño'] !== '-' && item['Diseño'] !== '')
+                    ? `<span class="bg-gray-100 text-gray-600 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold border border-gray-200 flex-shrink-0"><i class="fa-solid fa-swatchbook text-[9px] mr-1 text-gray-400"></i>${esc(item['Diseño'])}</span>`
+                    : '';
+
                 // Código y Descripción se escapan antes de insertarse como HTML: si un CSV
                 // trajera texto con etiquetas/script, se muestra como texto plano en vez de ejecutarse.
                 card.innerHTML = `
@@ -1299,6 +1288,7 @@
                         <div class="flex items-center gap-2 mb-1 flex-wrap">
                             <span class="text-xs font-bold ${completado ? 'text-teal-800' : 'text-teal-700'} truncate">${esc(item['Código de Item'])}</span>
                             ${loteBadge}
+                            ${disenoBadge}
                             ${badgeHTML}
                         </div>
                         <p class="text-[11px] font-medium ${completado ? 'text-teal-700/80' : 'text-gray-500'} truncate leading-snug">${esc(item['Descripción'])}</p>
@@ -1403,14 +1393,7 @@
             setTimeout(() => modal.classList.add('hidden-view'), 300);
         }
 
-        // --- 5. MODAL WIDGET GRID Y CALCULADORA (OPERADOR HILADOS) ---
-        const TARA_VALORES_CONO = {
-            'Cartón': 0.040,
-            'Plástico': 0.035,
-            'Otro': 0,
-            '': 0
-        };
-
+        // --- 5. MODAL WIDGET GRID Y CALCULADORA (OPERADOR TELAS) ---
         const TARA_VALORES_BOLSA = {
             'Delgada': 0.010,
             'Mediana': 0.020,
@@ -1418,17 +1401,6 @@
             'Otro': 0,
             '': 0
         };
-
-        function onTipoConoChange() {
-            const tipo = document.getElementById('tipo_cono').value;
-            const inputManual = document.getElementById('tipo_cono_manual');
-            if (tipo === 'Otro') {
-                inputManual.classList.remove('hidden-view');
-            } else {
-                inputManual.classList.add('hidden-view');
-                inputManual.value = '';
-            }
-        }
 
         function onTipoBolsaChange() {
             const tipo = document.getElementById('tipo_bolsa').value;
@@ -1458,6 +1430,7 @@
                 document.getElementById('modal-descripcion').innerText = item['Descripción'] || '';
                 document.getElementById('modal-um').innerText = `UM: ${item['Unidad de Medida'] || 'KG'} | ALM: ${item['Almacen'] || '-'} / ${item['Sub Almacen'] || '-'}`;
                 document.getElementById('modal-lote').innerText = item['Lote'] || '-';
+                document.getElementById('modal-diseno').innerText = item['Diseño'] || '-';
 
                 const stockSap = parseFloat(item['Stock SAP'] || 0);
                 const elStockSap = document.getElementById('resumen-stock-sap');
@@ -1472,19 +1445,16 @@
                     if (el) el.value = val;
                 };
 
-                // Valores de campos de conteo Hilados
-                setVal('nro_conos', completado ? (item['Nro de Conos'] || 0) : '');
-                setVal('tipo_cono', item['Tipo de Cono'] || 'Cartón');
+                // Valores de campos de conteo Telas
                 setVal('nro_bolsas', completado ? (item['Nro de Bolsas'] || 0) : '');
                 setVal('tipo_bolsa', item['Tipo de Bolsa'] || 'Delgada');
                 setVal('peso_bruto', completado ? (item['Peso Bruto'] || '') : '');
                 setVal('ubicacion', completado ? (item['Ubicación'] || '') : '');
                 setVal('observaciones', completado ? (item['Observaciones'] || '') : '');
 
-                onTipoConoChange();
                 onTipoBolsaChange();
 
-                const inputs = ['nro_conos', 'tipo_cono', 'tipo_cono_manual', 'nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones'];
+                const inputs = ['nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones'];
                 const btnGuardar = document.getElementById('btnGuardar');
                 const btnModificar = document.getElementById('btnModificar');
                 const badgeEstado = document.getElementById('modal-estado-badge');
@@ -1562,10 +1532,10 @@
             if (!password) return;
 
             // Se guarda para enviarla junto con los datos al guardar: el servidor valida
-            // contraseña + datos en una sola operación atómica (función modificar_conteo_hilado).
+            // contraseña + datos en una sola operación atómica (función modificar_conteo_telas).
             claveModificacionPendiente = password;
 
-            const inputs = ['nro_conos', 'tipo_cono', 'tipo_cono_manual', 'nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones'];
+            const inputs = ['nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones'];
             inputs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
@@ -1662,14 +1632,6 @@
         }
 
         function calcularModal() {
-            const nroConos = parseFloat(document.getElementById('nro_conos').value) || 0;
-            const tipoCono = document.getElementById('tipo_cono').value;
-            let taraConoUnit = TARA_VALORES_CONO[tipoCono] || 0;
-            if (tipoCono === 'Otro') {
-                taraConoUnit = parseFloat(document.getElementById('tipo_cono_manual').value) || 0;
-            }
-            const taraConos = nroConos * taraConoUnit;
-
             const nroBolsas = parseFloat(document.getElementById('nro_bolsas').value) || 0;
             const tipoBolsa = document.getElementById('tipo_bolsa').value;
             let taraBolsaUnit = TARA_VALORES_BOLSA[tipoBolsa] || 0;
@@ -1681,13 +1643,12 @@
             const pesoBruto = parseFloat(document.getElementById('peso_bruto').value) || 0;
             let pesoNeto = 0;
             if (pesoBruto > 0) {
-                pesoNeto = Math.max(0, pesoBruto - taraConos - taraBolsa);
+                pesoNeto = Math.max(0, pesoBruto - taraBolsa);
             }
 
             const stockSap = parseFloat(document.getElementById('resumen-stock-sap').dataset.valor) || 0;
             const diferencia = pesoNeto - stockSap;
 
-            document.getElementById('resumen-tara-conos').innerText = taraConos.toFixed(3);
             document.getElementById('resumen-tara-bolsa').innerText = taraBolsa.toFixed(3);
             document.getElementById('resumen-peso-neto').innerText = pesoNeto.toFixed(3);
 
@@ -1764,14 +1725,6 @@
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Guardando...';
 
-            const nroConos = parseFloat(document.getElementById('nro_conos').value) || 0;
-            const tipoCono = document.getElementById('tipo_cono').value;
-            let taraConoUnit = TARA_VALORES_CONO[tipoCono] || 0;
-            if (tipoCono === 'Otro') {
-                taraConoUnit = parseFloat(document.getElementById('tipo_cono_manual').value) || 0;
-            }
-            const taraConos = nroConos * taraConoUnit;
-
             const nroBolsas = parseFloat(document.getElementById('nro_bolsas').value) || 0;
             const tipoBolsa = document.getElementById('tipo_bolsa').value;
             let taraBolsaUnit = TARA_VALORES_BOLSA[tipoBolsa] || 0;
@@ -1779,7 +1732,7 @@
                 taraBolsaUnit = parseFloat(document.getElementById('tipo_bolsa_manual').value) || 0;
             }
             const taraBolsa = nroBolsas * taraBolsaUnit;
-            const pesoNeto = Math.max(0, pesoBruto - taraConos - taraBolsa);
+            const pesoNeto = Math.max(0, pesoBruto - taraBolsa);
             const sap = parseFloat(document.getElementById('resumen-stock-sap').dataset.valor) || 0;
             const diferencia = pesoNeto - sap;
 
@@ -1798,12 +1751,10 @@
                 if (modoEdicionAutorizada) {
                     // Edición de un registro ya contado: pasa por la función segura del
                     // servidor, que valida la contraseña (cifrada) antes de escribir nada.
-                    const resp = await _supabase.rpc('modificar_conteo_hilado', {
+                    const resp = await _supabase.rpc('modificar_conteo_telas', {
                         p_id: registroId,
                         p_password: claveModificacionPendiente,
                         p_peso_bruto: pesoBruto,
-                        p_nro_conos: nroConos,
-                        p_tipo_cono: tipoCono,
                         p_nro_bolsas: nroBolsas,
                         p_tipo_bolsa: tipoBolsa,
                         p_ubicacion: ubicacionValor
@@ -1816,10 +1767,6 @@
                         "Inventariador": (document.getElementById('inventariador').value || '').trim() || (currentUser ? currentUser.name : 'Operador'),
                         "Grupo de Trabajo": (document.getElementById('grupo_trabajo').value || '').trim() || (currentUser ? currentUser.group : 'Grupo 1'),
                         "Peso Bruto": pesoBruto,
-                        "Nro de Conos": nroConos,
-                        "Tipo de Cono": tipoCono,
-                        "Tara Conos": taraConos,
-                        "Tara Conos Inv": taraConos,
                         "Nro de Bolsas": nroBolsas,
                         "Tipo de Bolsa": tipoBolsa,
                         "Tara Bolsa": taraBolsa,
@@ -2200,7 +2147,7 @@
             };
         }
 
-        // Arma las filas de datos para Hilados:
+        // Arma las filas de datos para Telas:
         function armarFilasExport(formatoTexto) {
             const num = formatoTexto ? (v) => parseFloat(v || 0).toFixed(3) : (v) => parseFloat(v || 0);
             return datosFiltradosParaExportar.map(e => [
@@ -2209,6 +2156,7 @@
                 e['Nro'] || '-',
                 e['Grupo de Articulos'] || '-',
                 e['Código de Item'] || '',
+                e['Diseño'] || '-',
                 e['Descripción'] || '',
                 e['Lote'] || '-',
                 e['Unidad de Medida'] || '',
@@ -2216,9 +2164,6 @@
                 e['Sub Almacen'] || '',
                 num(e['Stock SAP']),
                 num(e['Peso Bruto']),
-                e['Nro de Conos'] || 0,
-                e['Tipo de Cono'] || '-',
-                num(e['Tara Conos'] || e['Tara Conos Inv']),
                 e['Nro de Bolsas'] || 0,
                 e['Tipo de Bolsa'] || '-',
                 num(e['Tara Bolsa'] || e['Tara Bolsa Inv']),
@@ -2258,7 +2203,7 @@
 
                 doc.setFont("helvetica", "bold");
                 doc.setFontSize(14);
-                doc.text("TOMA DE INVENTARIO - HILADOS", pageWidth / 2, 15, {
+                doc.text("TOMA DE INVENTARIO - TELAS", pageWidth / 2, 15, {
                     align: "center"
                 });
 
@@ -2273,13 +2218,13 @@
                     { content: 'Grupo' },
                     { content: '#' },
                     { content: 'Código' },
+                    { content: 'Diseño' },
                     { content: 'Descripción' },
                     { content: 'Lote' },
                     { content: 'UM' },
                     { content: 'Alm' },
                     { content: 'Stock SAP' },
                     { content: 'Peso Bruto' },
-                    { content: 'Conos' },
                     { content: 'Bolsas' },
                     { content: 'Peso Neto' },
                     { content: 'Diferencia' },
@@ -2293,13 +2238,13 @@
                 e['Grupo de Trabajo'] || '-',
                 e['Nro'] || '-',
                 e['Código de Item'] || '',
+                e['Diseño'] || '-',
                 e['Descripción'] || '',
                 e['Lote'] || '-',
                 e['Unidad de Medida'] || '',
                 (e['Almacen'] || '-') + '/' + (e['Sub Almacen'] || '-'),
                 parseFloat(e['Stock SAP'] || 0).toFixed(3),
                 e.Registro ? parseFloat(e['Peso Bruto'] || 0).toFixed(3) : '-',
-                e.Registro ? `${e['Nro de Conos'] || 0} (${e['Tipo de Cono'] || ''})` : '-',
                 e.Registro ? `${e['Nro de Bolsas'] || 0} (${e['Tipo de Bolsa'] || ''})` : '-',
                 e.Registro ? parseFloat(e['Peso Neto'] || e['Peso Neto Inv'] || 0).toFixed(3) : '-',
                 e.Registro ? (parseFloat(e['Diferencia'] || 0) > 0 ? '+' : '') + parseFloat(e['Diferencia'] || 0).toFixed(3) : '-',
@@ -2375,10 +2320,10 @@
                 align: "center"
             });
 
-            doc.save(`Inventario_Hilado_${new Date().toISOString().split('T')[0]}.pdf`);
+            doc.save(`Inventario_Telas_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
-        // Exporta en formato Excel para Hilados
+        // Exporta en formato Excel para Telas
         function exportarExcel() {
             if (datosFiltradosParaExportar.length === 0) return Swal.fire('Vacío', 'No hay datos para exportar con los filtros actuales', 'info');
 
@@ -2387,12 +2332,12 @@
 
             const encabezado = [
                 ['ART ATLAS SRL - RUC: 20413770204'],
-                ['TOMA DE INVENTARIO - HILADOS 2025'],
+                ['TOMA DE INVENTARIO - TELAS 2025'],
                 [`GRUPO: ${infoFiltros.grupo}    FILTRO: ${infoFiltros.filtro}    FECHA: ${infoFiltros.fecha}    Generado: ${generado}`],
                 [],
                 [
-                    'Inventariador', 'Grupo de Trabajo', '#', 'Grupo de Artículos', 'Código de Item', 'Descripción', 'Lote', 'UM', 'Almacén', 'Sub Almacén',
-                    'Stock SAP (kg)', 'Peso Bruto (kg)', 'Nro Conos', 'Tipo Cono', 'Tara Conos (kg)', 'Nro Bolsas', 'Tipo Bolsa', 'Tara Bolsa (kg)',
+                    'Inventariador', 'Grupo de Trabajo', '#', 'Grupo de Artículos', 'Código de Item', 'Diseño', 'Descripción', 'Lote', 'UM', 'Almacén', 'Sub Almacén',
+                    'Stock SAP (kg)', 'Peso Bruto (kg)', 'Nro Bolsas', 'Tipo Bolsa', 'Tara Bolsa (kg)',
                     'Peso Neto (kg)', 'Diferencia (kg)', 'Ubicación', 'Observaciones', 'Registro'
                 ]
             ];
@@ -2444,6 +2389,8 @@
                 }, {
                     wch: 20
                 }, {
+                    wch: 12
+                }, {
                     wch: 45
                 }, {
                     wch: 8
@@ -2456,10 +2403,6 @@
                     wch: 10
                 }, {
                     wch: 12
-                }, {
-                    wch: 10
-                }, {
-                    wch: 16
                 }, {
                     wch: 10
                 }, {
@@ -2477,7 +2420,7 @@
 
             const libro = XLSX.utils.book_new();
             XLSX.utils.book_append_sheet(libro, hoja, 'Toma de Inventario');
-            XLSX.writeFile(libro, `Inventario_${new Date().toISOString().split('T')[0]}.xlsx`);
+            XLSX.writeFile(libro, `Inventario_Telas_${new Date().toISOString().split('T')[0]}.xlsx`);
         }
 
         // --- 7. CARGA MASIVA CSV Y RESET DB (ADMIN) ---
@@ -2555,8 +2498,10 @@
 
                     return {
                         "id": crypto.randomUUID(),
+                        "#": (row["#"] !== undefined && row["#"] !== null) ? String(row["#"]).trim() : '',
                         "Nro": rowLimpio["nro"] || '',
                         "Código de Item": rowLimpio["codigo de item"] || rowLimpio["codigo"] || rowLimpio["item"] || '',
+                        "Diseño": rowLimpio["diseno"] || '',
                         "Descripción": rowLimpio["descripcion"] || '',
                         "Grupo de Articulos": rowLimpio["grupo de articulos"] || rowLimpio["grupo"] || '',
                         "Lote": rowLimpio["lote"] || rowLimpio["nro lote"] || rowLimpio["nro de lote"] || rowLimpio["numero de lote"] || rowLimpio["n lote"] || rowLimpio["no lote"] || rowLimpio["batch"] || rowLimpio["lot"] || '',
