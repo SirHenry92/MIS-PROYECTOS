@@ -467,6 +467,7 @@
                     { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-', num: true },
                     { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
                     { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', num: true },
+                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-', num: true },
                 ],
             },
             telas: {
@@ -502,6 +503,7 @@
                     { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-', num: true },
                     { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
                     { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', num: true },
+                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-', num: true },
                 ],
             },
             desperdicios: {
@@ -537,6 +539,7 @@
                     { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-', num: true },
                     { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
                     { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', num: true },
+                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-', num: true },
                     { header: 'Bloqueo', get: it => it['Bloqueo'] ? 'SI' : 'NO' },
                 ],
             },
