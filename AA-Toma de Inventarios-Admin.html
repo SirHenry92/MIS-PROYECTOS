@@ -402,6 +402,34 @@
                         </button>
                     </div>
 
+                    <div id="card-tipos-cono" class="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 hidden-view">
+                        <h2 class="text-lg font-bold text-gray-800 mb-1">Tipos de Cono y su Tara</h2>
+                        <p class="text-sm text-gray-500 mb-4">Cada tipo que agregues acá aparece automáticamente en el desplegable "Tipo de Cono" del operador.</p>
+                        <div id="lista-tipos-cono" class="flex flex-col gap-2 mb-3"></div>
+                        <button type="button" onclick="agregarFilaTipo('cono')" class="btn-secondary bg-white border border-gray-300 py-1.5 px-3 text-xs mb-4">
+                            <i class="fa-solid fa-plus mr-1"></i> Agregar Tipo
+                        </button>
+                        <div>
+                            <button onclick="guardarTipos('cono')" id="btn-guardar-tipos-cono" class="btn-primary py-2 px-4 text-sm">
+                                <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Tipos de Cono
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="card-tipos-bolsa" class="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 hidden-view">
+                        <h2 class="text-lg font-bold text-gray-800 mb-1">Tipos de Bolsa y su Tara</h2>
+                        <p class="text-sm text-gray-500 mb-4">Cada tipo que agregues acá aparece automáticamente en el desplegable "Tipo de Bolsa" del operador.</p>
+                        <div id="lista-tipos-bolsa" class="flex flex-col gap-2 mb-3"></div>
+                        <button type="button" onclick="agregarFilaTipo('bolsa')" class="btn-secondary bg-white border border-gray-300 py-1.5 px-3 text-xs mb-4">
+                            <i class="fa-solid fa-plus mr-1"></i> Agregar Tipo
+                        </button>
+                        <div>
+                            <button onclick="guardarTipos('bolsa')" id="btn-guardar-tipos-bolsa" class="btn-primary py-2 px-4 text-sm">
+                                <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Tipos de Bolsa
+                            </button>
+                        </div>
+                    </div>
+
                     <div class="bg-white border border-red-200 shadow-sm rounded-2xl p-6">
                         <h2 class="text-lg font-bold text-red-700 mb-1">Zona de Peligro</h2>
                         <p class="text-sm text-gray-500 mb-4">Borra permanentemente todos los registros del maestro y los conteos de esta app. No afecta a las otras 3 apps.</p>
@@ -717,6 +745,8 @@
             document.getElementById('txt-personal-app').textContent = `Nuevo Operador (${APPS[key].label})`;
             document.getElementById('card-foto-balanza').classList.toggle('hidden-view', !APPS[key].exigeFoto);
             document.getElementById('card-tolerancia').classList.toggle('hidden-view', !APPS[key].tieneTolerancia);
+            document.getElementById('card-tipos-cono').classList.toggle('hidden-view', !APPS[key].tieneConos);
+            document.getElementById('card-tipos-bolsa').classList.toggle('hidden-view', !APPS[key].tieneTolerancia);
             document.getElementById('wrap-ajustar-diferencias').classList.toggle('hidden-view', !APPS[key].tieneTolerancia);
             ajustarDiferenciasActivo = false;
             document.getElementById('chk-ajustar-diferencias').checked = false;
@@ -749,6 +779,59 @@
             actualizarBotonToggleSap();
             actualizarBotonToggleFoto();
             if (app.tieneTolerancia) renderizarTramosTolerancia();
+            if (app.tieneConos) renderizarListaTipos('cono');
+            if (app.tieneTolerancia) renderizarListaTipos('bolsa');
+        }
+
+        // --- Tipos de Cono/Bolsa configurables (Hilado/Desperdicios conos; Hilado/Telas/
+        // Desperdicios bolsas). Cada fila es un tipo con su tara en kg; el admin puede agregar
+        // o quitar filas libremente antes de guardar. Los mismos tipos alimentan el desplegable
+        // del operador y el cálculo de tara en el servidor.
+        function filaTipoHtml(nombre, tara) {
+            return `<div class="flex items-center gap-2 tipo-row">
+                <input type="text" class="smart-input py-1.5 text-sm flex-1 tipo-nombre" value="${esc(nombre)}" placeholder="Nombre (ej. Cartón)">
+                <input type="number" step="0.001" min="0" class="smart-input py-1.5 text-sm w-28 tipo-tara" value="${tara}" placeholder="Tara (kg)">
+                <button type="button" onclick="this.closest('.tipo-row').remove()" class="text-gray-400 hover:text-red-500 p-1.5 flex-shrink-0" title="Eliminar"><i class="fa-solid fa-trash-can"></i></button>
+            </div>`;
+        }
+
+        function renderizarListaTipos(tipo) {
+            const campo = tipo === 'cono' ? 'tipos_cono' : 'tipos_bolsa';
+            const lista = configuracionApp[campo] || [];
+            document.getElementById(`lista-tipos-${tipo}`).innerHTML = lista.map(t => filaTipoHtml(t.tipo, t.tara)).join('');
+        }
+
+        function agregarFilaTipo(tipo) {
+            document.getElementById(`lista-tipos-${tipo}`).insertAdjacentHTML('beforeend', filaTipoHtml('', 0));
+        }
+
+        async function guardarTipos(tipo) {
+            const app = APPS[currentApp];
+            const campo = tipo === 'cono' ? 'tipos_cono' : 'tipos_bolsa';
+            const filas = [...document.getElementById(`lista-tipos-${tipo}`).querySelectorAll('.tipo-row')];
+            const valores = filas.map(f => ({
+                tipo: f.querySelector('.tipo-nombre').value.trim(),
+                tara: parseFloat(f.querySelector('.tipo-tara').value) || 0
+            })).filter(t => t.tipo !== '');
+
+            if (valores.length === 0) {
+                Swal.fire('Atención', 'Agrega al menos un tipo antes de guardar.', 'warning');
+                return;
+            }
+
+            const btn = document.getElementById(`btn-guardar-tipos-${tipo}`);
+            btn.disabled = true;
+            try {
+                const { error } = await _supabase.from(app.tablaConfig).update({ [campo]: valores }).eq('id', 1);
+                if (error) throw error;
+                configuracionApp[campo] = valores;
+                renderizarListaTipos(tipo);
+                Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Tipos actualizados', showConfirmButton: false, timer: 1200 });
+            } catch (error) {
+                Swal.fire('Error', error.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
         }
 
         // --- Tramos de tolerancia para "Diferencia Aceptada" (Hilado/Telas/Desperdicios) ---
