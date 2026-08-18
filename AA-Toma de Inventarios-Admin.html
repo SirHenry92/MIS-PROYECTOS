@@ -851,41 +851,58 @@
             if (!item) return;
             const pesoNeto = parseFloat(item['Peso Neto'] ?? item['Peso Neto Inv'] ?? 0);
             const pesoBruto = parseFloat(item['Peso Bruto'] || 0);
+            const taraConos = parseFloat(item['Tara Conos'] ?? item['Tara Conos Inv'] ?? 0);
+            const taraBolsa = parseFloat(item['Tara Bolsa'] ?? item['Tara Bolsa Inv'] ?? 0);
             const sap = parseFloat(item['Stock SAP'] || 0);
             const dif = parseFloat(item['Diferencia'] || 0);
             const difColor = Math.abs(dif) < 0.001 ? '#0d9488' : (dif < 0 ? '#ef4444' : '#0d9488');
             const hayAnterior = fotoBalanzaIndice > 0;
             const haySiguiente = fotoBalanzaIndice < fotoBalanzaLista.length - 1;
 
+            // Se usan los botones nativos de SweetAlert2 (Cancelar/Confirmar) en vez de botones
+            // HTML propios: con el layout flexible de antes, en pantallas angostas los botones
+            // "‹"/"›" terminaban empujados fuera de la vista por el resto del contenido.
             Swal.fire({
-                showConfirmButton: false,
+                showConfirmButton: true,
+                showCancelButton: true,
                 showCloseButton: true,
+                cancelButtonText: '‹ Anterior',
+                confirmButtonText: 'Siguiente ›',
+                cancelButtonColor: '#334155',
+                confirmButtonColor: '#0d9488',
+                reverseButtons: false,
                 width: 'min(95vw, 780px)',
                 padding: '1.25rem',
+                title: `${fotoBalanzaIndice + 1} / ${fotoBalanzaLista.length}`,
+                customClass: { title: 'text-sm' },
                 html: `
-                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
-                        <span style="font-size:0.75rem; color:#94a3b8; font-weight:700;">${fotoBalanzaIndice + 1} / ${fotoBalanzaLista.length}</span>
-                    </div>
-                    <div style="display:flex; align-items:center; gap:8px;">
-                        <button onclick="navegarFotoBalanza(-1)" ${hayAnterior ? '' : 'disabled'} style="flex-shrink:0; width:36px; height:36px; border-radius:50%; border:1px solid #e2e8f0; background:${hayAnterior ? '#fff' : '#f1f5f9'}; color:${hayAnterior ? '#0f766e' : '#cbd5e1'}; cursor:${hayAnterior ? 'pointer' : 'not-allowed'}; font-size:1.1rem;">‹</button>
-                        <div style="display:flex; gap:16px; flex-wrap:wrap; text-align:left; flex:1;">
-                            <div style="flex:1 1 200px; min-width:180px;">
-                                <div style="font-family:monospace; font-weight:800; color:#0f766e; font-size:1.1rem;">${esc(item['Código de Item'] || '')}</div>
-                                <div style="color:#64748b; font-size:0.8rem; margin-bottom:10px;">${esc(item['Descripción'] || '')}</div>
-                                <table style="width:100%; font-size:0.85rem;">
-                                    <tr><td style="color:#64748b; padding:3px 0;">Peso Bruto</td><td style="text-align:right; font-family:monospace; font-weight:700;">${pesoBruto.toFixed(3)} kg</td></tr>
-                                    <tr><td style="color:#64748b; padding:3px 0;">Peso Neto (registrado)</td><td style="text-align:right; font-family:monospace; font-weight:800; color:#0f766e;">${pesoNeto.toFixed(3)} kg</td></tr>
-                                    <tr><td style="color:#64748b; padding:3px 0;">Stock SAP (teórico)</td><td style="text-align:right; font-family:monospace;">${sap.toFixed(3)} kg</td></tr>
-                                    <tr><td style="color:#64748b; padding:3px 0;">Diferencia</td><td style="text-align:right; font-family:monospace; font-weight:700; color:${difColor};">${dif > 0 ? '+' : ''}${dif.toFixed(3)} kg</td></tr>
-                                </table>
-                            </div>
-                            <div style="flex:1 1 260px; min-width:220px;">
-                                <img src="${esc(item['Foto Balanza'])}" alt="Foto de la báscula" style="width:100%; max-height:55vh; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0;">
-                            </div>
+                    <div style="display:flex; gap:16px; flex-wrap:wrap; text-align:left;">
+                        <div style="flex:1 1 220px; min-width:200px;">
+                            <div style="font-family:monospace; font-weight:800; color:#0f766e; font-size:1.1rem;">${esc(item['Código de Item'] || '')}</div>
+                            <div style="color:#64748b; font-size:0.8rem; margin-bottom:10px;">${esc(item['Descripción'] || '')}</div>
+                            <table style="width:100%; font-size:0.85rem;">
+                                <tr><td style="color:#64748b; padding:3px 0;">Peso Bruto</td><td style="text-align:right; font-family:monospace; font-weight:700;">${pesoBruto.toFixed(3)} kg</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0;">Conos</td><td style="text-align:right; font-family:monospace;">${item['Nro de Conos'] || 0} × ${esc(item['Tipo de Cono'] || '-')}</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0;">Tara Conos</td><td style="text-align:right; font-family:monospace;">${taraConos.toFixed(3)} kg</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0;">Bolsas</td><td style="text-align:right; font-family:monospace;">${item['Nro de Bolsas'] || 0} × ${esc(item['Tipo de Bolsa'] || '-')}</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0;">Tara Bolsa</td><td style="text-align:right; font-family:monospace;">${taraBolsa.toFixed(3)} kg</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0; border-top:1px solid #e2e8f0;">Peso Neto (registrado)</td><td style="text-align:right; font-family:monospace; font-weight:800; color:#0f766e; border-top:1px solid #e2e8f0;">${pesoNeto.toFixed(3)} kg</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0;">Stock SAP (teórico)</td><td style="text-align:right; font-family:monospace;">${sap.toFixed(3)} kg</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0;">Diferencia</td><td style="text-align:right; font-family:monospace; font-weight:700; color:${difColor};">${dif > 0 ? '+' : ''}${dif.toFixed(3)} kg</td></tr>
+                            </table>
                         </div>
-                        <button onclick="navegarFotoBalanza(1)" ${haySiguiente ? '' : 'disabled'} style="flex-shrink:0; width:36px; height:36px; border-radius:50%; border:1px solid #e2e8f0; background:${haySiguiente ? '#fff' : '#f1f5f9'}; color:${haySiguiente ? '#0f766e' : '#cbd5e1'}; cursor:${haySiguiente ? 'pointer' : 'not-allowed'}; font-size:1.1rem;">›</button>
+                        <div style="flex:1 1 260px; min-width:220px;">
+                            <img src="${esc(item['Foto Balanza'])}" alt="Foto de la báscula" style="width:100%; max-height:50vh; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0;">
+                        </div>
                     </div>
-                `
+                `,
+                didOpen: () => {
+                    if (!hayAnterior) Swal.getCancelButton().disabled = true;
+                    if (!haySiguiente) Swal.getConfirmButton().disabled = true;
+                }
+            }).then((result) => {
+                if (result.dismiss === Swal.DismissReason.cancel) navegarFotoBalanza(-1);
+                else if (result.isConfirmed) navegarFotoBalanza(1);
             });
         }
 
