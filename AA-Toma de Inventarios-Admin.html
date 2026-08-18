@@ -269,6 +269,7 @@
                                 <button onclick="cargarReportesAdmin()" class="btn-secondary py-1.5 px-3 text-xs bg-white border border-gray-300 shadow-sm" title="Sincronizar DB"><i class="fa-solid fa-rotate mr-1"></i> Sync</button>
                                 <button onclick="exportarExcel()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-emerald-600 hover:bg-emerald-700 border border-emerald-700"><i class="fa-solid fa-file-excel mr-1"></i> Exportar Excel</button>
                                 <button onclick="exportarPDF()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-red-600 hover:bg-red-700 border border-red-700"><i class="fa-solid fa-file-pdf mr-1"></i> Imprimir PDF</button>
+                                <button onclick="exportarReporteFotografico()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-indigo-600 hover:bg-indigo-700 border border-indigo-700" title="Ficha por artículo con detalle de taras y fotos"><i class="fa-solid fa-images mr-1"></i> Reporte Fotográfico</button>
                             </div>
                         </div>
                         <div class="flex-grow overflow-auto relative">
@@ -560,7 +561,9 @@
             telas: {
                 label: 'Telas', icon: 'fa-solid fa-shirt',
                 tabla: 'telas', tablaPersonal: 'inventariadores_telas', tablaConfig: 'telas_config',
-                exigeFoto: false, tieneTolerancia: true, tieneConos: false,
+                exigeFoto: true, tieneTolerancia: true, tieneConos: false, tieneFoto: true,
+                campoExigirFoto: 'exigir_foto', labelFoto: 'Foto de la Tela',
+                getFotos: it => it['Foto Tela'] ? [it['Foto Tela']] : [],
                 importFields: [
                     { db: '#', aliases: ['n', 'numero'] },
                     { db: 'Nro', aliases: ['nro'] },
@@ -603,7 +606,9 @@
             desperdicios: {
                 label: 'Desperdicios', icon: 'fa-solid fa-recycle',
                 tabla: 'desperdicios', tablaPersonal: 'inventariadores_desperdicios', tablaConfig: 'desperdicios_config',
-                exigeFoto: false, tieneTolerancia: true, tieneConos: true,
+                exigeFoto: true, tieneTolerancia: true, tieneConos: true, tieneFoto: true,
+                campoExigirFoto: 'exigir_foto', labelFoto: 'Foto del Desperdicio',
+                getFotos: it => it['Foto Desperdicio'] ? [it['Foto Desperdicio']] : [],
                 importFields: [
                     { db: '#', aliases: ['n', 'numero'] },
                     { db: 'Nro', aliases: ['nro'] },
@@ -1418,6 +1423,264 @@
             doc.line(205, sigY, 270, sigY); doc.text("SUPERVISOR DE INVENTARIO", 237.5, sigY + 5, { align: "center" });
 
             doc.save(`Inventario_${app.label}_${new Date().toISOString().split('T')[0]}.pdf`);
+        }
+
+        // --- 9B. REPORTE FOTOGRÁFICO (PDF tipo "repositorio": una ficha por artículo con
+        // el detalle del conteo + su(s) foto(s)). Pensado para el cierre de un inventario,
+        // cuando ya se contó todo y se necesita un archivo para archivar/enviar.
+        //
+        // Por qué así:
+        // - Texto real (no imagen escaneada): cualquier lector de PDF puede buscarlo con
+        //   Ctrl+F por código, descripción, ubicación, etc. -- no hace falta OCR ni un índice
+        //   aparte para que sea "fácil de buscar".
+        // - Las fotos se insertan tal cual llegan de Storage (ya vienen comprimidas a unos
+        //   25-45 KB desde las apps de conteo) sin recomprimir de nuevo: el PDF pesa
+        //   básicamente lo que pesan las fotos incluidas, nada más.
+        // - Reutiliza los filtros de la pestaña Reportes (estado/grupo/fecha/texto), así el
+        //   admin puede generar un PDF liviano por grupo/día en vez de uno gigante con todo.
+
+        // Descarga N URLs con un máximo de `limite` peticiones en simultáneo (no todas a la
+        // vez, para no saturar la conexión ni el navegador con miles de fotos).
+        async function mapConcurrente(items, limite, fn) {
+            const resultados = new Array(items.length);
+            let indice = 0;
+            async function trabajador() {
+                while (indice < items.length) {
+                    const i = indice++;
+                    resultados[i] = await fn(items[i], i);
+                }
+            }
+            await Promise.all(Array.from({ length: Math.min(limite, items.length) }, trabajador));
+            return resultados;
+        }
+
+        async function fotoABase64(url) {
+            try {
+                const resp = await fetch(url);
+                if (!resp.ok) throw new Error('HTTP ' + resp.status);
+                const blob = await resp.blob();
+                return await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.onerror = reject;
+                    reader.readAsDataURL(blob);
+                });
+            } catch (e) {
+                return null; // Si una foto puntual falla, se omite en su ficha en vez de abortar todo el PDF.
+            }
+        }
+
+        function dibujarFotoEnCaja(doc, dataUrl, x, y, w, h) {
+            if (!dataUrl) return;
+            try {
+                doc.addImage(dataUrl, 'JPEG', x, y, w, h, undefined, 'FAST');
+            } catch (e) {
+                // Por si alguna foto vieja se subió como PNG en vez de JPEG.
+                try { doc.addImage(dataUrl, 'PNG', x, y, w, h, undefined, 'FAST'); } catch (e2) {}
+            }
+        }
+
+        async function exportarReporteFotografico() {
+            const app = APPS[currentApp];
+            const items = datosFiltradosParaExportar.filter(i => i.Registro != null);
+            if (items.length === 0) {
+                return Swal.fire('Vacío', 'No hay artículos inventariados con los filtros actuales para incluir en el reporte.', 'info');
+            }
+
+            const urlsUnicas = new Set();
+            let itemsConFoto = 0;
+            if (app.tieneFoto && app.getFotos) {
+                items.forEach(it => {
+                    const fotos = app.getFotos(it);
+                    if (fotos.length > 0) itemsConFoto++;
+                    fotos.forEach(u => urlsUnicas.add(u));
+                });
+            }
+            const pesoEstimadoMB = (urlsUnicas.size * 0.035).toFixed(1);
+
+            const confirmacion = await Swal.fire({
+                title: 'Reporte Fotográfico (PDF)',
+                html: `
+                    <div style="text-align:left; font-size:13px; color:#475569; line-height:1.5;">
+                        <p>Genera una ficha por artículo con el detalle del conteo${app.tieneFoto ? ' y su(s) foto(s)' : ''}, respetando los filtros de la tabla actual (estado, grupo, fecha, texto).</p>
+                        <table style="width:100%; margin-top:10px; font-size:12.5px; border-collapse:collapse;">
+                            <tr><td style="padding:3px 0;">Artículos a incluir:</td><td style="text-align:right; font-weight:700;">${items.length}</td></tr>
+                            ${app.tieneFoto ? `<tr><td style="padding:3px 0;">Con foto adjunta:</td><td style="text-align:right; font-weight:700;">${itemsConFoto}</td></tr>
+                            <tr><td style="padding:3px 0;">Peso estimado del PDF:</td><td style="text-align:right; font-weight:700;">~${pesoEstimadoMB} MB</td></tr>` : ''}
+                        </table>
+                        ${items.length > 400 ? `<p style="margin-top:10px; color:#b45309; font-size:12px;"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Son bastantes artículos: descargar las fotos puede tardar varios minutos. Para un archivo más liviano, filtra por Grupo o Fecha antes de generar.</p>` : ''}
+                    </div>`,
+                icon: items.length > 400 ? 'warning' : 'question',
+                showCancelButton: true,
+                confirmButtonText: 'Generar PDF',
+                cancelButtonText: 'Cancelar',
+                confirmButtonColor: '#0d9488',
+                width: 460
+            });
+            if (!confirmacion.isConfirmed) return;
+
+            const incluirFotos = app.tieneFoto && urlsUnicas.size > 0;
+            const mapaFotos = new Map();
+
+            if (incluirFotos) {
+                const listaUrls = [...urlsUnicas];
+                let completadas = 0;
+                Swal.fire({
+                    title: 'Descargando fotos...',
+                    html: `<div id="prog-fotos-txt">0 / ${listaUrls.length}</div>`,
+                    allowOutsideClick: false,
+                    allowEscapeKey: false,
+                    didOpen: () => Swal.showLoading()
+                });
+                await mapConcurrente(listaUrls, 6, async (url) => {
+                    const b64 = await fotoABase64(url);
+                    if (b64) mapaFotos.set(url, b64);
+                    completadas++;
+                    const el = document.getElementById('prog-fotos-txt');
+                    if (el) el.textContent = `${completadas} / ${listaUrls.length}`;
+                });
+            } else {
+                Swal.fire({ title: 'Generando PDF...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            }
+
+            Swal.update({ title: 'Armando fichas del PDF...', html: '<div>Esto puede tardar unos segundos...</div>' });
+            await new Promise(r => setTimeout(r, 30)); // deja pintar el mensaje antes de bloquear el hilo con jsPDF
+
+            const { jsPDF } = window.jspdf;
+            const doc = new jsPDF('portrait', 'mm', 'a4');
+            const pageWidth = doc.internal.pageSize.width;
+            const pageHeight = doc.internal.pageSize.height;
+            const margenX = 12;
+            const anchoTexto = 122;
+            const xFoto = margenX + anchoTexto + 6;
+            const anchoFoto = pageWidth - margenX - xFoto;
+            const generado = new Date().toLocaleString('es-PE');
+            const infoFiltros = obtenerInfoFiltrosExport();
+            const activarAjuste = ajustarDiferenciasActivo && app.tieneTolerancia;
+            const tramosPdf = configuracionApp.tramos_tolerancia || [];
+
+            function dibujarEncabezadoFicha() {
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(15, 23, 42);
+                doc.text(`REPORTE FOTOGRÁFICO - ${app.label.toUpperCase()}`, margenX, 12);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+                doc.text(`Generado: ${generado}`, margenX, 17);
+                doc.text(`Grupo: ${infoFiltros.grupo}  |  Filtro: ${infoFiltros.filtro}  |  Fecha: ${infoFiltros.fecha}`, margenX, 21);
+                doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.3);
+                doc.line(margenX, 24, pageWidth - margenX, 24);
+            }
+
+            dibujarEncabezadoFicha();
+            let y = 30;
+
+            for (let idx = 0; idx < items.length; idx++) {
+                const item = items[idx];
+                const fotos = incluirFotos && app.getFotos ? app.getFotos(item).filter(u => mapaFotos.has(u)) : [];
+
+                let overrides = null;
+                if (activarAjuste) {
+                    const aj = calcularAjuste(item, app, tramosPdf);
+                    overrides = { 'Tara Conos': aj.taraConosAj, 'Tara Bolsa': aj.taraBolsaAj, 'Peso Neto': aj.pesoNetoAj, 'Diferencia': aj.diferenciaAj };
+                }
+                const camposConteo = app.exportColumns.filter(c => c.group === 'conteo' || c.group === 'resultado');
+                const lineasTexto = 1 + camposConteo.length + 3;
+                const altoTexto = 20 + lineasTexto * 4.3;
+                const altoFotos = fotos.length > 0 ? 46 : 0;
+                const altoFicha = Math.max(altoTexto, altoFotos, 34) + 6;
+
+                if (y + altoFicha > pageHeight - 12) {
+                    doc.addPage();
+                    dibujarEncabezadoFicha();
+                    y = 30;
+                }
+
+                const yInicio = y;
+
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 118, 110);
+                doc.text(String(item['Código de Item'] || 'Sin Código'), margenX, y + 5);
+
+                const badges = [];
+                if (item['Lote']) badges.push(`Lote: ${item['Lote']}`);
+                if (item['Diseño']) badges.push(`Diseño: ${item['Diseño']}`);
+                if (item['Grupo de Trabajo']) badges.push(String(item['Grupo de Trabajo']));
+                if (badges.length) {
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+                    doc.text(badges.join('   •   '), margenX + anchoTexto, y + 5, { align: 'right' });
+                }
+
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(51, 65, 85);
+                const descLineas = doc.splitTextToSize(String(item['Descripción'] || ''), anchoTexto);
+                doc.text(descLineas.slice(0, 2), margenX, y + 10);
+
+                let ty = y + 10 + Math.min(descLineas.length, 2) * 3.6 + 3;
+
+                const imprimirLinea = (label, valor, destacar) => {
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+                    doc.text(label, margenX, ty);
+                    doc.setFont('helvetica', 'bold');
+                    if (destacar) {
+                        const num = parseFloat(String(valor).replace(/[^0-9.-]/g, '')) || 0;
+                        if (Math.abs(num) < 0.001) doc.setTextColor(13, 148, 136);
+                        else if (num < 0) doc.setTextColor(220, 38, 38);
+                        else doc.setTextColor(13, 148, 136);
+                    } else {
+                        doc.setTextColor(30, 41, 59);
+                    }
+                    doc.text(String(valor), margenX + 46, ty);
+                    ty += 4.3;
+                };
+
+                imprimirLinea('Stock SAP (teórico):', num3(item['Stock SAP']), false);
+                camposConteo.forEach(c => {
+                    const valor = (overrides && (c.header in overrides)) ? formatearValorAjustado(c.header, overrides[c.header]) : c.get(item, true);
+                    imprimirLinea(`${c.header}:`, valor, c.header === 'Diferencia');
+                });
+                imprimirLinea('Ubicación:', item['Ubicación'] || '-', false);
+                imprimirLinea('Inventariador:', `${item['Inventariador'] || '-'}  (${fmtFecha(item['Registro'])})`, false);
+                if (item['Observaciones']) {
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
+                    doc.text('Obs:', margenX, ty);
+                    doc.setTextColor(30, 41, 59);
+                    doc.text(doc.splitTextToSize(String(item['Observaciones']), anchoTexto - 14), margenX + 12, ty);
+                }
+
+                if (fotos.length > 0) {
+                    const maxFotos = Math.min(fotos.length, 4);
+                    if (maxFotos === 1) {
+                        dibujarFotoEnCaja(doc, mapaFotos.get(fotos[0]), xFoto, y, anchoFoto, 40);
+                    } else {
+                        const cols = 2, gap = 2;
+                        const cellW = (anchoFoto - gap) / cols;
+                        const cellH = 19;
+                        for (let f = 0; f < maxFotos; f++) {
+                            const col = f % cols, row = Math.floor(f / cols);
+                            dibujarFotoEnCaja(doc, mapaFotos.get(fotos[f]), xFoto + col * (cellW + gap), y + row * (cellH + gap), cellW, cellH);
+                        }
+                        if (fotos.length > 4) {
+                            doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(107, 114, 128);
+                            doc.text(`+${fotos.length - 4} foto(s) más`, xFoto, y + 2 * (cellH + gap) + 4);
+                        }
+                    }
+                } else if (app.tieneFoto) {
+                    doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2);
+                    doc.rect(xFoto, y, anchoFoto, 26);
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(203, 213, 225);
+                    doc.text('Sin foto', xFoto + anchoFoto / 2, y + 14, { align: 'center' });
+                }
+
+                y = yInicio + altoFicha;
+                doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2);
+                doc.line(margenX, y - 3, pageWidth - margenX, y - 3);
+            }
+
+            const totalPaginas = doc.internal.getNumberOfPages();
+            for (let i = 1; i <= totalPaginas; i++) {
+                doc.setPage(i);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
+                doc.text(`Página ${i} de ${totalPaginas}`, pageWidth - margenX, 12, { align: 'right' });
+            }
+
+            Swal.close();
+            doc.save(`Reporte_Fotografico_${app.label}_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
         function exportarExcel() {

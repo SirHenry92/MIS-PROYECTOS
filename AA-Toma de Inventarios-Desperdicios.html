@@ -464,6 +464,22 @@
                                 <input type="checkbox" id="bloqueo" class="w-4 h-4 accent-red-500">
                                 <span class="text-xs font-semibold text-gray-600"><i class="fa-solid fa-lock text-red-400 mr-1"></i> Marcar como Bloqueado (material no disponible / observado)</span>
                             </label>
+
+                            <!-- Foto del desperdicio (opcional salvo que el admin la exija) -->
+                            <div class="border border-gray-200 rounded-lg p-2.5 bg-gray-50">
+                                <label class="smart-label text-[10px] text-gray-500 mb-1 flex items-center gap-1">
+                                    <i class="fa-solid fa-camera"></i> Foto del Desperdicio <span id="foto-desperdicio-obligatoria" class="text-red-500 hidden-view">*</span>
+                                    <span id="foto-desperdicio-opcional-tag" class="text-gray-400 normal-case font-normal">(Opcional)</span>
+                                </label>
+                                <input type="file" id="foto_desperdicio_input" accept="image/*" capture="environment" onchange="onFotoDesperdicioSeleccionada(event)" class="hidden">
+                                <div id="foto-desperdicio-preview-wrap" class="hidden-view mb-2">
+                                    <img id="foto-desperdicio-preview" class="w-full max-h-40 object-contain rounded border border-gray-200 bg-white" src="">
+                                </div>
+                                <button type="button" id="btn-foto-desperdicio" onclick="document.getElementById('foto_desperdicio_input').click()" class="btn-secondary w-full py-2 text-xs bg-white border border-gray-300">
+                                    <i class="fa-solid fa-camera mr-1"></i> <span id="txt-btn-foto-desperdicio">Tomar / Adjuntar Foto</span>
+                                </button>
+                                <p id="foto-desperdicio-status" class="text-[10px] text-gray-400 mt-1"></p>
+                            </div>
                         </div>
 
                     <!-- Calculadora flotante: es "position:absolute" sobre el modal, así que no
@@ -578,9 +594,10 @@
 
         // Configuración de la app (tabla desperdicios_config), administrada desde el Panel de
         // Administrador centralizado. Aquí solo se LEE: el operador no puede cambiarla, solo
-        // ve si el conteo a ciegas está activo.
+        // ve si el conteo a ciegas y la foto obligatoria del desperdicio están activos.
         let configuracionApp = {
-            ocultar_stock_sap: true
+            ocultar_stock_sap: true,
+            exigir_foto: false
         };
 
         async function cargarConfiguracion() {
@@ -592,7 +609,7 @@
                 if (error) throw error;
                 if (data) configuracionApp = data;
             } catch (e) {
-                // Si falla, se mantiene el valor por defecto (oculto), la opción más segura.
+                // Si falla, se mantiene el valor por defecto (oculto / no exigir foto), lo más seguro.
             }
 
             TARA_VALORES_CONO = construirMapaTara(configuracionApp.tipos_cono);
@@ -600,7 +617,123 @@
             poblarSelectTipo('tipo_cono', configuracionApp.tipos_cono);
             poblarSelectTipo('tipo_bolsa', configuracionApp.tipos_bolsa);
 
+            const obligatoria = !!configuracionApp.exigir_foto;
+            const asterisco = document.getElementById('foto-desperdicio-obligatoria');
+            const tagOpcional = document.getElementById('foto-desperdicio-opcional-tag');
+            if (asterisco) asterisco.classList.toggle('hidden-view', !obligatoria);
+            if (tagOpcional) tagOpcional.classList.toggle('hidden-view', obligatoria);
+
             return configuracionApp;
+        }
+
+        // Foto del desperdicio: fotoDesperdicioBlob es la imagen ya comprimida lista para subir
+        // (null si el operador no adjuntó una nueva). fotoDesperdicioUrlActual es la URL que ya
+        // tenía el registro (si se está editando uno ya contado), para no perderla si no cambia.
+        let fotoDesperdicioBlob = null;
+        let fotoDesperdicioUrlActual = null;
+
+        function canvasToBlob(canvas, calidad) {
+            return new Promise((resolve, reject) => {
+                canvas.toBlob((blob) => {
+                    if (!blob) return reject(new Error('No se pudo procesar la imagen'));
+                    resolve(blob);
+                }, 'image/jpeg', calidad);
+            });
+        }
+
+        // Compresión liviana en el propio navegador (canvas + JPEG) antes de subir. Desperdicios
+        // tiene muy pocos artículos (~22), pero igual se mantiene chica para ser consistente con
+        // el resto de apps y no comerse el plan gratuito de Storage (1GB compartido).
+        function comprimirImagenDesperdicio(file) {
+            return new Promise((resolve, reject) => {
+                const MAX_LADO = 600;
+                const TARGET_KB = 30;
+                const img = new Image();
+                const url = URL.createObjectURL(file);
+                img.onload = async () => {
+                    URL.revokeObjectURL(url);
+                    try {
+                        let { width, height } = img;
+                        if (width > MAX_LADO || height > MAX_LADO) {
+                            if (width >= height) {
+                                height = Math.round(height * (MAX_LADO / width));
+                                width = MAX_LADO;
+                            } else {
+                                width = Math.round(width * (MAX_LADO / height));
+                                height = MAX_LADO;
+                            }
+                        }
+                        const canvas = document.createElement('canvas');
+                        canvas.width = width;
+                        canvas.height = height;
+                        const ctx = canvas.getContext('2d');
+                        ctx.drawImage(img, 0, 0, width, height);
+
+                        let blob = await canvasToBlob(canvas, 0.55);
+                        for (const calidad of [0.4, 0.28]) {
+                            if (blob.size / 1024 <= TARGET_KB) break;
+                            blob = await canvasToBlob(canvas, calidad);
+                        }
+                        resolve(blob);
+                    } catch (err) {
+                        reject(err);
+                    }
+                };
+                img.onerror = () => {
+                    URL.revokeObjectURL(url);
+                    reject(new Error('No se pudo leer la imagen'));
+                };
+                img.src = url;
+            });
+        }
+
+        async function onFotoDesperdicioSeleccionada(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+
+            const status = document.getElementById('foto-desperdicio-status');
+            const txtBtn = document.getElementById('txt-btn-foto-desperdicio');
+            status.textContent = 'Comprimiendo imagen...';
+
+            try {
+                const blob = await comprimirImagenDesperdicio(file);
+                fotoDesperdicioBlob = blob;
+
+                const preview = document.getElementById('foto-desperdicio-preview');
+                preview.src = URL.createObjectURL(blob);
+                document.getElementById('foto-desperdicio-preview-wrap').classList.remove('hidden-view');
+
+                const kb = (blob.size / 1024).toFixed(0);
+                status.textContent = `Lista para subir (${kb} KB)`;
+                txtBtn.textContent = 'Cambiar Foto';
+            } catch (err) {
+                status.textContent = '';
+                Swal.fire('Error', 'No se pudo procesar la foto: ' + err.message, 'error');
+            } finally {
+                event.target.value = '';
+            }
+        }
+
+        async function subirFotoDesperdicio(blob, registroId) {
+            const nombreArchivo = `${registroId}-${Date.now()}.jpg`;
+            const { error } = await _supabase.storage
+                .from('fotos-desperdicios')
+                .upload(nombreArchivo, blob, { contentType: 'image/jpeg', upsert: false });
+            if (error) throw error;
+            const { data } = _supabase.storage.from('fotos-desperdicios').getPublicUrl(nombreArchivo);
+            return data.publicUrl;
+        }
+
+        function resetFotoDesperdicioModal() {
+            fotoDesperdicioBlob = null;
+            fotoDesperdicioUrlActual = null;
+            document.getElementById('foto-desperdicio-preview').src = '';
+            document.getElementById('foto-desperdicio-preview-wrap').classList.add('hidden-view');
+            document.getElementById('foto-desperdicio-status').textContent = '';
+            document.getElementById('txt-btn-foto-desperdicio').textContent = 'Tomar / Adjuntar Foto';
+            document.getElementById('foto_desperdicio_input').disabled = false;
+            document.getElementById('btn-foto-desperdicio').disabled = false;
+            document.getElementById('btn-foto-desperdicio').classList.remove('opacity-50', 'cursor-not-allowed');
         }
 
         document.addEventListener('DOMContentLoaded', () => {
@@ -1042,6 +1175,7 @@
                 if (!item) return;
                 const completado = item.Registro != null;
                 modoEdicionAutorizada = false; // Reinicia el modo edición cada vez que se abre un artículo
+                resetFotoDesperdicioModal();
 
                 document.getElementById('registro_id').value = item.id || '';
                 document.getElementById('modal-nro').innerText = `Nro: ${item['Nro'] || '-'}`;
@@ -1073,6 +1207,14 @@
                 setVal('observaciones', completado ? (item['Observaciones'] || '') : '');
                 document.getElementById('bloqueo').checked = completado ? !!item['Bloqueo'] : false;
 
+                // Foto del desperdicio: si el registro ya tiene una, se muestra de una vez.
+                fotoDesperdicioUrlActual = item['Foto Desperdicio'] || null;
+                if (fotoDesperdicioUrlActual) {
+                    document.getElementById('foto-desperdicio-preview').src = fotoDesperdicioUrlActual;
+                    document.getElementById('foto-desperdicio-preview-wrap').classList.remove('hidden-view');
+                    document.getElementById('foto-desperdicio-status').textContent = completado ? 'Foto registrada al momento del conteo' : '';
+                }
+
                 const inputs = ['nro_conos', 'tipo_cono', 'nro_bolsas', 'tipo_bolsa', 'peso_bruto', 'ubicacion', 'observaciones', 'bloqueo'];
                 const btnGuardar = document.getElementById('btnGuardar');
                 const btnModificar = document.getElementById('btnModificar');
@@ -1089,6 +1231,13 @@
                     });
                     if (btnGuardar) btnGuardar.classList.add('hidden-view');
                     if (btnModificar) btnModificar.classList.remove('hidden-view');
+
+                    document.getElementById('foto_desperdicio_input').disabled = true;
+                    const btnFotoDesperdicio = document.getElementById('btn-foto-desperdicio');
+                    btnFotoDesperdicio.disabled = true;
+                    btnFotoDesperdicio.classList.add('opacity-50', 'cursor-not-allowed');
+                    document.getElementById('txt-btn-foto-desperdicio').textContent = fotoDesperdicioUrlActual ? 'Foto ya registrada' : 'Sin foto registrada';
+
                     if (badgeEstado) badgeEstado.innerHTML = `<span class="bg-teal-100 text-teal-700 px-2 py-1 rounded border border-teal-200 text-[10px] font-bold uppercase tracking-wider"><i class="fa-solid fa-check-double mr-1"></i> Por ${esc(item.Inventariador || 'N/A')}</span>`;
                 } else {
                     inputs.forEach(id => {
@@ -1180,6 +1329,13 @@
             document.getElementById('btnGuardar').classList.remove('hidden-view');
             document.getElementById('btnGuardar').innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Actualizar Conteo';
             document.getElementById('btnModificar').classList.add('hidden-view');
+
+            // También se habilita el reemplazo de la foto del desperdicio durante la edición.
+            document.getElementById('foto_desperdicio_input').disabled = false;
+            const btnFotoDesperdicio = document.getElementById('btn-foto-desperdicio');
+            btnFotoDesperdicio.disabled = false;
+            btnFotoDesperdicio.classList.remove('opacity-50', 'cursor-not-allowed');
+            document.getElementById('txt-btn-foto-desperdicio').textContent = 'Cambiar Foto';
 
             calcTargetInput = document.getElementById('peso_bruto');
             modoEdicionAutorizada = true;
@@ -1356,6 +1512,15 @@
                 return;
             }
 
+            if (configuracionApp.exigir_foto && !fotoDesperdicioBlob && !fotoDesperdicioUrlActual) {
+                Swal.fire({
+                    icon: 'warning',
+                    title: 'Falta la foto del desperdicio',
+                    text: 'El administrador exige adjuntar una foto del desperdicio antes de guardar.'
+                });
+                return;
+            }
+
             const btn = document.getElementById('btnGuardar');
             btn.disabled = true;
             btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Guardando...';
@@ -1387,6 +1552,16 @@
             try {
                 let data, error;
 
+                // Si el operador tomó una foto nueva, se sube recién en este momento (no antes,
+                // para no llenar Storage con fotos de conteos que al final no se guardaron).
+                // Si no tomó una nueva, se conserva la que ya tenía el registro (o null).
+                let fotoDesperdicioUrlFinal = fotoDesperdicioUrlActual;
+                if (fotoDesperdicioBlob) {
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Subiendo foto...';
+                    fotoDesperdicioUrlFinal = await subirFotoDesperdicio(fotoDesperdicioBlob, registroId);
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Guardando...';
+                }
+
                 if (modoEdicionAutorizada) {
                     // Edición de un registro ya contado: pasa por la función segura del
                     // servidor, que valida la contraseña (cifrada) antes de escribir nada.
@@ -1399,7 +1574,8 @@
                         p_nro_bolsas: nroBolsas,
                         p_tipo_bolsa: tipoBolsa,
                         p_ubicacion: ubicacionValor,
-                        p_bloqueo: bloqueoValor
+                        p_bloqueo: bloqueoValor,
+                        p_foto_desperdicio: fotoDesperdicioUrlFinal
                     });
                     data = resp.data ? [resp.data] : null;
                     error = resp.error;
@@ -1423,6 +1599,7 @@
                         "Ubicación": ubicacionValor,
                         "Observaciones": document.getElementById('observaciones').value.trim().toUpperCase(),
                         "Bloqueo": bloqueoValor,
+                        "Foto Desperdicio": fotoDesperdicioUrlFinal,
                         "Registro": fechaLocal
                     };
 
