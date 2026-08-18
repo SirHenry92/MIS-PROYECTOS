@@ -269,7 +269,7 @@
                                 <button onclick="cargarReportesAdmin()" class="btn-secondary py-1.5 px-3 text-xs bg-white border border-gray-300 shadow-sm" title="Sincronizar DB"><i class="fa-solid fa-rotate mr-1"></i> Sync</button>
                                 <button onclick="exportarExcel()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-emerald-600 hover:bg-emerald-700 border border-emerald-700"><i class="fa-solid fa-file-excel mr-1"></i> Exportar Excel</button>
                                 <button onclick="exportarPDF()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-red-600 hover:bg-red-700 border border-red-700"><i class="fa-solid fa-file-pdf mr-1"></i> Imprimir PDF</button>
-                                <button onclick="exportarReporteFotografico()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-indigo-600 hover:bg-indigo-700 border border-indigo-700" title="Ficha por artículo con detalle de taras y fotos"><i class="fa-solid fa-images mr-1"></i> Reporte Fotográfico</button>
+                                <button onclick="exportarReporteFotografico()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-indigo-600 hover:bg-indigo-700 border border-indigo-700" title="Ficha por artículo con detalle de taras y fotos"><i class="fa-solid fa-images mr-1"></i> Repositorio</button>
                             </div>
                         </div>
                         <div class="flex-grow overflow-auto relative">
@@ -1423,8 +1423,8 @@
             doc.save(`Inventario_${app.label}_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
-        // --- 9B. REPORTE FOTOGRÁFICO (PDF tipo "repositorio": una ficha por artículo con
-        // el detalle del conteo + su(s) foto(s)). Pensado para el cierre de un inventario,
+        // --- 9B. REPOSITORIO (PDF con una ficha por artículo con el detalle del conteo +
+        // su(s) foto(s)). Pensado para el cierre de un inventario,
         // cuando ya se contó todo y se necesita un archivo para archivar/enviar.
         //
         // Por qué así:
@@ -1503,7 +1503,7 @@
                 const pesoEstimadoMB = (urlsUnicas.size * 0.035).toFixed(1);
 
                 const confirmacion = await Swal.fire({
-                    title: 'Reporte Fotográfico (PDF)',
+                    title: `Repositorio - ${app.label}`,
                     html: `
                         <div style="text-align:left; font-size:13px; color:#475569; line-height:1.5;">
                             <p>Genera una ficha por artículo con el detalle del conteo${app.tieneFoto ? ' y su(s) foto(s)' : ''}, respetando los filtros de la tabla actual (estado, grupo, fecha, texto).</p>
@@ -1554,7 +1554,7 @@
 
                 Swal.close();
             } catch (err) {
-                console.error('Error generando Reporte Fotográfico:', err);
+                console.error('Error generando el Repositorio (PDF):', err);
                 Swal.fire({
                     icon: 'error',
                     title: 'No se pudo generar el PDF',
@@ -1569,141 +1569,163 @@
         // Recibe los datos ya listos (items filtrados + fotos ya descargadas en base64) y solo
         // se encarga de dibujar y guardar el PDF -- separado de exportarReporteFotografico() para
         // que el try/catch de arriba cubra cualquier error de dibujo (no solo la descarga).
+        //
+        // Layout a 2 columnas por hoja (antes era 1 sola, ocupando todo el ancho): márgenes
+        // angostos, una sola línea por descripción/observación (en vez de dejarlas envolver a
+        // varias líneas) y la foto en una franja chica debajo del texto -- solo cuando el
+        // artículo realmente tiene foto, en vez de reservar siempre un recuadro "Sin foto".
+        // Como cada línea de texto está acotada a un renglón fijo, el alto de la ficha se puede
+        // calcular exacto de antemano (no es una estimación), así no hay riesgo de que el dibujo
+        // se pase del espacio que se le asignó.
         function generarPdfReporteFotografico(app, items, incluirFotos, mapaFotos) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('portrait', 'mm', 'a4');
             const pageWidth = doc.internal.pageSize.width;
             const pageHeight = doc.internal.pageSize.height;
-            const margenX = 12;
-            const anchoTexto = 122;
-            const xFoto = margenX + anchoTexto + 6;
-            const anchoFoto = pageWidth - margenX - xFoto;
+            const margenX = 9;
+            const colGap = 5;
+            const colWidth = (pageWidth - margenX * 2 - colGap) / 2;
+            const labelW = 26; // ancho reservado para "Etiqueta:" antes del valor
+            const lineH = 3.7;
+            const topY = 20;
+            const bottomLimit = pageHeight - 9;
             const generado = new Date().toLocaleString('es-PE');
             const infoFiltros = obtenerInfoFiltrosExport();
             const activarAjuste = ajustarDiferenciasActivo && app.tieneTolerancia;
             const tramosPdf = configuracionApp.tramos_tolerancia || [];
+            const camposConteo = app.exportColumns.filter(c => c.group === 'conteo' || c.group === 'resultado');
 
             function dibujarEncabezadoFicha() {
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(12); doc.setTextColor(15, 23, 42);
-                doc.text(`REPORTE FOTOGRÁFICO - ${app.label.toUpperCase()}`, margenX, 12);
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
-                doc.text(`Generado: ${generado}`, margenX, 17);
-                doc.text(`Grupo: ${infoFiltros.grupo}  |  Filtro: ${infoFiltros.filtro}  |  Fecha: ${infoFiltros.fecha}`, margenX, 21);
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(15, 23, 42);
+                doc.text(`REPOSITORIO - ${app.label.toUpperCase()}`, margenX, 8);
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(107, 114, 128);
+                doc.text(`Generado: ${generado}   |   Grupo: ${infoFiltros.grupo}   |   Filtro: ${infoFiltros.filtro}   |   Fecha: ${infoFiltros.fecha}`, margenX, 12.5);
                 doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.3);
-                doc.line(margenX, 24, pageWidth - margenX, 24);
+                doc.line(margenX, 15.5, pageWidth - margenX, 15.5);
             }
 
-            dibujarEncabezadoFicha();
-            let y = 30;
+            // Alto exacto que va a ocupar la ficha (debe usar los mismos números que dibujarFicha).
+            function altoDeFicha(item, fotos) {
+                const lineCount = 1 /* Stock SAP */ + camposConteo.length + 2 /* Ubicación + Inv/Fecha */;
+                let alto = 4.6 /* código */ + 4.2 /* descripción */ + lineCount * lineH;
+                if (item['Observaciones']) alto += lineH;
+                if (fotos.length > 0) alto += 1 + 19;
+                return alto + 2.5; // pequeño margen antes de la línea divisoria
+            }
 
-            for (let idx = 0; idx < items.length; idx++) {
-                const item = items[idx];
-                const fotos = incluirFotos && app.getFotos ? app.getFotos(item).filter(u => mapaFotos.has(u)) : [];
+            function dibujarFicha(x, y, item, fotos) {
+                let cy = y;
+
+                doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(15, 118, 110);
+                doc.text(String(item['Código de Item'] || 'Sin Código'), x, cy + 3.4);
+
+                const badges = [];
+                if (item['Lote']) badges.push(`Lote: ${item['Lote']}`);
+                if (item['Diseño']) badges.push(`Diseño: ${item['Diseño']}`);
+                if (badges.length) {
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.3); doc.setTextColor(107, 114, 128);
+                    doc.text(badges.join('  •  '), x + colWidth, cy + 3.4, { align: 'right' });
+                }
+                cy += 4.6;
+
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); doc.setTextColor(51, 65, 85);
+                const descLinea = doc.splitTextToSize(String(item['Descripción'] || ''), colWidth)[0] || '';
+                doc.text(descLinea, x, cy + 2.6);
+                cy += 4.2;
+
+                const imprimirLinea = (label, valor, destacar) => {
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139);
+                    doc.text(label, x, cy + 2.5);
+                    doc.setFont('helvetica', 'bold');
+                    if (destacar) {
+                        const num = parseFloat(String(valor).replace(/[^0-9.-]/g, '')) || 0;
+                        doc.setTextColor(13, 148, 136);
+                        if (num < 0) doc.setTextColor(220, 38, 38);
+                    } else {
+                        doc.setTextColor(30, 41, 59);
+                    }
+                    const valorLinea = doc.splitTextToSize(String(valor), colWidth - labelW)[0] || '';
+                    doc.text(valorLinea, x + labelW, cy + 2.5);
+                    cy += lineH;
+                };
 
                 let overrides = null;
                 if (activarAjuste) {
                     const aj = calcularAjuste(item, app, tramosPdf);
                     overrides = { 'Tara Conos': aj.taraConosAj, 'Tara Bolsa': aj.taraBolsaAj, 'Peso Neto': aj.pesoNetoAj, 'Diferencia': aj.diferenciaAj };
                 }
-                const camposConteo = app.exportColumns.filter(c => c.group === 'conteo' || c.group === 'resultado');
-                const lineasTexto = 1 + camposConteo.length + 3;
-                const altoTexto = 20 + lineasTexto * 4.3;
-                const altoFotos = fotos.length > 0 ? 46 : 0;
-                const altoFicha = Math.max(altoTexto, altoFotos, 34) + 6;
 
-                if (y + altoFicha > pageHeight - 12) {
-                    doc.addPage();
-                    dibujarEncabezadoFicha();
-                    y = 30;
-                }
-
-                const yInicio = y;
-
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(11); doc.setTextColor(15, 118, 110);
-                doc.text(String(item['Código de Item'] || 'Sin Código'), margenX, y + 5);
-
-                const badges = [];
-                if (item['Lote']) badges.push(`Lote: ${item['Lote']}`);
-                if (item['Diseño']) badges.push(`Diseño: ${item['Diseño']}`);
-                if (item['Grupo de Trabajo']) badges.push(String(item['Grupo de Trabajo']));
-                if (badges.length) {
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
-                    doc.text(badges.join('   •   '), margenX + anchoTexto, y + 5, { align: 'right' });
-                }
-
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(8.5); doc.setTextColor(51, 65, 85);
-                const descLineas = doc.splitTextToSize(String(item['Descripción'] || ''), anchoTexto);
-                doc.text(descLineas.slice(0, 2), margenX, y + 10);
-
-                let ty = y + 10 + Math.min(descLineas.length, 2) * 3.6 + 3;
-
-                const imprimirLinea = (label, valor, destacar) => {
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
-                    doc.text(label, margenX, ty);
-                    doc.setFont('helvetica', 'bold');
-                    if (destacar) {
-                        const num = parseFloat(String(valor).replace(/[^0-9.-]/g, '')) || 0;
-                        if (Math.abs(num) < 0.001) doc.setTextColor(13, 148, 136);
-                        else if (num < 0) doc.setTextColor(220, 38, 38);
-                        else doc.setTextColor(13, 148, 136);
-                    } else {
-                        doc.setTextColor(30, 41, 59);
-                    }
-                    doc.text(String(valor), margenX + 46, ty);
-                    ty += 4.3;
-                };
-
-                imprimirLinea('Stock SAP (teórico):', num3(item['Stock SAP']), false);
+                imprimirLinea('Stock SAP:', num3(item['Stock SAP']), false);
                 camposConteo.forEach(c => {
                     const valor = (overrides && (c.header in overrides)) ? formatearValorAjustado(c.header, overrides[c.header]) : c.get(item, true);
                     imprimirLinea(`${c.header}:`, valor, c.header === 'Diferencia');
                 });
                 imprimirLinea('Ubicación:', item['Ubicación'] || '-', false);
-                imprimirLinea('Inventariador:', `${item['Inventariador'] || '-'}  (${fmtFecha(item['Registro'])})`, false);
+                const fechaCorta = String(item['Registro'] || '').replace('T', ' ').split('.')[0].slice(0, 16);
+                imprimirLinea('Inv. / Fecha:', `${item['Inventariador'] || '-'} (${fechaCorta})`, false);
+
                 if (item['Observaciones']) {
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(8); doc.setTextColor(100, 116, 139);
-                    doc.text('Obs:', margenX, ty);
+                    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139);
+                    doc.text('Obs:', x, cy + 2.5);
                     doc.setTextColor(30, 41, 59);
-                    doc.text(doc.splitTextToSize(String(item['Observaciones']), anchoTexto - 14), margenX + 12, ty);
+                    const obsLinea = doc.splitTextToSize(String(item['Observaciones']), colWidth - 9)[0] || '';
+                    doc.text(obsLinea, x + 9, cy + 2.5);
+                    cy += lineH;
                 }
 
                 if (fotos.length > 0) {
-                    const maxFotos = Math.min(fotos.length, 4);
-                    if (maxFotos === 1) {
-                        dibujarFotoEnCaja(doc, mapaFotos.get(fotos[0]), xFoto, y, anchoFoto, 40);
-                    } else {
-                        const cols = 2, gap = 2;
-                        const cellW = (anchoFoto - gap) / cols;
-                        const cellH = 19;
-                        for (let f = 0; f < maxFotos; f++) {
-                            const col = f % cols, row = Math.floor(f / cols);
-                            dibujarFotoEnCaja(doc, mapaFotos.get(fotos[f]), xFoto + col * (cellW + gap), y + row * (cellH + gap), cellW, cellH);
-                        }
-                        if (fotos.length > 4) {
-                            doc.setFont('helvetica', 'normal'); doc.setFontSize(6.5); doc.setTextColor(107, 114, 128);
-                            doc.text(`+${fotos.length - 4} foto(s) más`, xFoto, y + 2 * (cellH + gap) + 4);
-                        }
+                    cy += 1;
+                    const fw = Math.min(colWidth * 0.55, 55);
+                    dibujarFotoEnCaja(doc, mapaFotos.get(fotos[0]), x, cy, fw, 19);
+                    if (fotos.length > 1) {
+                        doc.setFont('helvetica', 'normal'); doc.setFontSize(6.3); doc.setTextColor(107, 114, 128);
+                        doc.text(`+${fotos.length - 1} foto(s) más`, x + fw + 3, cy + 10);
                     }
-                } else if (app.tieneFoto) {
-                    doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2);
-                    doc.rect(xFoto, y, anchoFoto, 26);
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(203, 213, 225);
-                    doc.text('Sin foto', xFoto + anchoFoto / 2, y + 14, { align: 'center' });
+                    cy += 19;
                 }
 
-                y = yInicio + altoFicha;
+                cy += 2.5;
                 doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2);
-                doc.line(margenX, y - 3, pageWidth - margenX, y - 3);
+                doc.line(x, cy - 1.2, x + colWidth, cy - 1.2);
+            }
+
+            dibujarEncabezadoFicha();
+            let columnasY = [topY, topY];
+            let colPreferida = 0;
+
+            for (let idx = 0; idx < items.length; idx++) {
+                const item = items[idx];
+                const fotos = incluirFotos && app.getFotos ? app.getFotos(item).filter(u => mapaFotos.has(u)) : [];
+                const alto = altoDeFicha(item, fotos);
+
+                let col = colPreferida;
+                if (columnasY[col] + alto > bottomLimit) {
+                    const otra = 1 - col;
+                    if (columnasY[otra] + alto <= bottomLimit) {
+                        col = otra;
+                    } else {
+                        doc.addPage();
+                        dibujarEncabezadoFicha();
+                        columnasY = [topY, topY];
+                        col = 0;
+                    }
+                }
+
+                const x = margenX + col * (colWidth + colGap);
+                const y = columnasY[col];
+                dibujarFicha(x, y, item, fotos);
+                columnasY[col] = y + alto;
+                colPreferida = 1 - col;
             }
 
             const totalPaginas = doc.internal.getNumberOfPages();
             for (let i = 1; i <= totalPaginas; i++) {
                 doc.setPage(i);
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.5); doc.setTextColor(107, 114, 128);
-                doc.text(`Página ${i} de ${totalPaginas}`, pageWidth - margenX, 12, { align: 'right' });
+                doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(107, 114, 128);
+                doc.text(`Página ${i} de ${totalPaginas}`, pageWidth - margenX, 8, { align: 'right' });
             }
 
-            doc.save(`Reporte_Fotografico_${app.label}_${new Date().toISOString().split('T')[0]}.pdf`);
+            doc.save(`Repositorio_${app.label}_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
         function exportarExcel() {
