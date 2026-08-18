@@ -812,56 +812,60 @@
         // --- 7. REPORTES / MONITOR ---
         function construirTheadReportes() {
             const app = APPS[currentApp];
-            const cols = ['Estado', 'Fecha Reg.', 'Inventariador', ...app.columnasMedias.map(c => c.label), 'SAP', 'Físico', 'Dif'];
-            if (app.tieneFoto) cols.push('Foto');
+            const cols = ['Estado', 'Fecha Reg.', 'Inventariador', ...app.columnasMedias.map(c => c.label), 'SAP', 'Físico', 'Dif', 'Detalle'];
             document.getElementById('reportes-thead-row').innerHTML = cols.map((c, i) => {
                 const isRight = (c === 'SAP' || c === 'Físico' || c === 'Dif');
-                const isCenter = (c === 'Foto');
+                const isCenter = (c === 'Detalle');
                 return `<th class="py-2.5 px-3 font-bold text-gray-500 uppercase ${isRight ? 'text-right' : ''} ${isCenter ? 'text-center' : ''}">${c}</th>`;
             }).join('');
             return cols.length;
         }
 
-        // Muestra la foto de la báscula junto con el peso que quedó registrado para ese
-        // artículo, para poder corroborar de un vistazo que el número de la foto coincide
-        // con lo que se guardó en el sistema.
-        // Lista y posición actual dentro del visor de fotos, para poder navegar con
-        // "Anterior"/"Siguiente" sin cerrar y volver a abrir manualmente cada vez.
-        let fotoBalanzaLista = [];
-        let fotoBalanzaIndice = -1;
+        // Ficha de detalle completo: muestra TODO lo que llenó el operador para ese artículo
+        // (usa la misma lista de columnas que ya arma el Excel/PDF, así que queda igual de
+        // completa para las 4 apps sin duplicar definiciones) más la foto de la báscula si la
+        // app la maneja (hoy solo Hilado) y el registro la tiene.
+        // El conteo a ciegas (ocultar_stock_sap) es una restricción SOLO del operador — acá,
+        // como administrador, nunca se oculta nada.
+        let detalleApp = null;
+        let detalleLista = [];
+        let detalleIndice = -1;
 
-        function verFotoBalanza(id) {
+        function verDetalle(id) {
             // Se navega dentro de lo que está filtrado en pantalla (respeta grupo/estado/fecha/
-            // búsqueda), y solo entre los que sí tienen foto.
-            fotoBalanzaLista = datosFiltradosParaExportar.filter(i => i['Foto Balanza']);
-            fotoBalanzaIndice = fotoBalanzaLista.findIndex(i => i.id === id);
-            if (fotoBalanzaIndice === -1) return;
-            mostrarFotoBalanzaActual();
+            // búsqueda) y solo entre los artículos ya contados (los pendientes no tienen nada que mostrar).
+            detalleApp = APPS[currentApp];
+            detalleLista = datosFiltradosParaExportar.filter(i => i.Registro != null);
+            detalleIndice = detalleLista.findIndex(i => i.id === id);
+            if (detalleIndice === -1) return;
+            mostrarDetalleActual();
         }
 
-        function navegarFotoBalanza(delta) {
-            const nuevo = fotoBalanzaIndice + delta;
-            if (nuevo < 0 || nuevo >= fotoBalanzaLista.length) return;
-            fotoBalanzaIndice = nuevo;
-            mostrarFotoBalanzaActual();
+        function navegarDetalle(delta) {
+            const nuevo = detalleIndice + delta;
+            if (nuevo < 0 || nuevo >= detalleLista.length) return;
+            detalleIndice = nuevo;
+            mostrarDetalleActual();
         }
 
-        function mostrarFotoBalanzaActual() {
-            const item = fotoBalanzaLista[fotoBalanzaIndice];
+        function mostrarDetalleActual() {
+            const item = detalleLista[detalleIndice];
             if (!item) return;
-            const pesoNeto = parseFloat(item['Peso Neto'] ?? item['Peso Neto Inv'] ?? 0);
-            const pesoBruto = parseFloat(item['Peso Bruto'] || 0);
-            const taraConos = parseFloat(item['Tara Conos'] ?? item['Tara Conos Inv'] ?? 0);
-            const taraBolsa = parseFloat(item['Tara Bolsa'] ?? item['Tara Bolsa Inv'] ?? 0);
-            const sap = parseFloat(item['Stock SAP'] || 0);
-            const dif = parseFloat(item['Diferencia'] || 0);
-            const difColor = Math.abs(dif) < 0.001 ? '#0d9488' : (dif < 0 ? '#ef4444' : '#0d9488');
-            const hayAnterior = fotoBalanzaIndice > 0;
-            const haySiguiente = fotoBalanzaIndice < fotoBalanzaLista.length - 1;
+            const app = detalleApp;
+            const hayAnterior = detalleIndice > 0;
+            const haySiguiente = detalleIndice < detalleLista.length - 1;
+            const conFoto = !!(app.tieneFoto && item['Foto Balanza']);
+
+            // app.exportColumns ya viene en el mismo orden lógico que el PDF/Excel; se saltan
+            // los 2 primeros (Código y Descripción) porque van en el encabezado de la ficha.
+            const filasHtml = app.exportColumns.slice(2).map(c => {
+                const val = c.get(item, true);
+                return `<tr><td style="color:#64748b; padding:3px 10px 3px 0; white-space:nowrap;">${esc(c.header)}</td><td style="text-align:right; font-family:monospace; font-weight:600; color:#1e293b;">${esc(val)}</td></tr>`;
+            }).join('');
 
             // Se usan los botones nativos de SweetAlert2 (Cancelar/Confirmar) en vez de botones
-            // HTML propios: con el layout flexible de antes, en pantallas angostas los botones
-            // "‹"/"›" terminaban empujados fuera de la vista por el resto del contenido.
+            // HTML propios: con un layout flexible propio, en pantallas angostas terminaban
+            // empujados fuera de la vista por el resto del contenido.
             Swal.fire({
                 showConfirmButton: true,
                 showCancelButton: true,
@@ -870,30 +874,21 @@
                 confirmButtonText: 'Siguiente ›',
                 cancelButtonColor: '#334155',
                 confirmButtonColor: '#0d9488',
-                reverseButtons: false,
                 width: 'min(95vw, 780px)',
                 padding: '1.25rem',
-                title: `${fotoBalanzaIndice + 1} / ${fotoBalanzaLista.length}`,
+                title: `${detalleIndice + 1} / ${detalleLista.length}`,
                 customClass: { title: 'text-sm' },
                 html: `
                     <div style="display:flex; gap:16px; flex-wrap:wrap; text-align:left;">
-                        <div style="flex:1 1 220px; min-width:200px;">
+                        <div style="flex:1 1 240px; min-width:220px;">
                             <div style="font-family:monospace; font-weight:800; color:#0f766e; font-size:1.1rem;">${esc(item['Código de Item'] || '')}</div>
                             <div style="color:#64748b; font-size:0.8rem; margin-bottom:10px;">${esc(item['Descripción'] || '')}</div>
-                            <table style="width:100%; font-size:0.85rem;">
-                                <tr><td style="color:#64748b; padding:3px 0;">Peso Bruto</td><td style="text-align:right; font-family:monospace; font-weight:700;">${pesoBruto.toFixed(3)} kg</td></tr>
-                                <tr><td style="color:#64748b; padding:3px 0;">Conos</td><td style="text-align:right; font-family:monospace;">${item['Nro de Conos'] || 0} × ${esc(item['Tipo de Cono'] || '-')}</td></tr>
-                                <tr><td style="color:#64748b; padding:3px 0;">Tara Conos</td><td style="text-align:right; font-family:monospace;">${taraConos.toFixed(3)} kg</td></tr>
-                                <tr><td style="color:#64748b; padding:3px 0;">Bolsas</td><td style="text-align:right; font-family:monospace;">${item['Nro de Bolsas'] || 0} × ${esc(item['Tipo de Bolsa'] || '-')}</td></tr>
-                                <tr><td style="color:#64748b; padding:3px 0;">Tara Bolsa</td><td style="text-align:right; font-family:monospace;">${taraBolsa.toFixed(3)} kg</td></tr>
-                                <tr><td style="color:#64748b; padding:3px 0; border-top:1px solid #e2e8f0;">Peso Neto (registrado)</td><td style="text-align:right; font-family:monospace; font-weight:800; color:#0f766e; border-top:1px solid #e2e8f0;">${pesoNeto.toFixed(3)} kg</td></tr>
-                                <tr><td style="color:#64748b; padding:3px 0;">Stock SAP (teórico)</td><td style="text-align:right; font-family:monospace;">${sap.toFixed(3)} kg</td></tr>
-                                <tr><td style="color:#64748b; padding:3px 0;">Diferencia</td><td style="text-align:right; font-family:monospace; font-weight:700; color:${difColor};">${dif > 0 ? '+' : ''}${dif.toFixed(3)} kg</td></tr>
-                            </table>
+                            <table style="width:100%; font-size:0.82rem;">${filasHtml}</table>
                         </div>
+                        ${conFoto ? `
                         <div style="flex:1 1 260px; min-width:220px;">
                             <img src="${esc(item['Foto Balanza'])}" alt="Foto de la báscula" style="width:100%; max-height:50vh; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0;">
-                        </div>
+                        </div>` : ''}
                     </div>
                 `,
                 didOpen: () => {
@@ -901,8 +896,8 @@
                     if (!haySiguiente) Swal.getConfirmButton().disabled = true;
                 }
             }).then((result) => {
-                if (result.dismiss === Swal.DismissReason.cancel) navegarFotoBalanza(-1);
-                else if (result.isConfirmed) navegarFotoBalanza(1);
+                if (result.dismiss === Swal.DismissReason.cancel) navegarDetalle(-1);
+                else if (result.isConfirmed) navegarDetalle(1);
             });
         }
 
@@ -965,7 +960,7 @@
 
         function renderizarReportesAdmin(datos) {
             const app = APPS[currentApp];
-            const nCols = 8 + app.columnasMedias.length + (app.tieneFoto ? 1 : 0);
+            const nCols = 9 + app.columnasMedias.length;
             const tbody = document.getElementById('cuerpoReportes');
             tbody.innerHTML = '';
 
@@ -995,9 +990,11 @@
                     return `<td class="${cls}" ${c.truncate ? `title="${esc(val)}"` : ''}>${c.html ? val : esc(val)}</td>`;
                 }).join('');
 
-                const fotoHtml = app.tieneFoto
-                    ? `<td class="py-2.5 px-3 text-center">${item['Foto Balanza'] ? `<button type="button" onclick="verFotoBalanza('${esc(item.id)}')" class="text-teal-600 hover:text-teal-800" title="Ver foto de la báscula"><i class="fa-solid fa-image"></i></button>` : '<span class="text-gray-300"><i class="fa-solid fa-image-slash"></i></span>'}</td>`
-                    : '';
+                // Columna "Detalle": para el admin nunca se oculta nada (el conteo a ciegas
+                // solo aplica a la vista del operador); acá siempre se ve todo lo que llenó.
+                const detalleHtml = completado
+                    ? `<td class="py-2.5 px-3 text-center"><button type="button" onclick="verDetalle('${esc(item.id)}')" class="text-teal-600 hover:text-teal-800" title="Ver todo lo que llenó el operador"><i class="fa-solid fa-list-ul"></i></button></td>`
+                    : `<td class="py-2.5 px-3 text-center"><span class="text-gray-300"><i class="fa-solid fa-list-ul"></i></span></td>`;
 
                 const tr = document.createElement('tr');
                 tr.className = "hover:bg-gray-50 border-b border-gray-100 transition-colors";
@@ -1009,7 +1006,7 @@
                     <td class="py-2.5 px-3 text-right text-gray-400 font-mono">${parseFloat(item['Stock SAP'] || 0).toFixed(2)}</td>
                     <td class="py-2.5 px-3 text-right font-mono font-bold text-gray-800">${fisico !== null ? fisico.toFixed(2) : '-'}</td>
                     <td class="py-2.5 px-3 text-right font-mono ${diffColor}">${completado ? (dif > 0 ? '+' + dif.toFixed(2) : dif.toFixed(2)) : '-'}</td>
-                    ${fotoHtml}
+                    ${detalleHtml}
                 `;
                 tbody.appendChild(tr);
             });
