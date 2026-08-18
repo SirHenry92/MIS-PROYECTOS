@@ -390,42 +390,6 @@
         </div>
     </div>
 
-    <!-- MODAL: DETALLE COMPLETO (la misma "ficha de artículo" que ve el operador al contar,
-    en modo solo-lectura para el admin, sin la calculadora; con la foto a la derecha cuando
-    la app la maneja y el registro tiene una) -->
-    <div id="modal-detalle" class="fixed inset-0 modal-backdrop z-50 hidden-view flex items-end sm:items-center justify-center p-0 sm:p-4">
-        <div class="bg-white w-full max-w-3xl rounded-t-2xl sm:rounded-2xl shadow-2xl flex flex-col max-h-[95vh]">
-            <div class="px-4 py-2.5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl flex-shrink-0">
-                <div class="flex items-center gap-2">
-                    <i class="fa-solid fa-clipboard-list text-teal-600"></i>
-                    <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Ficha de Artículo</h3>
-                </div>
-                <div class="flex items-center gap-3">
-                    <span class="text-xs text-gray-500 font-mono font-bold bg-white px-2 py-0.5 rounded border border-gray-200" id="detalle-posicion">1 / 1</span>
-                    <button onclick="cerrarModalDetalle()" class="text-gray-400 hover:text-gray-700 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
-                </div>
-            </div>
-            <div class="p-4 overflow-y-auto bg-white flex-grow">
-                <div class="mb-3 border-b border-gray-100 pb-3">
-                    <div class="font-mono font-extrabold text-teal-700 text-2xl leading-none mb-1" id="detalle-codigo">CÓDIGO</div>
-                    <div class="text-gray-600 text-sm leading-tight font-medium" id="detalle-descripcion">Descripción del artículo</div>
-                </div>
-                <div class="flex flex-col md:flex-row gap-4">
-                    <div id="detalle-campos" class="flex-1 flex flex-col gap-3"></div>
-                    <div id="detalle-foto-wrap" class="md:w-64 flex-shrink-0 hidden-view">
-                        <label class="smart-label text-[10px] mb-1"><i class="fa-solid fa-camera mr-1"></i> Foto de la Báscula</label>
-                        <img id="detalle-foto" class="w-full rounded-lg border border-gray-200 object-contain max-h-72 md:max-h-none bg-gray-50" src="">
-                    </div>
-                </div>
-            </div>
-            <div class="px-4 py-3 border-t border-gray-200 bg-gray-50 rounded-b-2xl flex gap-2.5 flex-shrink-0">
-                <button onclick="navegarDetalle(-1)" id="btn-detalle-anterior" class="w-1/3 btn-secondary text-sm py-2.5 bg-white border border-gray-300"><i class="fa-solid fa-chevron-left mr-1"></i> Anterior</button>
-                <button onclick="cerrarModalDetalle()" class="w-1/3 btn-secondary text-sm py-2.5 bg-white border border-gray-300">Cerrar</button>
-                <button onclick="navegarDetalle(1)" id="btn-detalle-siguiente" class="w-1/3 btn-primary text-sm py-2.5">Siguiente <i class="fa-solid fa-chevron-right ml-1"></i></button>
-            </div>
-        </div>
-    </div>
-
     <!-- CÓDIGO JS PRINCIPAL -->
     <script>
         // --- 1. CONFIGURACIÓN SUPABASE (compartida por las 4 apps) ---
@@ -861,118 +825,91 @@
             return cols.length;
         }
 
-        // Ficha de detalle completo: muestra TODO lo que llenó el operador para ese artículo
-        // (usa la misma lista de columnas que ya arma el Excel/PDF, así que queda igual de
-        // completa para las 4 apps sin duplicar definiciones) más la foto de la báscula si la
-        // app la maneja (hoy solo Hilado) y el registro la tiene.
+        // Ficha de detalle: lo que llenó el operador (entradas de conteo + resultado) más
+        // Stock SAP y Diferencia para comparar, y la foto de la báscula al lado si la app la
+        // maneja (hoy solo Hilado) y el registro tiene una. Sin relleno de Almacén/UM/Lote/
+        // Ubicación/Observaciones — esto es para verificar el número rápido, no un reporte.
         // El conteo a ciegas (ocultar_stock_sap) es una restricción SOLO del operador — acá,
         // como administrador, nunca se oculta nada.
-        let detalleApp = null;
         let detalleLista = [];
         let detalleIndice = -1;
 
         function verDetalle(id) {
             // Se navega dentro de lo que está filtrado en pantalla (respeta grupo/estado/fecha/
             // búsqueda) y solo entre los artículos ya contados (los pendientes no tienen nada que mostrar).
-            detalleApp = APPS[currentApp];
             detalleLista = datosFiltradosParaExportar.filter(i => i.Registro != null);
             detalleIndice = detalleLista.findIndex(i => i.id === id);
             if (detalleIndice === -1) return;
-            abrirModalDetalle();
+            mostrarDetalleActual();
         }
 
         function navegarDetalle(delta) {
             const nuevo = detalleIndice + delta;
             if (nuevo < 0 || nuevo >= detalleLista.length) return;
             detalleIndice = nuevo;
-            abrirModalDetalle();
+            mostrarDetalleActual();
         }
 
-        function cerrarModalDetalle() {
-            document.getElementById('modal-detalle').classList.add('hidden-view');
-        }
-
-        // Llena y muestra el modal de detalle: mismas "cajas" (borde redondeado + fondo gris +
-        // etiqueta pequeña) que usa el formulario del operador, en modo solo-lectura, más la
-        // foto a la derecha cuando la app la maneja y el registro tiene una.
-        // Agrupa app.exportColumns por su "group" y arma la ficha en el mismo orden en que un
-        // humano razonaría el conteo: dónde está el artículo → qué decía SAP en teoría → qué
-        // hizo el operador al pesar/contar → el resultado (destacado, como el resumen que ve el
-        // operador) → notas de ubicación/observaciones/cuándo se registró.
-        const GRUPOS_DETALLE = [
-            { key: 'ident', titulo: 'Identificación y Ubicación en Almacén' },
-            { key: 'teorico', titulo: 'Stock Teórico (SAP)' },
-            { key: 'conteo', titulo: 'Detalle del Conteo Físico' },
-            { key: 'resultado', titulo: 'Resultado' },
-            { key: 'notas', titulo: 'Ubicación Fija y Observaciones' },
-        ];
-
-        function construirSeccionesDetalle(app, item) {
-            // Los 2 primeros (Código y Descripción) ya van en el encabezado de la ficha, no acá.
-            const campos = app.exportColumns.slice(2);
-            const dif = parseFloat(item['Diferencia'] || 0);
-
-            return GRUPOS_DETALLE.map(({ key, titulo }) => {
-                const camposGrupo = campos.filter(c => c.group === key);
-                if (camposGrupo.length === 0) return '';
-
-                if (key === 'resultado') {
-                    const filas = camposGrupo.map(c => {
-                        const val = c.get(item, true);
-                        const esDiferencia = c.header === 'Diferencia';
-                        const colorDif = Math.abs(dif) < 0.001 ? '#5eead4' : (dif < 0 ? '#fca5a5' : '#5eead4');
-                        return `<tr class="${esDiferencia ? '' : 'bg-teal-50'}" style="${esDiferencia ? 'background:#1f2937' : ''}">
-                            <td class="px-3 py-2 text-xs font-bold uppercase" style="color:${esDiferencia ? '#fff' : '#0f766e'}">${esc(c.header)}</td>
-                            <td class="px-3 py-2 text-right font-mono font-bold text-lg" style="color:${esDiferencia ? colorDif : '#0f766e'}">${esc(val)}</td>
-                        </tr>`;
-                    }).join('');
-                    return `<div>
-                        <h4 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">${titulo}</h4>
-                        <table class="w-full rounded-lg overflow-hidden border border-gray-200"><tbody class="divide-y divide-gray-100">${filas}</tbody></table>
-                    </div>`;
-                }
-
-                const cajas = camposGrupo.map(c => {
-                    const val = c.get(item, true);
-                    return `<div class="border border-gray-200 rounded-lg p-2.5 bg-gray-50">
-                        <label class="smart-label text-[10px]">${esc(c.header)}</label>
-                        <div class="font-mono font-bold text-gray-700 text-sm truncate" title="${esc(val)}">${esc(val) || '-'}</div>
-                    </div>`;
-                }).join('');
-                return `<div>
-                    <h4 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">${titulo}</h4>
-                    <div class="grid grid-cols-2 gap-2">${cajas}</div>
-                </div>`;
-            }).join('');
-        }
-
-        function abrirModalDetalle() {
+        function mostrarDetalleActual() {
             const item = detalleLista[detalleIndice];
             if (!item) return;
-            const app = detalleApp;
-
-            document.getElementById('detalle-codigo').textContent = item['Código de Item'] || '';
-            document.getElementById('detalle-descripcion').textContent = item['Descripción'] || '';
-            document.getElementById('detalle-posicion').textContent = `${detalleIndice + 1} / ${detalleLista.length}`;
-
-            document.getElementById('detalle-campos').innerHTML = construirSeccionesDetalle(app, item);
-
-            const conFoto = !!(app.tieneFoto && item['Foto Balanza']);
-            document.getElementById('detalle-foto-wrap').classList.toggle('hidden-view', !conFoto);
-            if (conFoto) document.getElementById('detalle-foto').src = item['Foto Balanza'];
-
+            const app = APPS[currentApp];
             const hayAnterior = detalleIndice > 0;
             const haySiguiente = detalleIndice < detalleLista.length - 1;
-            const btnAnt = document.getElementById('btn-detalle-anterior');
-            const btnSig = document.getElementById('btn-detalle-siguiente');
-            btnAnt.disabled = !hayAnterior;
-            btnAnt.classList.toggle('opacity-40', !hayAnterior);
-            btnAnt.classList.toggle('cursor-not-allowed', !hayAnterior);
-            btnSig.disabled = !haySiguiente;
-            btnSig.classList.toggle('opacity-40', !haySiguiente);
-            btnSig.classList.toggle('cursor-not-allowed', !haySiguiente);
+            const conFoto = !!(app.tieneFoto && item['Foto Balanza']);
 
-            document.getElementById('modal-detalle').classList.remove('hidden-view');
+            // Solo lo que llenó el operador (grupo "conteo") + el resultado (grupo "resultado",
+            // destacado) + Stock SAP para comparar. Se saltan Almacén/UM/Lote/Ubicación/etc.
+            const dif = parseFloat(item['Diferencia'] || 0);
+            const difColor = Math.abs(dif) < 0.001 ? '#0d9488' : (dif < 0 ? '#ef4444' : '#0d9488');
+            const filasConteo = app.exportColumns.filter(c => c.group === 'conteo').map(c =>
+                `<tr><td style="color:#64748b; padding:3px 0;">${esc(c.header)}</td><td style="text-align:right; font-family:monospace; font-weight:700;">${esc(c.get(item, true))}</td></tr>`
+            ).join('');
+            const filasResultado = app.exportColumns.filter(c => c.group === 'resultado' && c.header !== 'Diferencia').map(c =>
+                `<tr><td style="color:#64748b; padding:3px 0; border-top:1px solid #e2e8f0;">${esc(c.header)}</td><td style="text-align:right; font-family:monospace; font-weight:800; color:#0f766e; border-top:1px solid #e2e8f0;">${esc(c.get(item, true))}</td></tr>`
+            ).join('');
+
+            // Se usan los botones nativos de SweetAlert2 (Cancelar/Confirmar) en vez de botones
+            // HTML propios: con un layout flexible propio, en pantallas angostas terminaban
+            // empujados fuera de la vista por el resto del contenido.
+            Swal.fire({
+                showConfirmButton: true,
+                showCancelButton: true,
+                showCloseButton: true,
+                cancelButtonText: '‹ Anterior',
+                confirmButtonText: 'Siguiente ›',
+                cancelButtonColor: '#334155',
+                confirmButtonColor: '#0d9488',
+                width: 'min(95vw, 780px)',
+                padding: '1.25rem',
+                title: `${detalleIndice + 1} / ${detalleLista.length}`,
+                customClass: { title: 'text-sm' },
+                html: `
+                    <div style="display:flex; gap:16px; flex-wrap:wrap; text-align:left;">
+                        <div style="flex:1 1 220px; min-width:200px;">
+                            <div style="font-family:monospace; font-weight:800; color:#0f766e; font-size:1.1rem;">${esc(item['Código de Item'] || '')}</div>
+                            <div style="color:#64748b; font-size:0.8rem; margin-bottom:10px;">${esc(item['Descripción'] || '')}</div>
+                            <table style="width:100%; font-size:0.85rem;">
+                                ${filasConteo}
+                                ${filasResultado}
+                                <tr><td style="color:#64748b; padding:3px 0;">Stock SAP (teórico)</td><td style="text-align:right; font-family:monospace;">${num3(item['Stock SAP'])}</td></tr>
+                                <tr><td style="color:#64748b; padding:3px 0;">Diferencia</td><td style="text-align:right; font-family:monospace; font-weight:700; color:${difColor};">${dif > 0 ? '+' : ''}${num3(item['Diferencia'])}</td></tr>
+                            </table>
+                        </div>
+                        ${conFoto ? `
+                        <div style="flex:1 1 260px; min-width:220px;">
+                            <img src="${esc(item['Foto Balanza'])}" alt="Foto de la báscula" style="width:100%; max-height:50vh; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0;">
+                        </div>` : ''}
+                    </div>
+                `,
+                didOpen: () => {
+                    if (!hayAnterior) Swal.getCancelButton().disabled = true;
+                    if (!haySiguiente) Swal.getConfirmButton().disabled = true;
+                }
+            }).then((result) => {
+                if (result.dismiss === Swal.DismissReason.cancel) navegarDetalle(-1);
+                else if (result.isConfirmed) navegarDetalle(1);
+            });
         }
 
         async function cargarReportesAdmin() {
