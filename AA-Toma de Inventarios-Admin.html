@@ -25,8 +25,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.31/jspdf.plugin.autotable.min.js"></script>
 
-    <!-- SheetJS: exportar a Excel -->
+    <!-- SheetJS: exportar a Excel (tabla plana de reportes) -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+
+    <!-- ExcelJS: exportar el Repositorio a Excel con fotos incrustadas en las celdas
+         (SheetJS/xlsx no soporta insertar imágenes en la versión libre) -->
+    <script src="https://cdn.jsdelivr.net/npm/exceljs@4.4.0/dist/exceljs.min.js"></script>
 
     <!-- Chart.js: gráfico de avance diario -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.1/dist/chart.umd.min.js"></script>
@@ -269,7 +273,7 @@
                                 <button onclick="cargarReportesAdmin()" class="btn-secondary py-1.5 px-3 text-xs bg-white border border-gray-300 shadow-sm" title="Sincronizar DB"><i class="fa-solid fa-rotate mr-1"></i> Sync</button>
                                 <button onclick="exportarExcel()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-emerald-600 hover:bg-emerald-700 border border-emerald-700"><i class="fa-solid fa-file-excel mr-1"></i> Exportar Excel</button>
                                 <button onclick="exportarPDF()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-red-600 hover:bg-red-700 border border-red-700"><i class="fa-solid fa-file-pdf mr-1"></i> Imprimir PDF</button>
-                                <button onclick="exportarReporteFotografico()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-indigo-600 hover:bg-indigo-700 border border-indigo-700" title="Ficha por artículo con detalle de taras y fotos"><i class="fa-solid fa-images mr-1"></i> Repositorio</button>
+                                <button onclick="exportarRepositorio()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-indigo-600 hover:bg-indigo-700 border border-indigo-700" title="Excel con una fila por artículo: todo el detalle del conteo + su(s) foto(s) incrustada(s) en la celda"><i class="fa-solid fa-table-cells mr-1"></i> Repositorio</button>
                             </div>
                         </div>
                         <div class="flex-grow overflow-auto relative">
@@ -1423,19 +1427,23 @@
             doc.save(`Inventario_${app.label}_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
-        // --- 9B. REPOSITORIO (PDF con una ficha por artículo con el detalle del conteo +
-        // su(s) foto(s)). Pensado para el cierre de un inventario,
-        // cuando ya se contó todo y se necesita un archivo para archivar/enviar.
+        // --- 9B. REPOSITORIO (Excel con una fila por artículo: todo el detalle del conteo
+        // en columnas + su(s) foto(s) incrustada(s) al final de la fila, una celda por foto).
+        // Pensado para el cierre de un inventario, cuando ya se contó todo y se necesita un
+        // archivo para archivar/enviar/filtrar en Excel.
         //
-        // Por qué así:
-        // - Texto real (no imagen escaneada): cualquier lector de PDF puede buscarlo con
-        //   Ctrl+F por código, descripción, ubicación, etc. -- no hace falta OCR ni un índice
-        //   aparte para que sea "fácil de buscar".
+        // Por qué Excel y no PDF:
+        // - El admin lo pidió así: una fila = un artículo, con todos sus datos en horizontal y
+        //   la(s) foto(s) al final de esa misma fila, para poder filtrar/ordenar como cualquier
+        //   otra planilla.
+        // - SheetJS (la librería que ya se usa para "Exportar Excel") no soporta insertar
+        //   imágenes en celdas en su versión libre, así que este reporte usa ExcelJS (también
+        //   gratis) solo para este caso.
         // - Las fotos se insertan tal cual llegan de Storage (ya vienen comprimidas a unos
-        //   25-45 KB desde las apps de conteo) sin recomprimir de nuevo: el PDF pesa
+        //   25-45 KB desde las apps de conteo) sin recomprimir de nuevo: el archivo pesa
         //   básicamente lo que pesan las fotos incluidas, nada más.
         // - Reutiliza los filtros de la pestaña Reportes (estado/grupo/fecha/texto), así el
-        //   admin puede generar un PDF liviano por grupo/día en vez de uno gigante con todo.
+        //   admin puede generar un Excel liviano por grupo/día en vez de uno gigante con todo.
 
         // Descarga N URLs con un máximo de `limite` peticiones en simultáneo (no todas a la
         // vez, para no saturar la conexión ni el navegador con miles de fotos).
@@ -1468,17 +1476,7 @@
             }
         }
 
-        function dibujarFotoEnCaja(doc, dataUrl, x, y, w, h) {
-            if (!dataUrl) return;
-            try {
-                doc.addImage(dataUrl, 'JPEG', x, y, w, h, undefined, 'FAST');
-            } catch (e) {
-                // Por si alguna foto vieja se subió como PNG en vez de JPEG.
-                try { doc.addImage(dataUrl, 'PNG', x, y, w, h, undefined, 'FAST'); } catch (e2) {}
-            }
-        }
-
-        async function exportarReporteFotografico() {
+        async function exportarRepositorio() {
             // TODA la función va envuelta en un try/catch: antes, si algo fallaba ANTES del
             // diálogo de confirmación (por ejemplo, un dato inesperado al contar las fotos), la
             // promesa se rechazaba sin que nadie la capturara -- el botón parecía "no hacer nada"
@@ -1506,17 +1504,17 @@
                     title: `Repositorio - ${app.label}`,
                     html: `
                         <div style="text-align:left; font-size:13px; color:#475569; line-height:1.5;">
-                            <p>Genera una ficha por artículo con el detalle del conteo${app.tieneFoto ? ' y su(s) foto(s)' : ''}, respetando los filtros de la tabla actual (estado, grupo, fecha, texto).</p>
+                            <p>Genera un Excel con una fila por artículo (todo el detalle del conteo en columnas${app.tieneFoto ? ' + su(s) foto(s) incrustada(s) al final de la fila' : ''}), respetando los filtros de la tabla actual (estado, grupo, fecha, texto).</p>
                             <table style="width:100%; margin-top:10px; font-size:12.5px; border-collapse:collapse;">
                                 <tr><td style="padding:3px 0;">Artículos a incluir:</td><td style="text-align:right; font-weight:700;">${items.length}</td></tr>
                                 ${app.tieneFoto ? `<tr><td style="padding:3px 0;">Con foto adjunta:</td><td style="text-align:right; font-weight:700;">${itemsConFoto}</td></tr>
-                                <tr><td style="padding:3px 0;">Peso estimado del PDF:</td><td style="text-align:right; font-weight:700;">~${pesoEstimadoMB} MB</td></tr>` : ''}
+                                <tr><td style="padding:3px 0;">Peso estimado del Excel:</td><td style="text-align:right; font-weight:700;">~${pesoEstimadoMB} MB</td></tr>` : ''}
                             </table>
                             ${items.length > 400 ? `<p style="margin-top:10px; color:#b45309; font-size:12px;"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Son bastantes artículos: descargar las fotos puede tardar varios minutos. Para un archivo más liviano, filtra por Grupo o Fecha antes de generar.</p>` : ''}
                         </div>`,
                     icon: items.length > 400 ? 'warning' : 'question',
                     showCancelButton: true,
-                    confirmButtonText: 'Generar PDF',
+                    confirmButtonText: 'Generar Excel',
                     cancelButtonText: 'Cancelar',
                     confirmButtonColor: '#0d9488',
                     width: 460
@@ -1544,20 +1542,20 @@
                         if (el) el.textContent = `${completadas} / ${listaUrls.length}`;
                     });
                 } else {
-                    Swal.fire({ title: 'Generando PDF...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                    Swal.fire({ title: 'Generando Excel...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
                 }
 
-                Swal.update({ title: 'Armando fichas del PDF...', html: '<div>Esto puede tardar unos segundos...</div>' });
-                await new Promise(r => setTimeout(r, 30)); // deja pintar el mensaje antes de bloquear el hilo con jsPDF
+                Swal.update({ title: 'Armando el Excel...', html: '<div>Esto puede tardar unos segundos...</div>' });
+                await new Promise(r => setTimeout(r, 30)); // deja pintar el mensaje antes de bloquear el hilo
 
-                generarPdfReporteFotografico(app, items, incluirFotos, mapaFotos);
+                await generarExcelRepositorio(app, items, incluirFotos, mapaFotos);
 
                 Swal.close();
             } catch (err) {
-                console.error('Error generando el Repositorio (PDF):', err);
+                console.error('Error generando el Repositorio (Excel):', err);
                 Swal.fire({
                     icon: 'error',
-                    title: 'No se pudo generar el PDF',
+                    title: 'No se pudo generar el Excel',
                     html: `<div style="text-align:left; font-size:12.5px;">
                         <p>${esc(err && err.message ? err.message : String(err))}</p>
                         <p style="margin-top:8px; color:#64748b;">Si el error menciona "fetch" o "CORS", puede ser una foto que el navegador no pudo descargar (revisa que el archivo se esté abriendo desde un servidor http(s) y no directamente como archivo local). Si el problema persiste, intenta con menos artículos (filtra por Grupo o Fecha) y avísame el mensaje exacto.</p>
@@ -1566,166 +1564,104 @@
             }
         }
 
-        // Recibe los datos ya listos (items filtrados + fotos ya descargadas en base64) y solo
-        // se encarga de dibujar y guardar el PDF -- separado de exportarReporteFotografico() para
-        // que el try/catch de arriba cubra cualquier error de dibujo (no solo la descarga).
-        //
-        // Layout a 2 columnas por hoja (antes era 1 sola, ocupando todo el ancho): márgenes
-        // angostos, una sola línea por descripción/observación (en vez de dejarlas envolver a
-        // varias líneas) y la foto en una franja chica debajo del texto -- solo cuando el
-        // artículo realmente tiene foto, en vez de reservar siempre un recuadro "Sin foto".
-        // Como cada línea de texto está acotada a un renglón fijo, el alto de la ficha se puede
-        // calcular exacto de antemano (no es una estimación), así no hay riesgo de que el dibujo
-        // se pase del espacio que se le asignó.
-        function generarPdfReporteFotografico(app, items, incluirFotos, mapaFotos) {
-            const { jsPDF } = window.jspdf;
-            const doc = new jsPDF('portrait', 'mm', 'a4');
-            const pageWidth = doc.internal.pageSize.width;
-            const pageHeight = doc.internal.pageSize.height;
-            const margenX = 9;
-            const colGap = 5;
-            const colWidth = (pageWidth - margenX * 2 - colGap) / 2;
-            const labelW = 26; // ancho reservado para "Etiqueta:" antes del valor
-            const lineH = 3.7;
-            const topY = 20;
-            const bottomLimit = pageHeight - 9;
-            const generado = new Date().toLocaleString('es-PE');
-            const infoFiltros = obtenerInfoFiltrosExport();
+        // Recibe los datos ya listos (items filtrados + fotos ya descargadas en base64) y arma
+        // el Excel con ExcelJS: una fila por artículo, con todas las columnas de app.exportColumns
+        // más una columna por foto al final (hasta 4), con la imagen incrustada en esa celda.
+        // Separado de exportarRepositorio() para que el try/catch de arriba cubra cualquier
+        // error al armar el archivo (no solo la descarga de fotos).
+        async function generarExcelRepositorio(app, items, incluirFotos, mapaFotos) {
             const activarAjuste = ajustarDiferenciasActivo && app.tieneTolerancia;
-            const tramosPdf = configuracionApp.tramos_tolerancia || [];
-            const camposConteo = app.exportColumns.filter(c => c.group === 'conteo' || c.group === 'resultado');
+            const tramosXls = configuracionApp.tramos_tolerancia || [];
 
-            function dibujarEncabezadoFicha() {
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(10.5); doc.setTextColor(15, 23, 42);
-                doc.text(`REPOSITORIO - ${app.label.toUpperCase()}`, margenX, 8);
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(6.8); doc.setTextColor(107, 114, 128);
-                doc.text(`Generado: ${generado}   |   Grupo: ${infoFiltros.grupo}   |   Filtro: ${infoFiltros.filtro}   |   Fecha: ${infoFiltros.fecha}`, margenX, 12.5);
-                doc.setDrawColor(203, 213, 225); doc.setLineWidth(0.3);
-                doc.line(margenX, 15.5, pageWidth - margenX, 15.5);
+            // Cuántas columnas de foto hacen falta: el máximo de fotos que tenga un solo
+            // artículo entre los incluidos (con tope en 4, igual que en el detalle del admin).
+            let maxFotos = 0;
+            if (incluirFotos && app.getFotos) {
+                items.forEach(it => {
+                    const n = app.getFotos(it).filter(u => mapaFotos.has(u)).length;
+                    if (n > maxFotos) maxFotos = n;
+                });
             }
+            maxFotos = Math.min(maxFotos, 4);
 
-            // Alto exacto que va a ocupar la ficha (debe usar los mismos números que dibujarFicha).
-            function altoDeFicha(item, fotos) {
-                const lineCount = 1 /* Stock SAP */ + camposConteo.length + 2 /* Ubicación + Inv/Fecha */;
-                let alto = 4.6 /* código */ + 4.2 /* descripción */ + lineCount * lineH;
-                if (item['Observaciones']) alto += lineH;
-                if (fotos.length > 0) alto += 1 + 19;
-                return alto + 2.5; // pequeño margen antes de la línea divisoria
-            }
+            const workbook = new ExcelJS.Workbook();
+            workbook.creator = 'ART ATLAS SRL';
+            workbook.created = new Date();
+            const sheet = workbook.addWorksheet(`Repositorio ${app.label}`.slice(0, 31));
 
-            function dibujarFicha(x, y, item, fotos) {
-                let cy = y;
+            const columnasTexto = ['Inventariador', 'Grupo de Trabajo', 'Nro', ...app.exportColumns.map(c => c.header), 'Registro'];
+            const columnasFoto = Array.from({ length: maxFotos }, (_, i) => maxFotos === 1 ? 'Foto' : `Foto ${i + 1}`);
+            const nColsTexto = columnasTexto.length; // última columna de texto = "Registro"
 
-                doc.setFont('helvetica', 'bold'); doc.setFontSize(9); doc.setTextColor(15, 118, 110);
-                doc.text(String(item['Código de Item'] || 'Sin Código'), x, cy + 3.4);
+            sheet.addRow([...columnasTexto, ...columnasFoto]);
+            const filaEncabezado = sheet.getRow(1);
+            filaEncabezado.height = 20;
+            filaEncabezado.eachCell(celda => {
+                celda.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+                celda.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF0F172A' } };
+                celda.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+            });
+            sheet.views = [{ state: 'frozen', ySplit: 1 }];
 
-                const badges = [];
-                if (item['Lote']) badges.push(`Lote: ${item['Lote']}`);
-                if (item['Diseño']) badges.push(`Diseño: ${item['Diseño']}`);
-                if (badges.length) {
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(6.3); doc.setTextColor(107, 114, 128);
-                    doc.text(badges.join('  •  '), x + colWidth, cy + 3.4, { align: 'right' });
-                }
-                cy += 4.6;
+            sheet.getColumn(1).width = 18; // Inventariador
+            sheet.getColumn(2).width = 14; // Grupo de Trabajo
+            sheet.getColumn(3).width = 8; // Nro
+            app.exportColumns.forEach((c, i) => {
+                sheet.getColumn(4 + i).width = Math.max(12, Math.min(28, c.header.length + 6));
+            });
+            sheet.getColumn(nColsTexto).width = 18; // Registro
+            for (let f = 0; f < maxFotos; f++) sheet.getColumn(nColsTexto + 1 + f).width = 15;
 
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(7.2); doc.setTextColor(51, 65, 85);
-                const descLinea = doc.splitTextToSize(String(item['Descripción'] || ''), colWidth)[0] || '';
-                doc.text(descLinea, x, cy + 2.6);
-                cy += 4.2;
-
-                const imprimirLinea = (label, valor, destacar) => {
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139);
-                    doc.text(label, x, cy + 2.5);
-                    doc.setFont('helvetica', 'bold');
-                    if (destacar) {
-                        const num = parseFloat(String(valor).replace(/[^0-9.-]/g, '')) || 0;
-                        doc.setTextColor(13, 148, 136);
-                        if (num < 0) doc.setTextColor(220, 38, 38);
-                    } else {
-                        doc.setTextColor(30, 41, 59);
-                    }
-                    const valorLinea = doc.splitTextToSize(String(valor), colWidth - labelW)[0] || '';
-                    doc.text(valorLinea, x + labelW, cy + 2.5);
-                    cy += lineH;
-                };
-
+            items.forEach(item => {
                 let overrides = null;
                 if (activarAjuste) {
-                    const aj = calcularAjuste(item, app, tramosPdf);
+                    const aj = calcularAjuste(item, app, tramosXls);
                     overrides = { 'Tara Conos': aj.taraConosAj, 'Tara Bolsa': aj.taraBolsaAj, 'Peso Neto': aj.pesoNetoAj, 'Diferencia': aj.diferenciaAj };
                 }
+                const valoresColumnas = app.exportColumns.map(c =>
+                    (overrides && (c.header in overrides)) ? formatearValorAjustado(c.header, overrides[c.header]) : c.get(item, true)
+                );
+                const fila = [
+                    item['Inventariador'] || '-',
+                    item['Grupo de Trabajo'] || '-',
+                    item['Nro'] || '-',
+                    ...valoresColumnas,
+                    fmtFecha(item['Registro'])
+                ];
+                const filaAgregada = sheet.addRow(fila);
+                const rowIndex = filaAgregada.number; // 1-based
+                filaAgregada.alignment = { vertical: 'middle', wrapText: false };
 
-                imprimirLinea('Stock SAP:', num3(item['Stock SAP']), false);
-                camposConteo.forEach(c => {
-                    const valor = (overrides && (c.header in overrides)) ? formatearValorAjustado(c.header, overrides[c.header]) : c.get(item, true);
-                    imprimirLinea(`${c.header}:`, valor, c.header === 'Diferencia');
-                });
-                imprimirLinea('Ubicación:', item['Ubicación'] || '-', false);
-                const fechaCorta = String(item['Registro'] || '').replace('T', ' ').split('.')[0].slice(0, 16);
-                imprimirLinea('Inv. / Fecha:', `${item['Inventariador'] || '-'} (${fechaCorta})`, false);
-
-                if (item['Observaciones']) {
-                    doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(100, 116, 139);
-                    doc.text('Obs:', x, cy + 2.5);
-                    doc.setTextColor(30, 41, 59);
-                    const obsLinea = doc.splitTextToSize(String(item['Observaciones']), colWidth - 9)[0] || '';
-                    doc.text(obsLinea, x + 9, cy + 2.5);
-                    cy += lineH;
-                }
-
-                if (fotos.length > 0) {
-                    cy += 1;
-                    const fw = Math.min(colWidth * 0.55, 55);
-                    dibujarFotoEnCaja(doc, mapaFotos.get(fotos[0]), x, cy, fw, 19);
-                    if (fotos.length > 1) {
-                        doc.setFont('helvetica', 'normal'); doc.setFontSize(6.3); doc.setTextColor(107, 114, 128);
-                        doc.text(`+${fotos.length - 1} foto(s) más`, x + fw + 3, cy + 10);
-                    }
-                    cy += 19;
-                }
-
-                cy += 2.5;
-                doc.setDrawColor(226, 232, 240); doc.setLineWidth(0.2);
-                doc.line(x, cy - 1.2, x + colWidth, cy - 1.2);
-            }
-
-            dibujarEncabezadoFicha();
-            let columnasY = [topY, topY];
-            let colPreferida = 0;
-
-            for (let idx = 0; idx < items.length; idx++) {
-                const item = items[idx];
                 const fotos = incluirFotos && app.getFotos ? app.getFotos(item).filter(u => mapaFotos.has(u)) : [];
-                const alto = altoDeFicha(item, fotos);
-
-                let col = colPreferida;
-                if (columnasY[col] + alto > bottomLimit) {
-                    const otra = 1 - col;
-                    if (columnasY[otra] + alto <= bottomLimit) {
-                        col = otra;
-                    } else {
-                        doc.addPage();
-                        dibujarEncabezadoFicha();
-                        columnasY = [topY, topY];
-                        col = 0;
-                    }
+                if (fotos.length > 0) {
+                    filaAgregada.height = 78;
+                    fotos.slice(0, maxFotos).forEach((url, fIdx) => {
+                        const dataUrl = mapaFotos.get(url);
+                        if (!dataUrl) return;
+                        const base64 = dataUrl.split(',')[1] || '';
+                        if (!base64) return;
+                        const imgId = workbook.addImage({ base64, extension: 'jpeg' });
+                        sheet.addImage(imgId, {
+                            tl: { col: nColsTexto + fIdx, row: rowIndex - 1 },
+                            ext: { width: 95, height: 72 },
+                            editAs: 'oneCell'
+                        });
+                    });
+                } else {
+                    filaAgregada.height = 16;
                 }
+            });
 
-                const x = margenX + col * (colWidth + colGap);
-                const y = columnasY[col];
-                dibujarFicha(x, y, item, fotos);
-                columnasY[col] = y + alto;
-                colPreferida = 1 - col;
-            }
-
-            const totalPaginas = doc.internal.getNumberOfPages();
-            for (let i = 1; i <= totalPaginas; i++) {
-                doc.setPage(i);
-                doc.setFont('helvetica', 'normal'); doc.setFontSize(7); doc.setTextColor(107, 114, 128);
-                doc.text(`Página ${i} de ${totalPaginas}`, pageWidth - margenX, 8, { align: 'right' });
-            }
-
-            doc.save(`Repositorio_${app.label}_${new Date().toISOString().split('T')[0]}.pdf`);
+            const buffer = await workbook.xlsx.writeBuffer();
+            const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Repositorio_${app.label}_${new Date().toISOString().split('T')[0]}.xlsx`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
         }
 
         function exportarExcel() {
