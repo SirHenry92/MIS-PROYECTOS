@@ -261,7 +261,11 @@
                                     <input type="text" id="filtroReporte" placeholder="Buscar texto..." class="smart-input pl-8 py-1.5 text-xs w-full bg-white">
                                 </div>
                             </div>
-                            <div class="flex gap-2 w-full md:w-auto justify-end">
+                            <div class="flex gap-2 w-full md:w-auto justify-end items-center">
+                                <label id="wrap-ajustar-diferencias" class="hidden-view flex items-center gap-1.5 text-xs font-semibold text-gray-600 bg-white border border-gray-300 rounded-lg px-2.5 py-1.5 cursor-pointer" title="Al exportar, ajusta la tara (bolsa o, si no hay, cono) para que la diferencia calce con SAP, cuando cae dentro de los rangos de tolerancia configurados">
+                                    <input type="checkbox" id="chk-ajustar-diferencias" onchange="onToggleAjustarDiferencias()" class="w-3.5 h-3.5 accent-teal-600 mr-1">
+                                    Ajustar Diferencias
+                                </label>
                                 <button onclick="cargarReportesAdmin()" class="btn-secondary py-1.5 px-3 text-xs bg-white border border-gray-300 shadow-sm" title="Sincronizar DB"><i class="fa-solid fa-rotate mr-1"></i> Sync</button>
                                 <button onclick="exportarExcel()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-emerald-600 hover:bg-emerald-700 border border-emerald-700"><i class="fa-solid fa-file-excel mr-1"></i> Exportar Excel</button>
                                 <button onclick="exportarPDF()" class="btn-primary py-1.5 px-3 text-xs shadow-sm bg-red-600 hover:bg-red-700 border border-red-700"><i class="fa-solid fa-file-pdf mr-1"></i> Imprimir PDF</button>
@@ -378,6 +382,26 @@
                         </button>
                     </div>
 
+                    <div id="card-tolerancia" class="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 hidden-view">
+                        <h2 class="text-lg font-bold text-gray-800 mb-1">Rangos de Tolerancia (Diferencia Aceptada)</h2>
+                        <p class="text-sm text-gray-500 mb-4">Definen cuándo una diferencia se considera aceptable según el peso neto del artículo. Se usan al exportar con "Ajustar Diferencias" activado. No aplica a Avíos.</p>
+                        <div class="overflow-x-auto">
+                            <table class="w-full text-sm">
+                                <thead>
+                                    <tr class="text-[10px] text-gray-400 uppercase font-bold tracking-wider text-left">
+                                        <th class="pb-2 pr-3">Tramo</th>
+                                        <th class="pb-2 pr-3">Peso Neto hasta (kg)</th>
+                                        <th class="pb-2">Tolerancia (± kg)</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="cuerpo-tramos-tolerancia"></tbody>
+                            </table>
+                        </div>
+                        <button onclick="guardarTramosTolerancia()" id="btn-guardar-tramos" class="btn-primary py-2 px-4 text-sm mt-4">
+                            <i class="fa-solid fa-floppy-disk mr-2"></i> Guardar Rangos
+                        </button>
+                    </div>
+
                     <div class="bg-white border border-red-200 shadow-sm rounded-2xl p-6">
                         <h2 class="text-lg font-bold text-red-700 mb-1">Zona de Peligro</h2>
                         <p class="text-sm text-gray-500 mb-4">Borra permanentemente todos los registros del maestro y los conteos de esta app. No afecta a las otras 3 apps.</p>
@@ -410,7 +434,7 @@
             avios: {
                 label: 'Avíos', icon: 'fa-solid fa-shapes',
                 tabla: 'avios', tablaPersonal: 'inventariadores_avios', tablaConfig: 'avios_config',
-                exigeFoto: false,
+                exigeFoto: false, tieneTolerancia: false,
                 importFields: [
                     { db: 'Nro', aliases: ['nro'] },
                     { db: 'Grupo de Articulos', aliases: ['grupo de articulos', 'grupo'] },
@@ -456,7 +480,7 @@
             hilado: {
                 label: 'Hilado', icon: 'fa-solid fa-boxes-stacked',
                 tabla: 'hilado', tablaPersonal: 'inventariadores_hilado', tablaConfig: 'hilado_config',
-                exigeFoto: true,
+                exigeFoto: true, tieneTolerancia: true, tieneConos: true,
                 importFields: [
                     { db: 'Nro', aliases: ['nro'] },
                     { db: 'Grupo de Articulos', aliases: ['grupo de articulos', 'grupo'] },
@@ -500,7 +524,7 @@
             telas: {
                 label: 'Telas', icon: 'fa-solid fa-shirt',
                 tabla: 'telas', tablaPersonal: 'inventariadores_telas', tablaConfig: 'telas_config',
-                exigeFoto: false,
+                exigeFoto: false, tieneTolerancia: true, tieneConos: false,
                 importFields: [
                     { db: '#', aliases: ['n', 'numero'] },
                     { db: 'Nro', aliases: ['nro'] },
@@ -543,7 +567,7 @@
             desperdicios: {
                 label: 'Desperdicios', icon: 'fa-solid fa-recycle',
                 tabla: 'desperdicios', tablaPersonal: 'inventariadores_desperdicios', tablaConfig: 'desperdicios_config',
-                exigeFoto: false,
+                exigeFoto: false, tieneTolerancia: true, tieneConos: true,
                 importFields: [
                     { db: '#', aliases: ['n', 'numero'] },
                     { db: 'Nro', aliases: ['nro'] },
@@ -593,6 +617,9 @@
         let datosPersonal = [];
         let csvDataToUpload = [];
         let configuracionApp = { ocultar_stock_sap: true, exigir_foto_balanza: false };
+        // Si está activo, exportarExcel/exportarPDF usan calcularAjuste() para absorber
+        // diferencias aceptadas en la tara antes de armar las filas.
+        let ajustarDiferenciasActivo = false;
 
         // --- 3. UTILIDADES COMPARTIDAS ---
         function esc(valor) {
@@ -689,7 +716,12 @@
             document.getElementById('txt-carga-app').textContent = `Sube el archivo CSV para cargar la base de artículos pendientes a contar (${APPS[key].label}).`;
             document.getElementById('txt-personal-app').textContent = `Nuevo Operador (${APPS[key].label})`;
             document.getElementById('card-foto-balanza').classList.toggle('hidden-view', !APPS[key].exigeFoto);
+            document.getElementById('card-tolerancia').classList.toggle('hidden-view', !APPS[key].tieneTolerancia);
+            document.getElementById('wrap-ajustar-diferencias').classList.toggle('hidden-view', !APPS[key].tieneTolerancia);
+            ajustarDiferenciasActivo = false;
+            document.getElementById('chk-ajustar-diferencias').checked = false;
             limpiarArchivo();
+            cargarConfiguracion(); // asegura tener tramos_tolerancia listos aunque no se visite "Configuración"
             switchSubTab(currentSubTab);
         }
 
@@ -704,7 +736,7 @@
             else if (tab === 'config') cargarConfiguracion();
         }
 
-        // --- 6. CONFIGURACIÓN (ocultar SAP / exigir foto / vaciar BD) ---
+        // --- 6. CONFIGURACIÓN (ocultar SAP / exigir foto / tolerancia / vaciar BD) ---
         async function cargarConfiguracion() {
             const app = APPS[currentApp];
             try {
@@ -716,6 +748,94 @@
             }
             actualizarBotonToggleSap();
             actualizarBotonToggleFoto();
+            if (app.tieneTolerancia) renderizarTramosTolerancia();
+        }
+
+        // --- Tramos de tolerancia para "Diferencia Aceptada" (Hilado/Telas/Desperdicios) ---
+        function renderizarTramosTolerancia() {
+            const tramos = configuracionApp.tramos_tolerancia || [];
+            document.getElementById('cuerpo-tramos-tolerancia').innerHTML = tramos.map((t, i) => `
+                <tr class="border-t border-gray-100">
+                    <td class="py-2 pr-3 text-gray-500 text-xs">${i + 1}</td>
+                    <td class="py-2 pr-3"><input type="number" step="0.01" min="0" id="tramo-hasta-${i}" value="${t.hasta}" class="smart-input py-1.5 text-sm w-32"></td>
+                    <td class="py-2"><input type="number" step="0.01" min="0" id="tramo-tol-${i}" value="${t.tolerancia}" class="smart-input py-1.5 text-sm w-32"></td>
+                </tr>
+            `).join('');
+        }
+
+        async function guardarTramosTolerancia() {
+            const app = APPS[currentApp];
+            const tramos = (configuracionApp.tramos_tolerancia || []).map((_, i) => ({
+                hasta: parseFloat(document.getElementById(`tramo-hasta-${i}`).value) || 0,
+                tolerancia: parseFloat(document.getElementById(`tramo-tol-${i}`).value) || 0
+            }));
+            const btn = document.getElementById('btn-guardar-tramos');
+            btn.disabled = true;
+            try {
+                const { error } = await _supabase.from(app.tablaConfig).update({ tramos_tolerancia: tramos }).eq('id', 1);
+                if (error) throw error;
+                configuracionApp.tramos_tolerancia = tramos;
+                Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Rangos actualizados', showConfirmButton: false, timer: 1200 });
+            } catch (error) {
+                Swal.fire('Error', error.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        // Clasifica según los tramos, igual que la fórmula de Excel: si el peso neto está vacío
+        // o es 0 no hay nada que evaluar; si no, se busca el primer tramo cuyo "hasta" cubre el
+        // peso neto y se compara la diferencia contra su tolerancia. Si el peso neto se pasa del
+        // último tramo, queda "Fuera de Margen" directamente (igual que el SI() de Excel, que no
+        // tiene más ramas que cubran ese caso).
+        function evaluarDiferenciaAceptada(pesoNeto, diferencia, tramos) {
+            if (!pesoNeto) return null;
+            if (!tramos || tramos.length === 0) return null;
+            const absDif = Math.abs(diferencia);
+            for (const t of tramos) {
+                if (pesoNeto <= t.hasta) {
+                    return absDif <= t.tolerancia ? 'Diferencia Aceptada' : 'Fuera de Margen';
+                }
+            }
+            return 'Fuera de Margen';
+        }
+
+        // Si la diferencia es aceptada, se absorbe en la tara de las bolsas (o, si el artículo no
+        // llevó bolsas, en la de los conos) para que el peso neto ajustado calce con Stock SAP.
+        // Si no es aceptada, se deja todo igual que se registró.
+        function calcularAjuste(item, app, tramos) {
+            const pesoBruto = parseFloat(item['Peso Bruto'] || 0);
+            const taraConos = parseFloat(item['Tara Conos'] ?? item['Tara Conos Inv'] ?? 0);
+            const taraBolsa = parseFloat(item['Tara Bolsa'] ?? item['Tara Bolsa Inv'] ?? 0);
+            const pesoNeto = parseFloat(item['Peso Neto'] ?? item['Peso Neto Inv'] ?? 0);
+            const stockSap = parseFloat(item['Stock SAP'] || 0);
+            const diferencia = pesoNeto - stockSap;
+            const estado = evaluarDiferenciaAceptada(pesoNeto, diferencia, tramos);
+
+            let taraConosAj = taraConos, taraBolsaAj = taraBolsa, pesoNetoAj = pesoNeto, diferenciaAj = diferencia;
+
+            if (estado === 'Diferencia Aceptada') {
+                if (app.tieneConos && taraBolsa <= 0 && taraConos > 0) {
+                    taraConosAj = Math.max(pesoBruto - taraBolsa - stockSap, 0);
+                } else {
+                    taraBolsaAj = Math.max(pesoBruto - taraConos - stockSap, 0);
+                }
+                pesoNetoAj = pesoBruto - taraConosAj - taraBolsaAj;
+                diferenciaAj = pesoNetoAj - stockSap;
+            }
+
+            return { estado, taraConos, taraConosAj, taraBolsa, taraBolsaAj, pesoNeto, pesoNetoAj, diferencia, diferenciaAj };
+        }
+
+        // Da el mismo formato que ya usan los getters de exportColumns (num3 con signo para
+        // Diferencia) para que el valor ajustado no se note distinto del resto de la tabla.
+        function formatearValorAjustado(header, valor) {
+            if (header === 'Diferencia') return (valor > 0 ? '+' : '') + num3(valor);
+            return num3(valor);
+        }
+
+        function onToggleAjustarDiferencias() {
+            ajustarDiferenciasActivo = document.getElementById('chk-ajustar-diferencias').checked;
         }
 
         function actualizarBotonToggleSap() {
@@ -1153,10 +1273,24 @@
                 doc.line(8, 24, pageWidth - 8, 24);
             }
 
+            // "Ajustar Diferencias": el PDF NO agrega columnas nuevas ni cambia títulos, solo
+            // reemplaza el valor de Tara Conos/Tara Bolsa/Peso Neto/Diferencia por el ajustado
+            // cuando la diferencia cae dentro del rango de tolerancia configurado.
+            const activarAjuste = ajustarDiferenciasActivo && app.tieneTolerancia;
+            const tramosPdf = configuracionApp.tramos_tolerancia || [];
+
             const head = [['#', ...app.exportColumns.map(c => c.header)].map(h => ({ content: h }))];
             const bodyFilas = datosFiltradosParaExportar.map(e => {
                 const completado = e.Registro != null;
-                return [e['Nro'] || '-', ...app.exportColumns.map(c => c.get(e, completado))];
+                let overrides = null;
+                if (activarAjuste && completado) {
+                    const aj = calcularAjuste(e, app, tramosPdf);
+                    overrides = { 'Tara Conos': aj.taraConosAj, 'Tara Bolsa': aj.taraBolsaAj, 'Peso Neto': aj.pesoNetoAj, 'Diferencia': aj.diferenciaAj };
+                }
+                return [e['Nro'] || '-', ...app.exportColumns.map(c => {
+                    if (overrides && (c.header in overrides)) return formatearValorAjustado(c.header, overrides[c.header]);
+                    return c.get(e, completado);
+                })];
             });
 
             doc.autoTable({
@@ -1193,7 +1327,17 @@
 
             const infoFiltros = obtenerInfoFiltrosExport();
             const generado = new Date().toLocaleString('es-PE');
-            const encabezadoCols = ['Inventariador', 'Grupo de Trabajo', '#', ...app.exportColumns.map(c => c.header)];
+
+            // "Ajustar Diferencias": a diferencia del PDF, el Excel SÍ agrega columnas nuevas al
+            // final (auditoría): si la diferencia fue aceptada o no, y la tara/peso neto/diferencia
+            // original vs. ajustada, para que quede el detalle completo del cálculo.
+            const activarAjuste = ajustarDiferenciasActivo && app.tieneTolerancia;
+            const tramosXls = configuracionApp.tramos_tolerancia || [];
+            const colsAjuste = activarAjuste
+                ? ['Diferencia Aceptada', ...(app.tieneConos ? ['Tara Conos Ajustada'] : []), 'Tara Bolsa Ajustada', 'Peso Neto Ajustado', 'Diferencia Ajustada']
+                : [];
+
+            const encabezadoCols = ['Inventariador', 'Grupo de Trabajo', '#', ...app.exportColumns.map(c => c.header), ...colsAjuste];
             const encabezado = [
                 ['ART ATLAS SRL - RUC: 20413770204'],
                 [`TOMA DE INVENTARIO - ${app.label.toUpperCase()}`],
@@ -1204,12 +1348,27 @@
 
             const filas = datosFiltradosParaExportar.map(e => {
                 const completado = e.Registro != null;
-                return [
+                const fila = [
                     e['Inventariador'] || '-',
                     e['Grupo de Trabajo'] || '-',
                     e['Nro'] || '-',
                     ...app.exportColumns.map(c => c.get(e, completado))
                 ];
+                if (activarAjuste) {
+                    if (!completado) {
+                        fila.push('-', ...(app.tieneConos ? ['-'] : []), '-', '-', '-');
+                    } else {
+                        const aj = calcularAjuste(e, app, tramosXls);
+                        fila.push(
+                            aj.estado || '-',
+                            ...(app.tieneConos ? [num3(aj.taraConosAj)] : []),
+                            num3(aj.taraBolsaAj),
+                            num3(aj.pesoNetoAj),
+                            formatearValorAjustado('Diferencia', aj.diferenciaAj)
+                        );
+                    }
+                }
+                return fila;
             });
 
             const hoja = XLSX.utils.aoa_to_sheet([...encabezado, ...filas]);
