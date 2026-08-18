@@ -1150,8 +1150,21 @@
 
             if (!password) return;
 
+            // La contraseña se valida en el servidor ANTES de desbloquear ningún campo. Antes
+            // se desbloqueaba con cualquier contraseña y recién se validaba al guardar -- eso
+            // dejaba tocar/explorar todos los campos protegidos (incluido tipo de cono/bolsa)
+            // sin haber acertado la clave.
+            Swal.fire({ title: 'Verificando...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+            const { data: esValida, error: errorVerif } = await _supabase.rpc('verificar_password_modificacion', { p_password: password });
+            if (errorVerif || !esValida) {
+                Swal.fire('Contraseña incorrecta', 'No se desbloqueó ningún campo.', 'error');
+                return;
+            }
+            Swal.close();
+
             // Se guarda para enviarla junto con los datos al guardar: el servidor valida
-            // contraseña + datos en una sola operación atómica (función modificar_conteo_desperdicios).
+            // contraseña + datos en una sola operación atómica también en ese paso (función
+            // modificar_conteo_desperdicios).
             claveModificacionPendiente = password;
 
             const inputs = ['nro_conos', 'tipo_cono', 'nro_bolsas', 'tipo_bolsa', 'peso_bruto', 'ubicacion', 'observaciones', 'bloqueo'];
