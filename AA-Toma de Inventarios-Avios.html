@@ -439,8 +439,11 @@
         // decenas de KB sin perder de vista el artículo fotografiado.
         function comprimirImagenAvio(file) {
             return new Promise((resolve, reject) => {
-                const MAX_LADO = 800;
-                const TARGET_KB = 60;
+                // Avíos tiene ~5,200 artículos (los más numerosos de las 4 apps) y la foto es
+                // opcional, así que cada una debe pesar poco para no comerse el plan gratuito
+                // de Storage (1GB, compartido con Hilado) si muchos operadores la adjuntan.
+                const MAX_LADO = 600;
+                const TARGET_KB = 30;
                 const img = new Image();
                 const url = URL.createObjectURL(file);
                 img.onload = async () => {
@@ -462,8 +465,8 @@
                         const ctx = canvas.getContext('2d');
                         ctx.drawImage(img, 0, 0, width, height);
 
-                        let blob = await canvasToBlob(canvas, 0.7);
-                        for (const calidad of [0.55, 0.4]) {
+                        let blob = await canvasToBlob(canvas, 0.55);
+                        for (const calidad of [0.4, 0.28]) {
                             if (blob.size / 1024 <= TARGET_KB) break;
                             blob = await canvasToBlob(canvas, calidad);
                         }
