@@ -268,11 +268,11 @@
                             <div class="flex flex-col sm:flex-row gap-3 bg-gray-50 p-3 rounded-lg border border-gray-100 mt-auto">
                                 <div class="flex-1">
                                     <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-location-dot mr-1"></i> Ubicación Fija <span class="text-red-500">*</span></label>
-                                    <input type="text" id="ubicacion" required class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Estante A">
+                                    <input type="text" id="ubicacion" required oninput="this.value = this.value.toUpperCase()" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Estante A">
                                 </div>
                                 <div class="flex-1">
                                     <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i> Observaciones</label>
-                                    <input type="text" id="observaciones" class="smart-input py-1.5 px-2 text-sm" placeholder="Opcional">
+                                    <input type="text" id="observaciones" oninput="this.value = this.value.toUpperCase()" class="smart-input py-1.5 px-2 text-sm" placeholder="Opcional">
                                 </div>
                             </div>
                         </div>
@@ -1007,7 +1007,7 @@
             calcularModal(); 
 
             // La ubicación fija es obligatoria para poder registrar el conteo.
-            const ubicacionValor = document.getElementById('ubicacion').value.trim();
+            const ubicacionValor = document.getElementById('ubicacion').value.trim().toUpperCase();
             if (!ubicacionValor) {
                 Swal.fire({ icon: 'warning', title: 'Falta la Ubicación', text: 'Debes ingresar la ubicación fija del artículo antes de guardar.' });
                 document.getElementById('ubicacion').focus();
@@ -1046,7 +1046,7 @@
                         p_reserva: r,
                         p_sin_reserva: sr,
                         p_ubicacion: ubicacionValor,
-                        p_observaciones: document.getElementById('observaciones').value
+                        p_observaciones: document.getElementById('observaciones').value.trim().toUpperCase()
                     });
                     data = resp.data ? [resp.data] : null;
                     error = resp.error;
@@ -1063,7 +1063,7 @@
                         "Total Inventario": r + sr,
                         "Diferencia": (r+sr) - sap,
                         "Ubicación": ubicacionValor,
-                        "Observaciones": document.getElementById('observaciones').value,
+                        "Observaciones": document.getElementById('observaciones').value.trim().toUpperCase(),
                         "Registro": fechaLocal
                     };
                     const resp = await _supabase.from(NOMBRE_TABLA).update(payload).eq('id', registroId).select();

@@ -440,13 +440,13 @@
                             <!-- Ubicación -->
                             <div class="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                                 <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-location-dot mr-1"></i> Ubicación Fija <span class="text-red-500">*</span></label>
-                                <input type="text" id="ubicacion" required class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Estante A">
+                                <input type="text" id="ubicacion" required oninput="this.value = this.value.toUpperCase()" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Estante A">
                             </div>
 
                             <!-- Observaciones -->
                             <div class="bg-gray-50 p-2.5 rounded-lg border border-gray-100">
                                 <label class="smart-label text-[10px] text-gray-500 mb-1"><i class="fa-solid fa-comment-dots mr-1"></i> Observaciones (Opcional)</label>
-                                <input type="text" id="observaciones" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Bolsa dañada, lote mixto, etc.">
+                                <input type="text" id="observaciones" oninput="this.value = this.value.toUpperCase()" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Bolsa dañada, lote mixto, etc.">
                             </div>
                         </div>
 
@@ -1323,7 +1323,7 @@
                 return;
             }
 
-            const ubicacionValor = document.getElementById('ubicacion').value.trim();
+            const ubicacionValor = document.getElementById('ubicacion').value.trim().toUpperCase();
             if (!ubicacionValor) {
                 Swal.fire({
                     icon: 'warning',
@@ -1385,7 +1385,7 @@
                         "Peso Neto Inv": pesoNeto,
                         "Diferencia": diferencia,
                         "Ubicación": ubicacionValor,
-                        "Observaciones": document.getElementById('observaciones').value.trim(),
+                        "Observaciones": document.getElementById('observaciones').value.trim().toUpperCase(),
                         "Registro": fechaLocal
                     };
 
