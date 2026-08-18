@@ -1,0 +1,745 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tipo de Cambio PE — Monitor &amp; Alertas</title>
+<style>
+  :root{
+    --bg:#0a0e17; --bg2:#0d1220;
+    --card:#111827; --card-border:#1f2937; --card-hover:#151d2e;
+    --text:#e5e9f0; --text-dim:#8b95a7; --text-faint:#5b6579;
+    --green:#10b981; --red:#f43f5e; --amber:#f59e0b;
+    --accent:#3b82f6; --accent-dim:#1d4ed8;
+    --mono:'SF Mono',ui-monospace,'Cascadia Code',Menlo,Consolas,monospace;
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0; font-family:-apple-system,BlinkMacSystemFont,'Inter','Segoe UI',Roboto,Arial,sans-serif;
+    background:
+      radial-gradient(ellipse 900px 500px at 20% -10%, rgba(59,130,246,.08), transparent),
+      radial-gradient(ellipse 700px 400px at 100% 0%, rgba(16,185,129,.06), transparent),
+      var(--bg);
+    color:var(--text); min-height:100vh; padding:20px 16px 60px; font-size:14px;
+  }
+  .wrap{max-width:920px;margin:0 auto;}
+
+  /* Header */
+  header{display:flex;justify-content:space-between;align-items:flex-start;gap:12px;margin-bottom:18px;flex-wrap:wrap;}
+  .brand{display:flex;align-items:center;gap:10px;}
+  .brand-icon{
+    width:36px;height:36px;border-radius:10px;
+    background:linear-gradient(135deg,var(--accent),#22c55e);
+    display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;
+  }
+  h1{font-size:1.05rem;margin:0;font-weight:700;letter-spacing:-.01em;}
+  .sub{color:var(--text-dim);font-size:.72rem;margin-top:2px;}
+  .sub a{color:var(--text-dim);}
+  .hdr-status{
+    display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--card-border);
+    border-radius:20px;padding:6px 12px;font-size:.72rem;color:var(--text-dim);white-space:nowrap;
+  }
+  .status-dot{width:7px;height:7px;border-radius:50%;background:var(--text-faint);flex-shrink:0;}
+  .status-dot.live{background:var(--green);box-shadow:0 0 8px var(--green);}
+  .status-dot.err{background:var(--red);box-shadow:0 0 8px var(--red);}
+
+  /* Alert banner */
+  #alertBanner{
+    display:none;background:linear-gradient(90deg,#e11d48,#be123c);color:#fff;padding:14px 16px;border-radius:12px;
+    margin-bottom:16px;font-weight:600;font-size:.88rem;align-items:flex-start;justify-content:space-between;
+    gap:12px;box-shadow:0 4px 20px rgba(225,29,72,.35);animation:pulse 1.4s infinite;
+  }
+  #alertBanner.show{display:flex;}
+  @keyframes pulse{0%{box-shadow:0 0 0 0 rgba(225,29,72,.5);}70%{box-shadow:0 0 0 12px rgba(225,29,72,0);}100%{box-shadow:0 0 0 0 rgba(225,29,72,0);}}
+  #alertBanner button{flex-shrink:0;background:#fff;color:#be123c;border:none;border-radius:7px;padding:7px 14px;font-weight:700;font-size:.78rem;cursor:pointer;}
+  #alertMsg .hit-list{margin:6px 0 0;padding:0;list-style:none;font-weight:500;font-size:.8rem;opacity:.95;}
+  #alertMsg .hit-list li{padding:2px 0;}
+  #alertMsg .hit-title{font-weight:700;}
+
+  /* Section titles */
+  .section-title{
+    font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text-faint);
+    font-weight:700;margin:22px 0 9px;display:flex;align-items:center;justify-content:space-between;
+  }
+  .section-title span.count{color:var(--text-dim);font-weight:500;text-transform:none;letter-spacing:0;font-size:.7rem;}
+
+  /* Primary rate cards */
+  .primary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:10px;}
+  .rate-card{
+    background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:14px 16px;
+    transition:border-color .15s, background .15s; position:relative; overflow:hidden;
+  }
+  .rate-card:hover{border-color:#2d3a4f;background:var(--card-hover);}
+  .rate-card .rc-top{display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;}
+  .rate-card .rc-name{font-weight:700;font-size:.82rem;}
+  .rate-card .rc-tag{color:var(--text-faint);font-size:.66rem;font-weight:500;}
+  .rc-vals{display:flex;gap:16px;}
+  .rc-val{flex:1;}
+  .rc-val .lbl{color:var(--text-faint);font-size:.62rem;text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px;}
+  .rc-val .num{font-family:var(--mono);font-size:1.32rem;font-weight:700;line-height:1.1;transition:color .2s;}
+  .rc-val .delta{font-family:var(--mono);font-size:.68rem;margin-top:2px;}
+  .up{color:var(--green);} .down{color:var(--red);} .flat{color:var(--text-faint);}
+  .meta-hit{color:var(--red)!important;text-shadow:0 0 14px rgba(244,63,94,.5);}
+  .rate-card.has-hit{border-color:rgba(244,63,94,.5);}
+
+  /* Houses table */
+  .table-card{background:var(--card);border:1px solid var(--card-border);border-radius:12px;overflow:hidden;}
+  table{width:100%;border-collapse:collapse;font-size:.8rem;}
+  thead th{
+    text-align:left;font-size:.64rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);
+    padding:9px 12px;border-bottom:1px solid var(--card-border);font-weight:700;position:sticky;top:0;background:var(--card);
+    cursor:pointer;user-select:none;
+  }
+  thead th:hover{color:var(--text-dim);}
+  thead th.num, tbody td.num{text-align:right;font-family:var(--mono);}
+  tbody tr{border-bottom:1px solid #161d2b;transition:background .1s;}
+  tbody tr:last-child{border-bottom:none;}
+  tbody tr:hover{background:#131b2c;}
+  tbody td{padding:8px 12px;vertical-align:middle;}
+  .house-name{font-weight:600;display:flex;align-items:center;gap:7px;}
+  .house-name a{color:var(--text);}
+  .house-name a:hover{color:var(--accent);text-decoration:none;}
+  .house-name a::after{content:" ↗";font-size:.7em;color:var(--text-faint);}
+  .best-badge{
+    background:rgba(16,185,129,.15);color:var(--green);font-size:.6rem;font-weight:700;
+    padding:2px 6px;border-radius:5px;letter-spacing:.02em;
+  }
+  .updated-cell{color:var(--text-faint);font-size:.72rem;text-align:right;white-space:nowrap;}
+  .empty-row td{padding:20px;text-align:center;color:var(--text-faint);}
+  .sort-indicator{font-weight:500;font-size:.68rem;color:var(--text-faint);cursor:pointer;}
+  .sort-indicator b{color:var(--accent);font-weight:700;}
+  .sort-indicator:hover{color:var(--text-dim);}
+
+  /* Controls */
+  .controls-card{background:var(--card);border:1px solid var(--card-border);border-radius:12px;padding:16px;margin-top:22px;}
+  .ctrl-grid{display:grid;grid-template-columns:1fr 1.6fr 1.6fr;gap:12px;}
+  @media (max-width:720px){ .ctrl-grid{grid-template-columns:1fr;} }
+  label{display:block;font-size:.66rem;text-transform:uppercase;letter-spacing:.05em;color:var(--text-faint);margin-bottom:5px;font-weight:600;}
+  input,select{
+    width:100%;background:#0b1120;border:1px solid var(--card-border);color:var(--text);
+    padding:8px 10px;border-radius:7px;font-size:.82rem;font-family:inherit;
+  }
+  input:focus,select:focus{outline:none;border-color:var(--accent);}
+  input[type=number]{font-family:var(--mono);}
+  .target-row{display:flex;gap:6px;}
+  .target-row select{flex:0 0 64px;}
+  .target-row input{flex:1;}
+  .scope-note{font-size:.68rem;color:var(--text-faint);margin-top:6px;}
+  .btn-row{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap;}
+  button{
+    cursor:pointer;border:none;border-radius:7px;padding:9px 15px;font-size:.78rem;font-weight:700;
+    transition:opacity .15s,transform .1s; font-family:inherit;
+  }
+  button:hover{opacity:.88;} button:active{transform:scale(.97);}
+  button:disabled{opacity:.4;cursor:not-allowed;}
+  .btn-primary{background:linear-gradient(135deg,var(--accent),var(--accent-dim));color:#fff;}
+  .btn-stop{background:#1f2937;color:var(--text);}
+  .btn-ghost{background:transparent;border:1px solid var(--card-border);color:var(--text-dim);}
+
+  /* Log */
+  details{margin-top:14px;}
+  summary{cursor:pointer;font-size:.7rem;color:var(--text-faint);font-weight:600;text-transform:uppercase;letter-spacing:.05em;padding:4px 0;}
+  .log{max-height:150px;overflow-y:auto;font-size:.74rem;color:var(--text-dim);font-family:var(--mono);margin-top:8px;}
+  .log div{padding:4px 0;border-bottom:1px dashed var(--card-border);}
+  .log div:last-child{border-bottom:none;}
+
+  .note{font-size:.68rem;color:var(--text-faint);line-height:1.6;margin-top:18px;}
+  a{color:var(--accent);text-decoration:none;}
+  a:hover{text-decoration:underline;}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="brand">
+      <div class="brand-icon">$</div>
+      <div>
+        <h1>Tipo de Cambio PE</h1>
+        <div class="sub">Fuente: <a href="https://cuantoestaeldolar.pe" target="_blank">cuantoestaeldolar.pe</a> · Monitor en tiempo real</div>
+      </div>
+    </div>
+    <div class="hdr-status">
+      <span class="status-dot" id="statusDot"></span>
+      <span id="statusText">Detenido</span>
+      <span style="color:var(--card-border)">|</span>
+      <span id="lastUpdate">Sin datos</span>
+    </div>
+  </header>
+
+  <div id="alertBanner">
+    <span id="alertMsg"></span>
+    <button onclick="dismissAlert()">Entendido</button>
+  </div>
+
+  <div class="section-title">Tipos de cambio principales</div>
+  <div class="primary-grid" id="primaryGrid">
+    <div class="rate-card" id="typeCard-paralelo">
+      <div class="rc-top"><span class="rc-name">Paralelo</span><span class="rc-tag">calle</span></div>
+      <div class="rc-vals">
+        <div class="rc-val"><div class="lbl">Compra</div><div class="num" id="paralelo-compra-val">–</div><div class="delta flat" id="paralelo-compra-delta">--</div></div>
+        <div class="rc-val"><div class="lbl">Venta</div><div class="num" id="paralelo-venta-val">–</div><div class="delta flat" id="paralelo-venta-delta">--</div></div>
+      </div>
+    </div>
+    <div class="rate-card" id="typeCard-sunat">
+      <div class="rc-top"><span class="rc-name">Sunat</span><span class="rc-tag">oficial</span></div>
+      <div class="rc-vals">
+        <div class="rc-val"><div class="lbl">Compra</div><div class="num" id="sunat-compra-val">–</div><div class="delta flat" id="sunat-compra-delta">--</div></div>
+        <div class="rc-val"><div class="lbl">Venta</div><div class="num" id="sunat-venta-val">–</div><div class="delta flat" id="sunat-venta-delta">--</div></div>
+      </div>
+    </div>
+    <div class="rate-card" id="typeCard-digital">
+      <div class="rc-top"><span class="rc-name"><a id="digitalLink" href="https://lemon.go.link/eGgAx" target="_blank" rel="noreferrer" style="color:inherit;text-decoration:none;">Dólar Digital ↗</a></span><span class="rc-tag">Lemon</span></div>
+      <div class="rc-vals">
+        <div class="rc-val"><div class="lbl">Compra</div><div class="num" id="digital-compra-val">–</div><div class="delta flat" id="digital-compra-delta">--</div></div>
+        <div class="rc-val"><div class="lbl">Venta</div><div class="num" id="digital-venta-val">–</div><div class="delta flat" id="digital-venta-delta">--</div></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="section-title">
+    Casas de cambio online <span class="count" id="housesCount"></span>
+    <span class="sort-indicator" id="sortIndicator" title="Clic para volver al orden automático según tu meta"></span>
+  </div>
+  <div class="table-card">
+    <table>
+      <thead>
+        <tr>
+          <th data-sort="name">Casa de cambio</th>
+          <th class="num" data-sort="compra">Compra</th>
+          <th class="num" data-sort="venta">Venta</th>
+          <th class="num" data-sort="spread">Spread</th>
+        </tr>
+      </thead>
+      <tbody id="housesBody">
+        <tr class="empty-row"><td colspan="4">Aún no hay datos. Presiona «Actualizar ahora».</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="controls-card">
+    <div class="ctrl-grid">
+      <div>
+        <label for="interval">Actualizar cada (min)</label>
+        <input type="number" id="interval" min="1" max="120" step="1" value="5" required>
+      </div>
+      <div>
+        <label for="targetCompra">Meta Compra (S/)</label>
+        <div class="target-row">
+          <select id="dirCompra">
+            <option value="gte">≥</option>
+            <option value="lte">≤</option>
+            <option value="eq">=</option>
+          </select>
+          <input type="number" id="targetCompra" min="0" step="0.001" placeholder="ej. 3.350">
+        </div>
+      </div>
+      <div>
+        <label for="targetVenta">Meta Venta (S/)</label>
+        <div class="target-row">
+          <select id="dirVenta">
+            <option value="lte">≤</option>
+            <option value="gte">≥</option>
+            <option value="eq">=</option>
+          </select>
+          <input type="number" id="targetVenta" min="0" step="0.001" placeholder="ej. 3.400">
+        </div>
+      </div>
+    </div>
+    <div class="scope-note">Se evalúan las 3 fuentes principales y las 23 casas de cambio online — alerta apenas <b>cualquiera</b> cumpla la meta. Deja un campo vacío para no vigilarlo.</div>
+    <div class="btn-row">
+      <button type="button" class="btn-primary" id="startBtn">▶ Iniciar monitoreo</button>
+      <button type="button" class="btn-stop" id="stopBtn" disabled>⏸ Detener</button>
+      <button type="button" class="btn-ghost" id="refreshBtn">↻ Actualizar ahora</button>
+      <button type="button" class="btn-ghost" id="testSoundBtn">🔊 Probar alerta</button>
+    </div>
+    <details>
+      <summary>Historial de esta sesión</summary>
+      <div class="log" id="log"><div>Aún no hay lecturas.</div></div>
+    </details>
+  </div>
+
+  <div class="note">
+    Esta página consulta cuantoestaeldolar.pe mediante un lector externo (r.jina.ai, con respaldo automático)
+    porque el navegador bloquea peticiones directas entre sitios distintos (CORS). Mantén esta pestaña abierta
+    para que el monitoreo continúe; se detiene si la cierras o el equipo se suspende. La alerta suena, resalta
+    visualmente y — si lo permites — muestra una notificación del sistema.
+  </div>
+</div>
+
+<script>
+const els = {
+  interval: document.getElementById('interval'),
+  targetCompra: document.getElementById('targetCompra'),
+  dirCompra: document.getElementById('dirCompra'),
+  targetVenta: document.getElementById('targetVenta'),
+  dirVenta: document.getElementById('dirVenta'),
+  startBtn: document.getElementById('startBtn'),
+  stopBtn: document.getElementById('stopBtn'),
+  refreshBtn: document.getElementById('refreshBtn'),
+  testSoundBtn: document.getElementById('testSoundBtn'),
+  statusDot: document.getElementById('statusDot'),
+  statusText: document.getElementById('statusText'),
+  lastUpdate: document.getElementById('lastUpdate'),
+  log: document.getElementById('log'),
+  alertBanner: document.getElementById('alertBanner'),
+  alertMsg: document.getElementById('alertMsg'),
+  housesBody: document.getElementById('housesBody'),
+  housesCount: document.getElementById('housesCount'),
+  sortIndicator: document.getElementById('sortIndicator'),
+  primaryGrid: document.getElementById('primaryGrid'),
+  digitalLink: document.getElementById('digitalLink'),
+};
+
+const TYPE_LABELS = { paralelo: 'Paralelo', sunat: 'Sunat', digital: 'Dólar Digital' };
+const DIR_SYMBOL = { gte: '≥', lte: '≤', eq: '=' };
+let timer = null;
+let lastValues = {};
+let houses = [];
+let firedKeys = new Set();      // sources already notified (sound) while their condition stays true
+let activeKeysStr = '';         // snapshot of currently-true keys, to detect changes
+let bannerDismissed = false;
+let lastResultsByType = {};     // last successfully parsed {paralelo,sunat,digital} data, for re-highlighting without refetch
+let sortState = { mode: 'auto', key: 'venta', dir: 1 };
+let digitalUrl = 'https://lemon.go.link/eGgAx';
+
+try{
+  const saved = JSON.parse(localStorage.getItem('tc_settings')||'{}');
+  if(saved.interval) els.interval.value = saved.interval;
+  if(saved.targetCompra) els.targetCompra.value = saved.targetCompra;
+  if(saved.dirCompra) els.dirCompra.value = saved.dirCompra;
+  if(saved.targetVenta) els.targetVenta.value = saved.targetVenta;
+  if(saved.dirVenta) els.dirVenta.value = saved.dirVenta;
+}catch(e){}
+
+function saveSettings(){
+  localStorage.setItem('tc_settings', JSON.stringify({
+    interval: els.interval.value,
+    targetCompra: els.targetCompra.value, dirCompra: els.dirCompra.value,
+    targetVenta: els.targetVenta.value, dirVenta: els.dirVenta.value,
+  }));
+}
+
+function addLog(text){
+  const line = document.createElement('div');
+  const t = new Date().toLocaleTimeString('es-PE');
+  line.textContent = `[${t}] ${text}`;
+  if(els.log.firstChild && els.log.firstChild.textContent === 'Aún no hay lecturas.') els.log.innerHTML = '';
+  els.log.prepend(line);
+  while(els.log.children.length > 40) els.log.removeChild(els.log.lastChild);
+}
+
+function setStatus(mode, text){
+  els.statusDot.className = 'status-dot' + (mode==='live' ? ' live' : mode==='err' ? ' err' : '');
+  els.statusText.textContent = text;
+}
+
+function slugify(name){
+  return name.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[^a-z0-9]+/g,'-').replace(/(^-|-$)/g,'');
+}
+
+const PROXIES = [
+  url => 'https://r.jina.ai/' + url,
+  url => 'https://api.allorigins.win/raw?url=' + encodeURIComponent(url),
+];
+
+async function fetchViaProxies(url){
+  let lastErr;
+  for(const build of PROXIES){
+    try{
+      const res = await fetch(build(url), {cache:'no-store'});
+      if(!res.ok) throw new Error('HTTP ' + res.status);
+      const text = await res.text();
+      if(text && text.length > 30) return text;
+      throw new Error('respuesta vacía o demasiado corta');
+    }catch(e){ lastErr = e; }
+  }
+  throw lastErr || new Error('no se pudo obtener los datos');
+}
+
+function parseParalelo(text){
+  const m = text.match(/paralelo\s*\n+\s*([\d.]+)\s*\n+\s*(-?[\d.]+)\s*\n+\s*([\d.]+)\s*\n+\s*(-?[\d.]+)/i);
+  if(!m) throw new Error('no se encontró el bloque "paralelo"');
+  return { compra: parseFloat(m[1]), venta: parseFloat(m[3]) };
+}
+
+function parseDigital(text){
+  const m = text.match(/D[oó]lar Digital\[CAMBIA[^\]]*\]\(([^)]*)\)\s*\n+\s*([\d.]+)\s*\n+\s*(-?[\d.]+)\s*\n+\s*([\d.]+)\s*\n+\s*(-?[\d.]+)/i);
+  if(!m) throw new Error('no se encontró el bloque "Dólar Digital"');
+  if(m[1]) digitalUrl = m[1];
+  return { compra: parseFloat(m[2]), venta: parseFloat(m[4]) };
+}
+
+function parseSunat(text){
+  const re = /"compra"\s*:\s*"([\d.]+)"\s*,\s*"venta"\s*:\s*"([\d.]+)"/gi;
+  let m, last;
+  while((m = re.exec(text))) last = m;
+  if(!last) throw new Error('no se encontró el dato de Sunat');
+  return { compra: parseFloat(last[1]), venta: parseFloat(last[2]) };
+}
+
+function parseHouses(text){
+  const startIdx = text.search(/Revisa quien/i);
+  if(startIdx < 0) throw new Error('no se encontró la sección de casas de cambio');
+  const endIdx = text.search(/Tipo De Cambio\n/i);
+  const section = text.slice(startIdx, endIdx > startIdx ? endIdx : startIdx + 12000);
+  const re = /\[!\[Image \d+: ([^\]]+)\][^\n]*\n\n\[CAMBIAR\]\(([^)]*)\)\n\n([\d.]+)\n\n(-?[\d.]+)\n\n([\d.]+)\n\n(-?[\d.]+)/g;
+  const out = [];
+  const seen = new Set();
+  let m;
+  while((m = re.exec(section))){
+    const name = m[1].trim();
+    if(seen.has(name)) continue;
+    seen.add(name);
+    out.push({ name, slug: slugify(name), url: m[2], compra: parseFloat(m[3]), venta: parseFloat(m[5]) });
+  }
+  if(out.length === 0) throw new Error('no se encontraron casas de cambio');
+  return out;
+}
+
+function renderDelta(el, prevVal, newVal){
+  if(prevVal == null){ el.textContent = '--'; el.className='delta flat'; return; }
+  const diff = +(newVal - prevVal).toFixed(3);
+  if(diff > 0){ el.textContent = '▲' + diff.toFixed(3); el.className = 'delta up'; }
+  else if(diff < 0){ el.textContent = '▼' + Math.abs(diff).toFixed(3); el.className = 'delta down'; }
+  else { el.textContent = '· 0.000'; el.className = 'delta flat'; }
+}
+
+function getTargetConfig(){
+  const tcRaw = els.targetCompra.value, tvRaw = els.targetVenta.value;
+  const hasCompra = tcRaw !== '' && !isNaN(parseFloat(tcRaw));
+  const hasVenta = tvRaw !== '' && !isNaN(parseFloat(tvRaw));
+  return {
+    hasCompra, tc: parseFloat(tcRaw), dirC: els.dirCompra.value,
+    hasVenta, tv: parseFloat(tvRaw), dirV: els.dirVenta.value,
+  };
+}
+
+// Lower score = closer to (or already past) the goal, per the active condition's direction
+function sortScore(entry, cfg){
+  if(cfg.hasVenta){
+    if(cfg.dirV === 'lte') return entry.venta;
+    if(cfg.dirV === 'gte') return -entry.venta;
+    if(cfg.dirV === 'eq') return Math.abs(entry.venta - cfg.tv);
+  }
+  if(cfg.hasCompra){
+    if(cfg.dirC === 'gte') return -entry.compra;
+    if(cfg.dirC === 'lte') return entry.compra;
+    if(cfg.dirC === 'eq') return Math.abs(entry.compra - cfg.tc);
+  }
+  return entry.venta;
+}
+
+function renderType(type, data){
+  lastResultsByType[type] = data;
+  const cfg = getTargetConfig();
+  let anyHit = false;
+  ['compra','venta'].forEach(k=>{
+    const key = `${type}-${k}`;
+    const el = document.getElementById(`${key}-val`);
+    el.textContent = data[k].toFixed(3);
+    renderDelta(document.getElementById(`${key}-delta`), lastValues[key], data[k]);
+    lastValues[key] = data[k];
+    const isHit = k === 'compra'
+      ? (cfg.hasCompra && matchesCondition(data.compra, cfg.tc, cfg.dirC))
+      : (cfg.hasVenta && matchesCondition(data.venta, cfg.tv, cfg.dirV));
+    el.classList.toggle('meta-hit', isHit);
+    if(isHit) anyHit = true;
+  });
+  const card = document.getElementById(`typeCard-${type}`);
+  if(card) card.classList.toggle('has-hit', anyHit);
+  if(type === 'digital' && els.digitalLink) els.digitalLink.href = digitalUrl;
+}
+
+function reorderPrimaryCards(){
+  const cfg = getTargetConfig();
+  const order = ['paralelo','sunat','digital'].filter(t=>lastResultsByType[t]);
+  order.sort((a,b)=> sortScore(lastResultsByType[a], cfg) - sortScore(lastResultsByType[b], cfg));
+  order.forEach(t=>{
+    const card = document.getElementById(`typeCard-${t}`);
+    if(card) els.primaryGrid.appendChild(card);
+  });
+}
+
+function updateSortIndicator(cfg){
+  if(sortState.mode === 'auto'){
+    const label = cfg.hasVenta
+      ? `venta ${DIR_SYMBOL[cfg.dirV]} ${cfg.tv.toFixed(3)}`
+      : cfg.hasCompra ? `compra ${DIR_SYMBOL[cfg.dirC]} ${cfg.tc.toFixed(3)}` : 'venta, ascendente';
+    els.sortIndicator.innerHTML = `Orden: <b>según tu meta</b> · ${label}`;
+  } else {
+    els.sortIndicator.innerHTML = `Orden: <b>manual</b> · clic para volver al automático`;
+  }
+}
+
+function renderHouses(){
+  const cfg = getTargetConfig();
+  updateSortIndicator(cfg);
+  els.housesCount.textContent = houses.length ? `${houses.length} casas` : '';
+
+  if(houses.length === 0){
+    els.housesBody.innerHTML = '<tr class="empty-row"><td colspan="4">Aún no hay datos. Presiona «Actualizar ahora».</td></tr>';
+    return;
+  }
+
+  const sorted = [...houses].sort((a,b)=>{
+    if(sortState.mode === 'auto') return sortScore(a, cfg) - sortScore(b, cfg);
+    const av = a[sortState.key], bv = b[sortState.key];
+    if(typeof av === 'string') return av.localeCompare(bv) * sortState.dir;
+    return (av - bv) * sortState.dir;
+  });
+
+  const bestVenta = houses.length ? Math.min(...houses.map(h=>h.venta)) : null;
+  const bestCompra = houses.length ? Math.max(...houses.map(h=>h.compra)) : null;
+
+  els.housesBody.innerHTML = '';
+  sorted.forEach(h=>{
+    const tr = document.createElement('tr');
+    const spread = (h.venta - h.compra).toFixed(3);
+    const hitCompra = cfg.hasCompra && matchesCondition(h.compra, cfg.tc, cfg.dirC);
+    const hitVenta = cfg.hasVenta && matchesCondition(h.venta, cfg.tv, cfg.dirV);
+
+    const tdName = document.createElement('td');
+    tdName.className = 'house-name';
+    if(h.url){
+      const a = document.createElement('a');
+      a.href = h.url; a.target = '_blank'; a.rel = 'noreferrer';
+      a.textContent = h.name;
+      tdName.appendChild(a);
+    } else {
+      tdName.appendChild(document.createTextNode(h.name));
+    }
+    if(h.venta === bestVenta){
+      const b = document.createElement('span'); b.className = 'best-badge'; b.textContent = 'MEJOR VENTA'; b.style.marginLeft = '6px';
+      tdName.appendChild(b);
+    }
+    if(h.compra === bestCompra){
+      const b = document.createElement('span'); b.className = 'best-badge'; b.textContent = 'MEJOR COMPRA'; b.style.marginLeft = '6px';
+      tdName.appendChild(b);
+    }
+
+    const tdCompra = document.createElement('td');
+    tdCompra.className = 'num' + (hitCompra ? ' meta-hit' : '');
+    tdCompra.textContent = h.compra.toFixed(3);
+
+    const tdVenta = document.createElement('td');
+    tdVenta.className = 'num' + (hitVenta ? ' meta-hit' : '');
+    tdVenta.textContent = h.venta.toFixed(3);
+
+    const tdSpread = document.createElement('td');
+    tdSpread.className = 'num';
+    tdSpread.textContent = spread;
+
+    tr.append(tdName, tdCompra, tdVenta, tdSpread);
+    els.housesBody.appendChild(tr);
+  });
+}
+
+function reapplyHighlights(){
+  Object.entries(lastResultsByType).forEach(([type, data]) => renderType(type, data));
+  reorderPrimaryCards();
+  renderHouses();
+}
+
+document.querySelectorAll('thead th[data-sort]').forEach(th=>{
+  th.addEventListener('click', ()=>{
+    const key = th.dataset.sort;
+    if(sortState.mode === 'manual' && sortState.key === key) sortState.dir *= -1;
+    else { sortState.mode = 'manual'; sortState.key = key; sortState.dir = 1; }
+    renderHouses();
+  });
+});
+
+els.sortIndicator.addEventListener('click', ()=>{
+  sortState.mode = 'auto';
+  renderHouses();
+});
+
+async function tick(){
+  setStatus('', 'Consultando…');
+  const results = {};
+  const errors = [];
+
+  try{
+    const homeText = await fetchViaProxies('https://cuantoestaeldolar.pe/');
+    try{ results.paralelo = parseParalelo(homeText); }catch(e){ errors.push('Paralelo: ' + e.message); }
+    try{ results.digital = parseDigital(homeText); }catch(e){ errors.push('Dólar Digital: ' + e.message); }
+    try{
+      houses = parseHouses(homeText);
+      renderHouses();
+    }catch(e){ errors.push('Casas de cambio: ' + e.message); }
+  }catch(e){ errors.push('Página principal: ' + e.message); }
+
+  try{
+    const sunatText = await fetchViaProxies('https://cuantoestaeldolar.pe/api/chart?type=ThreeDay');
+    results.sunat = parseSunat(sunatText);
+  }catch(e){ errors.push('Sunat: ' + e.message); }
+
+  Object.entries(results).forEach(([type, data]) => renderType(type, data));
+  reorderPrimaryCards();
+
+  const gotAnything = Object.keys(results).length > 0 || houses.length > 0;
+  if(gotAnything){
+    els.lastUpdate.textContent = new Date().toLocaleTimeString('es-PE');
+    setStatus(errors.length ? 'err' : 'live', errors.length ? 'Con errores parciales' : 'Monitoreando');
+    const summary = Object.entries(results).map(([t,d])=>`${TYPE_LABELS[t]} C${d.compra.toFixed(3)}/V${d.venta.toFixed(3)}`).join(' · ');
+    addLog(summary + (houses.length ? ` · ${houses.length} casas` : ''));
+    checkTargets(results);
+  } else {
+    setStatus('err', 'Error al consultar');
+  }
+  errors.forEach(e => addLog('⚠ ' + e));
+}
+
+function matchesCondition(val, target, dir){
+  if(dir === 'gte') return val >= target;
+  if(dir === 'lte') return val <= target;
+  if(dir === 'eq') return Math.abs(val - target) < 0.0005;
+  return false;
+}
+
+// Builds the full list of monitored sources (3 principales + todas las casas) for this tick
+function buildSources(results){
+  const sources = [];
+  Object.entries(results).forEach(([type, data])=>{
+    sources.push({ key: type, label: TYPE_LABELS[type], compra: data.compra, venta: data.venta });
+  });
+  houses.forEach(h=>{
+    sources.push({ key: `house-${h.slug}`, label: h.name, compra: h.compra, venta: h.venta });
+  });
+  return sources;
+}
+
+function checkTargets(results){
+  const sources = buildSources(results);
+  const cfg = getTargetConfig();
+
+  const hits = [];
+  sources.forEach(s=>{
+    if(cfg.hasCompra && matchesCondition(s.compra, cfg.tc, cfg.dirC)){
+      hits.push({ key: s.key + '-compra', label: s.label, field: 'Compra', val: s.compra, target: cfg.tc, dir: cfg.dirC });
+    }
+    if(cfg.hasVenta && matchesCondition(s.venta, cfg.tv, cfg.dirV)){
+      hits.push({ key: s.key + '-venta', label: s.label, field: 'Venta', val: s.venta, target: cfg.tv, dir: cfg.dirV });
+    }
+  });
+
+  const currentKeys = hits.map(h=>h.key).sort();
+  const currentKeysStr = currentKeys.join(',');
+  const newHits = hits.filter(h=>!firedKeys.has(h.key));
+
+  // drop keys that no longer qualify, so they can re-trigger if they cross the target again later
+  [...firedKeys].forEach(k=>{ if(!currentKeys.includes(k)) firedKeys.delete(k); });
+  newHits.forEach(h=>firedKeys.add(h.key));
+
+  if(hits.length === 0){
+    activeKeysStr = '';
+    return;
+  }
+
+  if(currentKeysStr !== activeKeysStr) bannerDismissed = false;
+  activeKeysStr = currentKeysStr;
+
+  if(!bannerDismissed) showBanner(hits);
+  if(newHits.length) notifyHits(newHits, hits.length);
+}
+
+let audioCtx = null;
+function beep(){
+  try{
+    audioCtx = audioCtx || new (window.AudioContext || window.webkitAudioContext)();
+    const now = audioCtx.currentTime;
+    [0, .35, .7].forEach(offset=>{
+      const osc = audioCtx.createOscillator();
+      const gain = audioCtx.createGain();
+      osc.type = 'sine'; osc.frequency.value = 880;
+      gain.gain.setValueAtTime(0.001, now+offset);
+      gain.gain.exponentialRampToValueAtTime(0.3, now+offset+0.02);
+      gain.gain.exponentialRampToValueAtTime(0.001, now+offset+0.3);
+      osc.connect(gain).connect(audioCtx.destination);
+      osc.start(now+offset); osc.stop(now+offset+0.35);
+    });
+  }catch(e){}
+}
+
+function formatHit(h){
+  return `${h.label} · ${h.field} S/ ${h.val.toFixed(3)} (meta ${DIR_SYMBOL[h.dir]} ${h.target.toFixed(3)})`;
+}
+
+function showBanner(hits){
+  const MAX_SHOWN = 6;
+  const shown = hits.slice(0, MAX_SHOWN);
+  const extra = hits.length - shown.length;
+  const title = `${hits.length} cotización${hits.length===1?'':'es'} cumple${hits.length===1?'':'n'} tu meta`;
+  const list = shown.map(h=>`<li>${formatHit(h)}</li>`).join('');
+  els.alertMsg.innerHTML = `<span class="hit-title">🚨 ${title}</span><ul class="hit-list">${list}${extra>0?`<li>+${extra} más…</li>`:''}</ul>`;
+  els.alertBanner.classList.add('show');
+  document.title = `🚨 (${hits.length}) ¡Meta alcanzada!`;
+}
+
+function notifyHits(newHits, totalCount){
+  beep();
+  addLog(`🚨 ALERTA — ${newHits.length} nueva(s) de ${totalCount} activa(s): ` + newHits.map(formatHit).join(' · '));
+  if('Notification' in window && Notification.permission === 'granted'){
+    const body = newHits.slice(0,5).map(formatHit).join('\n');
+    new Notification(`Tipo de cambio: ${newHits.length} meta(s) alcanzada(s)`, { body });
+  }
+}
+
+function dismissAlert(){
+  els.alertBanner.classList.remove('show');
+  bannerDismissed = true;
+  document.title = 'Tipo de Cambio PE — Monitor & Alertas';
+}
+window.dismissAlert = dismissAlert;
+
+function startMonitoring(){
+  saveSettings();
+  if('Notification' in window && Notification.permission === 'default'){
+    Notification.requestPermission();
+  }
+  firedKeys.clear();
+  activeKeysStr = '';
+  bannerDismissed = false;
+  els.alertBanner.classList.remove('show');
+  document.title = 'Tipo de Cambio PE — Monitor & Alertas';
+  const minutes = Math.max(1, parseFloat(els.interval.value) || 5);
+  clearInterval(timer);
+  tick();
+  timer = setInterval(tick, minutes * 60 * 1000);
+  els.startBtn.disabled = true;
+  els.stopBtn.disabled = false;
+  setStatus('live', 'Monitoreando');
+}
+
+function stopMonitoring(){
+  clearInterval(timer);
+  timer = null;
+  els.startBtn.disabled = false;
+  els.stopBtn.disabled = true;
+  setStatus('', 'Detenido');
+}
+
+els.startBtn.addEventListener('click', startMonitoring);
+els.stopBtn.addEventListener('click', stopMonitoring);
+els.refreshBtn.addEventListener('click', tick);
+els.testSoundBtn.addEventListener('click', ()=>{ beep(); if('Notification' in window && Notification.permission==='default'){ Notification.requestPermission(); } });
+
+els.interval.addEventListener('change', ()=>{
+  saveSettings();
+  if(timer){
+    const minutes = Math.max(1, parseFloat(els.interval.value) || 5);
+    clearInterval(timer);
+    timer = setInterval(tick, minutes * 60 * 1000);
+  }
+});
+[els.targetCompra, els.dirCompra, els.targetVenta, els.dirVenta].forEach(el=>{
+  el.addEventListener('input', ()=>{
+    saveSettings();
+    firedKeys.clear();
+    activeKeysStr = '';
+    reapplyHighlights();
+  });
+});
+</script>
+</body>
+</html>
