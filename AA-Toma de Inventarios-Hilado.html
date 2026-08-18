@@ -27,7 +27,7 @@
 
     <!-- Tesseract.js: OCR liviano en el navegador, solo para confirmar que la foto de la
          báscula capturada con la cámara guiada tenga al menos un número legible -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
 
     <style>
         body {
@@ -576,7 +576,7 @@
                     báscula. No sirve para leer un código de barras (como el escáner), es solo
                     una guía visual para encuadrar bien antes de capturar. -->
                     <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div id="guia-balanza" class="border-4 border-teal-400 rounded-lg" style="width:78%; height:30%; box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);"></div>
+                        <div id="guia-balanza" class="border-4 border-teal-400 rounded-lg" style="width:62%; aspect-ratio: 1 / 1; box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);"></div>
                     </div>
                     <div class="absolute top-2 left-0 right-0 text-center pointer-events-none px-2">
                         <span class="bg-black/60 text-white text-[11px] px-3 py-1 rounded-full font-semibold">Encuadra el número de la báscula en el recuadro</span>
@@ -1133,7 +1133,10 @@
 
         // Traduce el recuadro guía (posición en pantalla, con el video mostrado en
         // object-fit:cover) a un rectángulo en píxeles NATIVOS del video, para poder recortar
-        // justo esa zona con canvas antes de mandarla al OCR.
+        // justo esa zona con canvas -- tanto para el OCR como para la foto que se sube. Se le
+        // agrega un pequeño margen extra alrededor por si el encuadre real quedó un poco
+        // corrido respecto al recuadro dibujado en pantalla, para no cortar el número justo
+        // en el borde.
         function calcularRectanguloNativoBalanza() {
             const video = document.getElementById('video-balanza');
             const wrap = document.getElementById('camara-balanza-video-wrap');
@@ -1155,12 +1158,37 @@
             const gx = guiaRect.left - wrapRect.left;
             const gy = guiaRect.top - wrapRect.top;
 
-            return {
-                sx: Math.max(0, (gx + offsetX) / escala),
-                sy: Math.max(0, (gy + offsetY) / escala),
-                sw: Math.min(vw, guiaRect.width / escala),
-                sh: Math.min(vh, guiaRect.height / escala)
-            };
+            let sx = (gx + offsetX) / escala;
+            let sy = (gy + offsetY) / escala;
+            let sw = guiaRect.width / escala;
+            let sh = guiaRect.height / escala;
+
+            const margen = 0.08; // 8% extra de margen a cada lado
+            const padX = sw * margen, padY = sh * margen;
+            sx -= padX; sy -= padY;
+            sw += padX * 2; sh += padY * 2;
+
+            sx = Math.max(0, sx);
+            sy = Math.max(0, sy);
+            sw = Math.min(vw - sx, sw);
+            sh = Math.min(vh - sy, sh);
+
+            return { sx, sy, sw, sh };
+        }
+
+        // El worker de Tesseract se crea una sola vez (la primera foto de la sesión) y se
+        // reutiliza en las siguientes: crearlo descarga el modelo de OCR (unos MB), así que
+        // hacerlo de nuevo en cada captura sería lento e innecesario.
+        let workerBalanzaOcrPromesa = null;
+        function obtenerWorkerBalanzaOcr() {
+            if (!workerBalanzaOcrPromesa) {
+                workerBalanzaOcrPromesa = (async () => {
+                    const worker = await Tesseract.createWorker('eng');
+                    await worker.setParameters({ tessedit_char_whitelist: '0123456789.,-' });
+                    return worker;
+                })();
+            }
+            return workerBalanzaOcrPromesa;
         }
 
         async function capturarFotoBalanza() {
@@ -1171,14 +1199,9 @@
             const status = document.getElementById('camara-balanza-status');
             btn.disabled = true;
 
-            // 1) El cuadro COMPLETO es la foto que realmente se va a comprimir/guardar.
-            const canvasCompleto = document.createElement('canvas');
-            canvasCompleto.width = video.videoWidth;
-            canvasCompleto.height = video.videoHeight;
-            canvasCompleto.getContext('2d').drawImage(video, 0, 0);
-
-            // 2) Se recorta SOLO la zona del recuadro guía para el OCR: más rápido y más
-            // preciso que analizar la foto entera (menos ruido alrededor del número).
+            // Se recorta SOLO la zona del recuadro guía -- esta imagen recortada es a la vez
+            // lo que se le pasa al OCR y lo que finalmente se comprime y sube a Supabase (no
+            // se sube el cuadro completo de la cámara, solo lo que quedó encuadrado).
             const rect = calcularRectanguloNativoBalanza();
             const canvasRecorte = document.getElementById('canvas-balanza');
             canvasRecorte.width = Math.max(1, Math.round(rect.sw));
@@ -1189,19 +1212,19 @@
 
             let huboDigito = false;
             try {
-                const resultado = await Tesseract.recognize(canvasRecorte, 'eng', {
-                    tessedit_char_whitelist: '0123456789.,-'
-                });
-                huboDigito = /\d/.test((resultado.data && resultado.data.text) || '');
+                const worker = await obtenerWorkerBalanzaOcr();
+                const { data } = await worker.recognize(canvasRecorte);
+                huboDigito = /\d/.test((data && data.text) || '');
             } catch (err) {
                 console.warn('OCR de la báscula no disponible/falló; se deja pasar sin bloquear:', err);
+                status.textContent = 'No se pudo verificar automáticamente (sin conexión al servicio de OCR).';
                 huboDigito = true; // si el OCR falla (ej. sin conexión para el modelo), no se bloquea al operador
             }
 
             btn.disabled = false;
-            status.textContent = '';
 
             if (!huboDigito) {
+                status.textContent = '';
                 const resp = await Swal.fire({
                     icon: 'warning',
                     title: 'No se detectó ningún número',
@@ -1214,16 +1237,18 @@
                 });
                 if (resp.isConfirmed) return; // se queda en la cámara para reintentar
                 // si elige "Usar esta foto igual" (cancelButton), sigue con la foto capturada
+            } else if (status.textContent === 'Verificando que se vea un número...') {
+                status.textContent = '';
             }
 
-            canvasCompleto.toBlob(async (blob) => {
+            canvasRecorte.toBlob(async (blob) => {
                 if (!blob) {
                     Swal.fire('Error', 'No se pudo capturar la foto.', 'error');
                     return;
                 }
                 cerrarCamaraBalanza();
                 await procesarFotoBalanzaCapturada(blob);
-            }, 'image/jpeg', 0.85);
+            }, 'image/jpeg', 0.9);
         }
 
         // Reutiliza el mismo pipeline de compresión que ya existía para fotos elegidas por
