@@ -142,7 +142,7 @@
             </div>
             <div>
                 <h1 class="font-bold text-gray-800 leading-none">Panel de Administración</h1>
-                <p class="text-[10px] text-gray-500 font-medium tracking-wide uppercase">Toma de Inventarios 2025</p>
+                <p class="text-[10px] text-gray-500 font-medium tracking-wide uppercase">Toma de Inventarios</p>
             </div>
         </div>
 
@@ -411,7 +411,7 @@
                     <div class="text-gray-600 text-sm leading-tight font-medium" id="detalle-descripcion">Descripción del artículo</div>
                 </div>
                 <div class="flex flex-col md:flex-row gap-4">
-                    <div id="detalle-campos" class="flex-1 grid grid-cols-2 gap-2.5"></div>
+                    <div id="detalle-campos" class="flex-1 flex flex-col gap-3"></div>
                     <div id="detalle-foto-wrap" class="md:w-64 flex-shrink-0 hidden-view">
                         <label class="smart-label text-[10px] mb-1"><i class="fa-solid fa-camera mr-1"></i> Foto de la Báscula</label>
                         <img id="detalle-foto" class="w-full rounded-lg border border-gray-200 object-contain max-h-72 md:max-h-none bg-gray-50" src="">
@@ -466,23 +466,27 @@
                 getFisico: (it, completado) => completado ? parseFloat(it['Total Inventario'] || 0) : null,
                 // Orden pensado para lectura: identificación → ubicación en almacén → lo
                 // teórico de SAP → dónde está físicamente → lo contado → resultado → auditoría.
+                // group: agrupa los campos para la ficha de detalle del admin (identificación →
+                // teórico SAP → conteo físico → resultado destacado → ubicación/notas). El orden
+                // de este array es el que también usan el PDF y el Excel (por eso Ubicación va
+                // en su lugar "cronológico" ahí, aunque en la ficha se reordene por grupo).
                 exportColumns: [
                     { header: 'Código', get: it => it['Código de Item'] || '' },
                     { header: 'Descripción', get: it => it['Descripción'] || '' },
-                    { header: 'Grupo de Artículos', get: it => it['Grupo de Articulos'] || '-' },
-                    { header: 'UM', get: it => it['Unidad de Medida'] || '' },
-                    { header: 'Almacén', get: it => it['Almacen'] || '' },
-                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
-                    { header: 'Reserva SAP', get: it => num3(it['Reserva']) },
-                    { header: 'Sin Reserva SAP', get: it => num3(it['Sin Reserva']) },
-                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']) },
-                    { header: 'Ubicación', get: it => it['Ubicación'] || '-' },
-                    { header: 'Reserva Conteo', get: (it, c) => c ? num3(it['Reserva Inv']) : '-' },
-                    { header: 'Sin Reserva Conteo', get: (it, c) => c ? num3(it['Sin Reserva Inv']) : '-' },
-                    { header: 'Total Inventariado', get: (it, c) => c ? num3(it['Total Inventario']) : '-' },
-                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-' },
-                    { header: 'Observaciones', get: it => it['Observaciones'] || '-' },
-                    { header: 'Registro', get: it => fmtFecha(it['Registro']) },
+                    { header: 'Grupo de Artículos', get: it => it['Grupo de Articulos'] || '-', group: 'ident' },
+                    { header: 'UM', get: it => it['Unidad de Medida'] || '', group: 'ident' },
+                    { header: 'Almacén', get: it => it['Almacen'] || '', group: 'ident' },
+                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '', group: 'ident' },
+                    { header: 'Reserva SAP', get: it => num3(it['Reserva']), group: 'teorico' },
+                    { header: 'Sin Reserva SAP', get: it => num3(it['Sin Reserva']), group: 'teorico' },
+                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']), group: 'teorico' },
+                    { header: 'Ubicación', get: it => it['Ubicación'] || '-', group: 'notas' },
+                    { header: 'Reserva Conteo', get: (it, c) => c ? num3(it['Reserva Inv']) : '-', group: 'conteo' },
+                    { header: 'Sin Reserva Conteo', get: (it, c) => c ? num3(it['Sin Reserva Inv']) : '-', group: 'conteo' },
+                    { header: 'Total Inventariado', get: (it, c) => c ? num3(it['Total Inventario']) : '-', group: 'resultado', big: true },
+                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-', group: 'resultado', big: true },
+                    { header: 'Observaciones', get: it => it['Observaciones'] || '-', group: 'notas' },
+                    { header: 'Registro', get: it => fmtFecha(it['Registro']), group: 'notas' },
                 ],
             },
             hilado: {
@@ -512,21 +516,21 @@
                 exportColumns: [
                     { header: 'Código', get: it => it['Código de Item'] || '' },
                     { header: 'Descripción', get: it => it['Descripción'] || '' },
-                    { header: 'Lote', get: it => it['Lote'] || '-' },
-                    { header: 'UM', get: it => it['Unidad de Medida'] || '' },
-                    { header: 'Almacén', get: it => it['Almacen'] || '' },
-                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
-                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']) },
-                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-' },
-                    { header: 'Nro Conos', get: (it, c) => c ? `${it['Nro de Conos'] || 0} (${it['Tipo de Cono'] || ''})` : '-' },
-                    { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-' },
-                    { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
-                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-' },
-                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-' },
-                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-' },
-                    { header: 'Ubicación', get: it => it['Ubicación'] || '-' },
-                    { header: 'Observaciones', get: it => it['Observaciones'] || '-' },
-                    { header: 'Registro', get: it => fmtFecha(it['Registro']) },
+                    { header: 'Lote', get: it => it['Lote'] || '-', group: 'ident' },
+                    { header: 'UM', get: it => it['Unidad de Medida'] || '', group: 'ident' },
+                    { header: 'Almacén', get: it => it['Almacen'] || '', group: 'ident' },
+                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '', group: 'ident' },
+                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']), group: 'teorico' },
+                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-', group: 'conteo' },
+                    { header: 'Nro Conos', get: (it, c) => c ? `${it['Nro de Conos'] || 0} (${it['Tipo de Cono'] || ''})` : '-', group: 'conteo' },
+                    { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-', group: 'conteo' },
+                    { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-', group: 'conteo' },
+                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', group: 'conteo' },
+                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-', group: 'resultado', big: true },
+                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-', group: 'resultado', big: true },
+                    { header: 'Ubicación', get: it => it['Ubicación'] || '-', group: 'notas' },
+                    { header: 'Observaciones', get: it => it['Observaciones'] || '-', group: 'notas' },
+                    { header: 'Registro', get: it => fmtFecha(it['Registro']), group: 'notas' },
                 ],
             },
             telas: {
@@ -555,21 +559,21 @@
                 getFisico: (it, completado) => completado ? parseFloat(it['Peso Neto'] ?? it['Peso Neto Inv'] ?? 0) : null,
                 exportColumns: [
                     { header: 'Código', get: it => it['Código de Item'] || '' },
-                    { header: 'Diseño', get: it => it['Diseño'] || '-' },
+                    { header: 'Diseño', get: it => it['Diseño'] || '-', group: 'ident' },
                     { header: 'Descripción', get: it => it['Descripción'] || '' },
-                    { header: 'Lote', get: it => it['Lote'] || '-' },
-                    { header: 'UM', get: it => it['Unidad de Medida'] || '' },
-                    { header: 'Almacén', get: it => it['Almacen'] || '' },
-                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
-                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']) },
-                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-' },
-                    { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
-                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-' },
-                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-' },
-                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-' },
-                    { header: 'Ubicación', get: it => it['Ubicación'] || '-' },
-                    { header: 'Observaciones', get: it => it['Observaciones'] || '-' },
-                    { header: 'Registro', get: it => fmtFecha(it['Registro']) },
+                    { header: 'Lote', get: it => it['Lote'] || '-', group: 'ident' },
+                    { header: 'UM', get: it => it['Unidad de Medida'] || '', group: 'ident' },
+                    { header: 'Almacén', get: it => it['Almacen'] || '', group: 'ident' },
+                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '', group: 'ident' },
+                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']), group: 'teorico' },
+                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-', group: 'conteo' },
+                    { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-', group: 'conteo' },
+                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', group: 'conteo' },
+                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-', group: 'resultado', big: true },
+                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-', group: 'resultado', big: true },
+                    { header: 'Ubicación', get: it => it['Ubicación'] || '-', group: 'notas' },
+                    { header: 'Observaciones', get: it => it['Observaciones'] || '-', group: 'notas' },
+                    { header: 'Registro', get: it => fmtFecha(it['Registro']), group: 'notas' },
                 ],
             },
             desperdicios: {
@@ -598,22 +602,22 @@
                 exportColumns: [
                     { header: 'Código', get: it => it['Código de Item'] || '' },
                     { header: 'Descripción', get: it => it['Descripción'] || '' },
-                    { header: 'Lote', get: it => it['Lote'] || '-' },
-                    { header: 'UM', get: it => it['Unidad de Medida'] || '' },
-                    { header: 'Almacén', get: it => it['Almacen'] || '' },
-                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '' },
-                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']) },
-                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-' },
-                    { header: 'Nro Conos', get: (it, c) => c ? `${it['Nro de Conos'] || 0} (${it['Tipo de Cono'] || ''})` : '-' },
-                    { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-' },
-                    { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-' },
-                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-' },
-                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-' },
-                    { header: 'Bloqueo', get: it => it['Bloqueo'] ? 'SI' : 'NO' },
-                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-' },
-                    { header: 'Ubicación', get: it => it['Ubicación'] || '-' },
-                    { header: 'Observaciones', get: it => it['Observaciones'] || '-' },
-                    { header: 'Registro', get: it => fmtFecha(it['Registro']) },
+                    { header: 'Lote', get: it => it['Lote'] || '-', group: 'ident' },
+                    { header: 'UM', get: it => it['Unidad de Medida'] || '', group: 'ident' },
+                    { header: 'Almacén', get: it => it['Almacen'] || '', group: 'ident' },
+                    { header: 'Sub Almacén', get: it => it['Sub Almacen'] || '', group: 'ident' },
+                    { header: 'Stock SAP', get: it => num3(it['Stock SAP']), group: 'teorico' },
+                    { header: 'Peso Bruto', get: (it, c) => c ? num3(it['Peso Bruto']) : '-', group: 'conteo' },
+                    { header: 'Nro Conos', get: (it, c) => c ? `${it['Nro de Conos'] || 0} (${it['Tipo de Cono'] || ''})` : '-', group: 'conteo' },
+                    { header: 'Tara Conos', get: (it, c) => c ? num3(it['Tara Conos'] ?? it['Tara Conos Inv']) : '-', group: 'conteo' },
+                    { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-', group: 'conteo' },
+                    { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', group: 'conteo' },
+                    { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-', group: 'resultado', big: true },
+                    { header: 'Bloqueo', get: it => it['Bloqueo'] ? 'SI' : 'NO', group: 'notas' },
+                    { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-', group: 'resultado', big: true },
+                    { header: 'Ubicación', get: it => it['Ubicación'] || '-', group: 'notas' },
+                    { header: 'Observaciones', get: it => it['Observaciones'] || '-', group: 'notas' },
+                    { header: 'Registro', get: it => fmtFecha(it['Registro']), group: 'notas' },
                 ],
             },
         };
@@ -891,6 +895,57 @@
         // Llena y muestra el modal de detalle: mismas "cajas" (borde redondeado + fondo gris +
         // etiqueta pequeña) que usa el formulario del operador, en modo solo-lectura, más la
         // foto a la derecha cuando la app la maneja y el registro tiene una.
+        // Agrupa app.exportColumns por su "group" y arma la ficha en el mismo orden en que un
+        // humano razonaría el conteo: dónde está el artículo → qué decía SAP en teoría → qué
+        // hizo el operador al pesar/contar → el resultado (destacado, como el resumen que ve el
+        // operador) → notas de ubicación/observaciones/cuándo se registró.
+        const GRUPOS_DETALLE = [
+            { key: 'ident', titulo: 'Identificación y Ubicación en Almacén' },
+            { key: 'teorico', titulo: 'Stock Teórico (SAP)' },
+            { key: 'conteo', titulo: 'Detalle del Conteo Físico' },
+            { key: 'resultado', titulo: 'Resultado' },
+            { key: 'notas', titulo: 'Ubicación Fija y Observaciones' },
+        ];
+
+        function construirSeccionesDetalle(app, item) {
+            // Los 2 primeros (Código y Descripción) ya van en el encabezado de la ficha, no acá.
+            const campos = app.exportColumns.slice(2);
+            const dif = parseFloat(item['Diferencia'] || 0);
+
+            return GRUPOS_DETALLE.map(({ key, titulo }) => {
+                const camposGrupo = campos.filter(c => c.group === key);
+                if (camposGrupo.length === 0) return '';
+
+                if (key === 'resultado') {
+                    const filas = camposGrupo.map(c => {
+                        const val = c.get(item, true);
+                        const esDiferencia = c.header === 'Diferencia';
+                        const colorDif = Math.abs(dif) < 0.001 ? '#5eead4' : (dif < 0 ? '#fca5a5' : '#5eead4');
+                        return `<tr class="${esDiferencia ? '' : 'bg-teal-50'}" style="${esDiferencia ? 'background:#1f2937' : ''}">
+                            <td class="px-3 py-2 text-xs font-bold uppercase" style="color:${esDiferencia ? '#fff' : '#0f766e'}">${esc(c.header)}</td>
+                            <td class="px-3 py-2 text-right font-mono font-bold text-lg" style="color:${esDiferencia ? colorDif : '#0f766e'}">${esc(val)}</td>
+                        </tr>`;
+                    }).join('');
+                    return `<div>
+                        <h4 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">${titulo}</h4>
+                        <table class="w-full rounded-lg overflow-hidden border border-gray-200"><tbody class="divide-y divide-gray-100">${filas}</tbody></table>
+                    </div>`;
+                }
+
+                const cajas = camposGrupo.map(c => {
+                    const val = c.get(item, true);
+                    return `<div class="border border-gray-200 rounded-lg p-2.5 bg-gray-50">
+                        <label class="smart-label text-[10px]">${esc(c.header)}</label>
+                        <div class="font-mono font-bold text-gray-700 text-sm truncate" title="${esc(val)}">${esc(val) || '-'}</div>
+                    </div>`;
+                }).join('');
+                return `<div>
+                    <h4 class="text-[10px] font-bold text-gray-400 uppercase tracking-wider mb-1.5">${titulo}</h4>
+                    <div class="grid grid-cols-2 gap-2">${cajas}</div>
+                </div>`;
+            }).join('');
+        }
+
         function abrirModalDetalle() {
             const item = detalleLista[detalleIndice];
             if (!item) return;
@@ -900,16 +955,7 @@
             document.getElementById('detalle-descripcion').textContent = item['Descripción'] || '';
             document.getElementById('detalle-posicion').textContent = `${detalleIndice + 1} / ${detalleLista.length}`;
 
-            // app.exportColumns ya viene en el mismo orden lógico que el PDF/Excel; se saltan
-            // los 2 primeros (Código y Descripción) porque van en el encabezado de la ficha.
-            document.getElementById('detalle-campos').innerHTML = app.exportColumns.slice(2).map(c => {
-                const val = c.get(item, true);
-                return `
-                    <div class="border border-gray-200 rounded-lg p-2.5 bg-gray-50">
-                        <label class="smart-label text-[10px]">${esc(c.header)}</label>
-                        <div class="font-mono font-bold text-gray-700 text-sm truncate" title="${esc(val)}">${esc(val) || '-'}</div>
-                    </div>`;
-            }).join('');
+            document.getElementById('detalle-campos').innerHTML = construirSeccionesDetalle(app, item);
 
             const conFoto = !!(app.tieneFoto && item['Foto Balanza']);
             document.getElementById('detalle-foto-wrap').classList.toggle('hidden-view', !conFoto);
@@ -1213,7 +1259,7 @@
             const encabezadoCols = ['Inventariador', 'Grupo de Trabajo', '#', ...app.exportColumns.map(c => c.header)];
             const encabezado = [
                 ['ART ATLAS SRL - RUC: 20413770204'],
-                [`TOMA DE INVENTARIO - ${app.label.toUpperCase()} 2025`],
+                [`TOMA DE INVENTARIO - ${app.label.toUpperCase()}`],
                 [`GRUPO: ${infoFiltros.grupo}    FILTRO: ${infoFiltros.filtro}    FECHA: ${infoFiltros.fecha}    Generado: ${generado}`],
                 [],
                 encabezadoCols
