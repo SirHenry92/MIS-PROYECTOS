@@ -416,15 +416,15 @@
                                 </div>
                             </div>
 
-                            <!-- Foto de la báscula (control) -->
+                            <!-- Foto(s) de la báscula (control). Se permite más de una foto porque a
+                            veces el peso total se registra en varias pesadas (ej. 40kg + 30kg + ...):
+                            cada "Agregar Foto" sube/agrega una a la lista, una por una. -->
                             <div class="border border-gray-200 rounded-lg p-2.5 bg-gray-50">
                                 <label class="smart-label text-[10px] text-gray-500 mb-1 flex items-center gap-1">
-                                    <i class="fa-solid fa-camera"></i> Foto de la Báscula <span id="foto-balanza-obligatoria" class="text-red-500 hidden-view">*</span>
+                                    <i class="fa-solid fa-camera"></i> Foto(s) de la Báscula <span id="foto-balanza-obligatoria" class="text-red-500 hidden-view">*</span>
                                 </label>
                                 <input type="file" id="foto_balanza_input" accept="image/*" capture="environment" onchange="onFotoBalanzaSeleccionada(event)" class="hidden">
-                                <div id="foto-balanza-preview-wrap" class="hidden-view mb-2">
-                                    <img id="foto-balanza-preview" class="w-full max-h-40 object-contain rounded border border-gray-200 bg-white" src="">
-                                </div>
+                                <div id="foto-balanza-preview-wrap" class="hidden-view mb-2 grid grid-cols-3 gap-1.5"></div>
                                 <button type="button" id="btn-foto-balanza" onclick="document.getElementById('foto_balanza_input').click()" class="btn-secondary w-full py-2 text-xs bg-white border border-gray-300">
                                     <i class="fa-solid fa-camera mr-1"></i> <span id="txt-btn-foto-balanza">Tomar / Adjuntar Foto</span>
                                 </button>
@@ -585,11 +585,13 @@
         // nunca en el navegador: solo se sabe si acertó por el resultado que responde Supabase.
         let claveModificacionPendiente = null;
 
-        // Foto de la báscula: fotoBalanzaBlob es la imagen ya comprimida lista para subir (null si
-        // el operador no tomó una foto nueva). fotoBalanzaUrlActual es la URL que ya tenía el
-        // registro (si se está editando uno ya contado), para no perderla si no se cambia la foto.
-        let fotoBalanzaBlob = null;
-        let fotoBalanzaUrlActual = null;
+        // Foto(s) de la báscula: se admite más de una porque a veces el peso total se registra
+        // en varias pesadas (ej. 40kg + 30kg + ...). fotosBalanzaPendientes son las fotos nuevas
+        // ya comprimidas en este dispositivo, agregadas una por una (aún no subidas a Storage).
+        // fotosBalanzaGuardadas son las URLs que el registro ya tenía guardadas en Supabase (si
+        // se está viendo/editando uno ya contado), para no perderlas si no se agregan más.
+        let fotosBalanzaPendientes = []; // [{ blob, previewUrl }]
+        let fotosBalanzaGuardadas = []; // [url, url, ...]
 
         // Configuración de la app (tabla hilado_config), administrada desde el Panel de
         // Administrador centralizado. Aquí solo se LEE: el operador no puede cambiarla, solo
@@ -1071,11 +1073,13 @@
 
         function comprimirImagenBascula(file) {
             return new Promise((resolve, reject) => {
-                // Solo hace falta leer el número en la pantalla de la báscula: 900px de lado
+                // Solo hace falta leer el número en la pantalla de la báscula: 640px de lado
                 // mayor y escala de grises (sin color que aportar) ya dejan el dígito legible
                 // y reducen bastante el peso del archivo frente a una foto a color de cámara.
-                const MAX_LADO = 900;
-                const TARGET_KB = 70;
+                // Al permitir varias fotos por conteo, cada una pesa menos para no multiplicar
+                // el consumo del plan gratuito de Storage (1GB).
+                const MAX_LADO = 640;
+                const TARGET_KB = 40;
                 const img = new Image();
                 const url = URL.createObjectURL(file);
                 img.onload = async () => {
@@ -1100,8 +1104,8 @@
 
                         // Baja la calidad JPEG en pasos hasta acercarse al peso objetivo, sin
                         // pasar de una calidad mínima que ya no se leería bien.
-                        let blob = await canvasToBlob(canvas, 0.6);
-                        for (const calidad of [0.45, 0.35]) {
+                        let blob = await canvasToBlob(canvas, 0.5);
+                        for (const calidad of [0.35, 0.25]) {
                             if (blob.size / 1024 <= TARGET_KB) break;
                             blob = await canvasToBlob(canvas, calidad);
                         }
@@ -1118,25 +1122,24 @@
             });
         }
 
+        // Se agrega una foto por vez: el operador toca "Agregar Foto", el selector de archivo/
+        // cámara se abre una sola vez, se comprime esa foto y se suma a la lista de pendientes.
+        // Para agregar la siguiente pesada (ej. 40kg, luego 30kg...) debe tocar "Agregar Otra
+        // Foto" de nuevo -- no se puede seleccionar varias fotos de una sola vez.
         async function onFotoBalanzaSeleccionada(event) {
             const file = event.target.files && event.target.files[0];
             if (!file) return;
 
             const status = document.getElementById('foto-balanza-status');
-            const txtBtn = document.getElementById('txt-btn-foto-balanza');
             status.textContent = 'Comprimiendo imagen...';
 
             try {
                 const blob = await comprimirImagenBascula(file);
-                fotoBalanzaBlob = blob;
-
-                const preview = document.getElementById('foto-balanza-preview');
-                preview.src = URL.createObjectURL(blob);
-                document.getElementById('foto-balanza-preview-wrap').classList.remove('hidden-view');
+                fotosBalanzaPendientes.push({ blob, previewUrl: URL.createObjectURL(blob) });
+                renderFotosBalanzaPreview();
 
                 const kb = (blob.size / 1024).toFixed(0);
-                status.textContent = `Lista para subir (${kb} KB)`;
-                txtBtn.textContent = 'Cambiar Foto';
+                status.textContent = `Foto agregada (${kb} KB). Puedes agregar otra si pesaste en varias partes.`;
             } catch (err) {
                 status.textContent = '';
                 Swal.fire('Error', 'No se pudo procesar la foto: ' + err.message, 'error');
@@ -1145,22 +1148,65 @@
             }
         }
 
-        // Sube la foto ya comprimida a Storage y devuelve su URL pública. registroId se usa
-        // como parte del nombre de archivo para poder identificar a qué conteo pertenece.
-        async function subirFotoBalanza(blob, registroId) {
-            const nombreArchivo = `${registroId}-${Date.now()}.jpg`;
-            const { error } = await _supabase.storage
-                .from('fotos-balanza-hilado')
-                .upload(nombreArchivo, blob, { contentType: 'image/jpeg', upsert: false });
-            if (error) throw error;
-            const { data } = _supabase.storage.from('fotos-balanza-hilado').getPublicUrl(nombreArchivo);
-            return data.publicUrl;
+        function quitarFotoBalanzaPendiente(index) {
+            const item = fotosBalanzaPendientes[index];
+            if (item) URL.revokeObjectURL(item.previewUrl);
+            fotosBalanzaPendientes.splice(index, 1);
+            renderFotosBalanzaPreview();
+        }
+
+        // Dibuja las miniaturas: primero las ya guardadas en el registro (sin opción de quitar,
+        // son historial), luego las nuevas pendientes de subir (con botón "×" para descartarlas
+        // antes de guardar el conteo).
+        function renderFotosBalanzaPreview() {
+            const wrap = document.getElementById('foto-balanza-preview-wrap');
+            const total = fotosBalanzaGuardadas.length + fotosBalanzaPendientes.length;
+            wrap.classList.toggle('hidden-view', total === 0);
+            wrap.innerHTML = '';
+
+            fotosBalanzaGuardadas.forEach((url) => {
+                const div = document.createElement('div');
+                div.className = 'relative';
+                div.innerHTML = `<img src="${esc(url)}" class="w-full h-20 object-cover rounded border border-gray-200 bg-white">
+                    <span class="absolute bottom-0.5 left-0.5 bg-teal-600 text-white text-[8px] px-1 rounded font-bold">GUARDADA</span>`;
+                wrap.appendChild(div);
+            });
+            fotosBalanzaPendientes.forEach((item, index) => {
+                const div = document.createElement('div');
+                div.className = 'relative';
+                div.innerHTML = `<img src="${item.previewUrl}" class="w-full h-20 object-cover rounded border border-teal-300 bg-white">
+                    <button type="button" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center shadow" title="Quitar">×</button>`;
+                div.querySelector('button').onclick = () => quitarFotoBalanzaPendiente(index);
+                wrap.appendChild(div);
+            });
+
+            const txtBtn = document.getElementById('txt-btn-foto-balanza');
+            txtBtn.textContent = total > 0 ? 'Agregar Otra Foto' : 'Tomar / Adjuntar Foto';
+        }
+
+        // Sube todas las fotos pendientes a Storage, EN SECUENCIA (una termina antes de que
+        // empiece la siguiente) y devuelve la lista de URLs públicas ya subidas. registroId se
+        // usa como parte del nombre de archivo para poder identificar a qué conteo pertenecen.
+        async function subirFotosBalanzaPendientes(registroId) {
+            const urls = [];
+            for (let i = 0; i < fotosBalanzaPendientes.length; i++) {
+                const { blob } = fotosBalanzaPendientes[i];
+                const nombreArchivo = `${registroId}-${Date.now()}-${i}.jpg`;
+                const { error } = await _supabase.storage
+                    .from('fotos-balanza-hilado')
+                    .upload(nombreArchivo, blob, { contentType: 'image/jpeg', upsert: false });
+                if (error) throw error;
+                const { data } = _supabase.storage.from('fotos-balanza-hilado').getPublicUrl(nombreArchivo);
+                urls.push(data.publicUrl);
+            }
+            return urls;
         }
 
         function resetFotoBalanzaModal() {
-            fotoBalanzaBlob = null;
-            fotoBalanzaUrlActual = null;
-            document.getElementById('foto-balanza-preview').src = '';
+            fotosBalanzaPendientes.forEach(item => URL.revokeObjectURL(item.previewUrl));
+            fotosBalanzaPendientes = [];
+            fotosBalanzaGuardadas = [];
+            document.getElementById('foto-balanza-preview-wrap').innerHTML = '';
             document.getElementById('foto-balanza-preview-wrap').classList.add('hidden-view');
             document.getElementById('foto-balanza-status').textContent = '';
             document.getElementById('txt-btn-foto-balanza').textContent = 'Tomar / Adjuntar Foto';
@@ -1206,19 +1252,21 @@
                 setVal('ubicacion', completado ? (item['Ubicación'] || '') : '');
                 setVal('observaciones', completado ? (item['Observaciones'] || '') : '');
 
-                // Foto de la báscula: si el registro ya tiene una, se muestra de una vez.
-                fotoBalanzaUrlActual = item['Foto Balanza'] || null;
-                if (fotoBalanzaUrlActual) {
-                    document.getElementById('foto-balanza-preview').src = fotoBalanzaUrlActual;
-                    document.getElementById('foto-balanza-preview-wrap').classList.remove('hidden-view');
-                    document.getElementById('foto-balanza-status').textContent = completado ? 'Foto registrada al momento del conteo' : '';
+                // Foto(s) de la báscula: si el registro ya tiene alguna guardada, se muestran de
+                // una vez. "Fotos Balanza" (jsonb) es lo nuevo; "Foto Balanza" (texto) se lee
+                // solo como respaldo de registros antiguos guardados antes de este cambio.
+                const fotosPrevias = Array.isArray(item['Fotos Balanza']) ? item['Fotos Balanza'] : [];
+                fotosBalanzaGuardadas = fotosPrevias.length > 0 ? fotosPrevias : (item['Foto Balanza'] ? [item['Foto Balanza']] : []);
+                renderFotosBalanzaPreview();
+                if (fotosBalanzaGuardadas.length > 0) {
+                    document.getElementById('foto-balanza-status').textContent = completado ? 'Foto(s) registrada(s) al momento del conteo' : '';
                 }
                 if (completado) {
                     document.getElementById('foto_balanza_input').disabled = true;
                     const btnFoto = document.getElementById('btn-foto-balanza');
                     btnFoto.disabled = true;
                     btnFoto.classList.add('opacity-50', 'cursor-not-allowed');
-                    document.getElementById('txt-btn-foto-balanza').textContent = fotoBalanzaUrlActual ? 'Foto ya registrada' : 'Sin foto registrada';
+                    document.getElementById('txt-btn-foto-balanza').textContent = fotosBalanzaGuardadas.length > 0 ? 'Foto(s) ya registrada(s)' : 'Sin foto registrada';
                 }
 
                 const inputs = ['nro_conos', 'tipo_cono', 'nro_bolsas', 'tipo_bolsa', 'peso_bruto', 'ubicacion', 'observaciones'];
@@ -1329,12 +1377,12 @@
             document.getElementById('btnGuardar').innerHTML = '<i class="fa-solid fa-floppy-disk mr-2"></i> Actualizar Conteo';
             document.getElementById('btnModificar').classList.add('hidden-view');
 
-            // También se habilita el reemplazo de la foto de la báscula durante la edición.
+            // También se habilita agregar más fotos de la báscula durante la edición.
             document.getElementById('foto_balanza_input').disabled = false;
             const btnFoto = document.getElementById('btn-foto-balanza');
             btnFoto.disabled = false;
             btnFoto.classList.remove('opacity-50', 'cursor-not-allowed');
-            document.getElementById('txt-btn-foto-balanza').textContent = 'Cambiar Foto';
+            document.getElementById('txt-btn-foto-balanza').textContent = 'Agregar Otra Foto';
 
             calcTargetInput = document.getElementById('peso_bruto');
             modoEdicionAutorizada = true;
@@ -1511,7 +1559,7 @@
                 return;
             }
 
-            if (configuracionApp.exigir_foto_balanza && !fotoBalanzaBlob && !fotoBalanzaUrlActual) {
+            if (configuracionApp.exigir_foto_balanza && fotosBalanzaPendientes.length === 0 && fotosBalanzaGuardadas.length === 0) {
                 Swal.fire({
                     icon: 'warning',
                     title: 'Falta la foto de la báscula',
@@ -1549,13 +1597,14 @@
             try {
                 let data, error;
 
-                // Si el operador tomó una foto nueva, se sube recién en este momento (no antes,
-                // para no llenar Storage con fotos de conteos que al final no se guardaron).
-                // Si no tomó una nueva, se conserva la que ya tenía el registro (o null).
-                let fotoBalanzaUrlFinal = fotoBalanzaUrlActual;
-                if (fotoBalanzaBlob) {
-                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Subiendo foto...';
-                    fotoBalanzaUrlFinal = await subirFotoBalanza(fotoBalanzaBlob, registroId);
+                // Si el operador agregó fotos nuevas, se suben recién en este momento (no antes,
+                // para no llenar Storage con fotos de conteos que al final no se guardaron), en
+                // secuencia (una por una). Las que ya estaban guardadas se conservan.
+                let fotosBalanzaUrlsFinal = fotosBalanzaGuardadas;
+                if (fotosBalanzaPendientes.length > 0) {
+                    btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Subiendo fotos...';
+                    const nuevasUrls = await subirFotosBalanzaPendientes(registroId);
+                    fotosBalanzaUrlsFinal = [...fotosBalanzaGuardadas, ...nuevasUrls];
                     btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Guardando...';
                 }
 
@@ -1571,7 +1620,7 @@
                         p_nro_bolsas: nroBolsas,
                         p_tipo_bolsa: tipoBolsa,
                         p_ubicacion: ubicacionValor,
-                        p_foto_balanza: fotoBalanzaUrlFinal
+                        p_fotos_balanza: fotosBalanzaUrlsFinal
                     });
                     data = resp.data ? [resp.data] : null;
                     error = resp.error;
@@ -1594,7 +1643,7 @@
                         "Diferencia": diferencia,
                         "Ubicación": ubicacionValor,
                         "Observaciones": document.getElementById('observaciones').value.trim().toUpperCase(),
-                        "Foto Balanza": fotoBalanzaUrlFinal,
+                        "Fotos Balanza": fotosBalanzaUrlsFinal,
                         "Registro": fechaLocal
                     };
 

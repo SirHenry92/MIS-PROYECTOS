@@ -375,8 +375,8 @@
                     </div>
 
                     <div id="card-foto-balanza" class="bg-white border border-gray-200 shadow-sm rounded-2xl p-6 hidden-view">
-                        <h2 class="text-lg font-bold text-gray-800 mb-1">Foto de la Báscula</h2>
-                        <p class="text-sm text-gray-500 mb-4">Exige (o no) que el operador adjunte una foto del peso mostrado en la báscula antes de guardar cada conteo.</p>
+                        <h2 class="text-lg font-bold text-gray-800 mb-1" id="titulo-card-foto">Foto</h2>
+                        <p class="text-sm text-gray-500 mb-4" id="texto-card-foto">Exige (o no) que el operador adjunte una foto antes de guardar cada conteo.</p>
                         <button onclick="toggleExigirFotoBalanza()" id="btn-toggle-foto" class="btn-secondary bg-white border border-gray-300 shadow-sm px-4 py-2.5 text-sm">
                             <i class="fa-solid fa-circle-notch fa-spin mr-2"></i> <span id="txt-toggle-foto">Cargando...</span>
                         </button>
@@ -462,7 +462,9 @@
             avios: {
                 label: 'Avíos', icon: 'fa-solid fa-shapes',
                 tabla: 'avios', tablaPersonal: 'inventariadores_avios', tablaConfig: 'avios_config',
-                exigeFoto: false, tieneTolerancia: false,
+                exigeFoto: true, tieneTolerancia: false, tieneFoto: true,
+                campoExigirFoto: 'exigir_foto', labelFoto: 'Foto del Avío',
+                getFotos: it => it['Foto Avio'] ? [it['Foto Avio']] : [],
                 importFields: [
                     { db: 'Nro', aliases: ['nro'] },
                     { db: 'Grupo de Articulos', aliases: ['grupo de articulos', 'grupo'] },
@@ -527,6 +529,12 @@
                 ],
                 getFisico: (it, completado) => completado ? parseFloat(it['Peso Neto'] ?? it['Peso Neto Inv'] ?? 0) : null,
                 tieneFoto: true,
+                campoExigirFoto: 'exigir_foto_balanza', labelFoto: 'Foto de la Báscula',
+                // "Fotos Balanza" (jsonb) es lo nuevo (puede haber varias, ej. pesadas parciales);
+                // "Foto Balanza" (texto) se lee solo como respaldo de registros antiguos.
+                getFotos: it => (Array.isArray(it['Fotos Balanza']) && it['Fotos Balanza'].length > 0)
+                    ? it['Fotos Balanza']
+                    : (it['Foto Balanza'] ? [it['Foto Balanza']] : []),
                 // Orden: identificación → dónde está → lo teórico de SAP → cómo se pesó →
                 // resultado neto → diferencia → ubicación/observaciones/auditoría.
                 exportColumns: [
@@ -744,6 +752,8 @@
             document.getElementById('txt-carga-app').textContent = `Sube el archivo CSV para cargar la base de artículos pendientes a contar (${APPS[key].label}).`;
             document.getElementById('txt-personal-app').textContent = `Nuevo Operador (${APPS[key].label})`;
             document.getElementById('card-foto-balanza').classList.toggle('hidden-view', !APPS[key].exigeFoto);
+            document.getElementById('titulo-card-foto').textContent = APPS[key].labelFoto || 'Foto';
+            document.getElementById('texto-card-foto').textContent = `Exige (o no) que el operador adjunte una foto (${(APPS[key].labelFoto || 'foto').toLowerCase()}) antes de guardar cada conteo.`;
             document.getElementById('card-tolerancia').classList.toggle('hidden-view', !APPS[key].tieneTolerancia);
             document.getElementById('card-tipos-cono').classList.toggle('hidden-view', !APPS[key].tieneConos);
             document.getElementById('card-tipos-bolsa').classList.toggle('hidden-view', !APPS[key].tieneTolerancia);
@@ -938,11 +948,14 @@
             const btn = document.getElementById('btn-toggle-foto');
             const txt = document.getElementById('txt-toggle-foto');
             if (!btn || !txt) return;
-            if (configuracionApp.exigir_foto_balanza) {
-                txt.innerHTML = 'Foto Báscula: <b>Obligatoria</b>';
+            const app = APPS[currentApp];
+            const campo = app.campoExigirFoto || 'exigir_foto_balanza';
+            const label = app.labelFoto || 'Foto';
+            if (configuracionApp[campo]) {
+                txt.innerHTML = `${label}: <b>Obligatoria</b>`;
                 btn.querySelector('i').className = 'fa-solid fa-camera mr-2';
             } else {
-                txt.innerHTML = 'Foto Báscula: <b>Opcional</b>';
+                txt.innerHTML = `${label}: <b>Opcional</b>`;
                 btn.querySelector('i').className = 'fa-solid fa-camera-slash mr-2';
             }
         }
@@ -971,19 +984,21 @@
 
         async function toggleExigirFotoBalanza() {
             const app = APPS[currentApp];
-            const nuevoValor = !configuracionApp.exigir_foto_balanza;
+            const campo = app.campoExigirFoto || 'exigir_foto_balanza';
+            const label = (app.labelFoto || 'foto').toLowerCase();
+            const nuevoValor = !configuracionApp[campo];
             const accion = nuevoValor ? 'exigir' : 'dejar de exigir';
             const result = await Swal.fire({
-                title: nuevoValor ? '¿Exigir foto de la báscula?' : '¿Dejar de exigir la foto?',
-                text: nuevoValor ? 'Los operadores no podrán guardar un conteo sin adjuntar una foto del peso mostrado en la báscula.' : 'La foto de la báscula pasará a ser opcional para los operadores.',
+                title: nuevoValor ? `¿Exigir ${label}?` : `¿Dejar de exigir la ${label}?`,
+                text: nuevoValor ? `Los operadores no podrán guardar un conteo sin adjuntar la ${label}.` : `La ${label} pasará a ser opcional para los operadores.`,
                 icon: 'warning', showCancelButton: true, confirmButtonColor: '#0d9488',
                 confirmButtonText: `Sí, ${accion}`, cancelButtonText: 'Cancelar'
             });
             if (!result.isConfirmed) return;
             try {
-                const { error } = await _supabase.from(app.tablaConfig).update({ exigir_foto_balanza: nuevoValor }).eq('id', 1);
+                const { error } = await _supabase.from(app.tablaConfig).update({ [campo]: nuevoValor }).eq('id', 1);
                 if (error) throw error;
-                configuracionApp.exigir_foto_balanza = nuevoValor;
+                configuracionApp[campo] = nuevoValor;
                 actualizarBotonToggleFoto();
                 Swal.fire({ toast: true, position: 'top', icon: 'success', title: 'Actualizado', showConfirmButton: false, timer: 1200 });
             } catch (error) {
@@ -1059,7 +1074,8 @@
             const app = APPS[currentApp];
             const hayAnterior = detalleIndice > 0;
             const haySiguiente = detalleIndice < detalleLista.length - 1;
-            const conFoto = !!(app.tieneFoto && item['Foto Balanza']);
+            const fotosItem = (app.tieneFoto && app.getFotos) ? app.getFotos(item) : [];
+            const conFoto = fotosItem.length > 0;
 
             // Solo lo que llenó el operador (grupo "conteo") + el resultado (grupo "resultado",
             // destacado) + Stock SAP para comparar. Se saltan Almacén/UM/Lote/Ubicación/etc.
@@ -1100,8 +1116,8 @@
                             </table>
                         </div>
                         ${conFoto ? `
-                        <div style="flex:1 1 260px; min-width:220px;">
-                            <img src="${esc(item['Foto Balanza'])}" alt="Foto de la báscula" style="width:100%; max-height:50vh; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0;">
+                        <div style="flex:1 1 260px; min-width:220px; display:flex; flex-direction:column; gap:8px;">
+                            ${fotosItem.map(url => `<img src="${esc(url)}" alt="${esc(app.labelFoto || 'Foto')}" style="width:100%; max-height:${fotosItem.length > 1 ? '24vh' : '50vh'}; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0;">`).join('')}
                         </div>` : ''}
                     </div>
                 `,
