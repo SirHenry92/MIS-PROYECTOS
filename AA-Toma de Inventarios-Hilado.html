@@ -25,6 +25,10 @@
     <!-- html5-qrcode: Escáner de código de barras/QR usando la cámara -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
+    <!-- Tesseract.js: OCR liviano en el navegador, solo para confirmar que la foto de la
+         báscula capturada con la cámara guiada tenga al menos un número legible -->
+    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5.1.1/dist/tesseract.min.js"></script>
+
     <style>
         body {
             background-color: #f4f7f6;
@@ -423,10 +427,16 @@
                                 <label class="smart-label text-[10px] text-gray-500 mb-1 flex items-center gap-1">
                                     <i class="fa-solid fa-camera"></i> Foto(s) de la Báscula <span id="foto-balanza-obligatoria" class="text-red-500 hidden-view">*</span>
                                 </label>
+                                <!-- Respaldo (galería/sin cámara del navegador): sigue existiendo pero
+                                queda oculto detrás del enlace de abajo -- el flujo principal es la
+                                cámara guiada con recuadro + verificación de número. -->
                                 <input type="file" id="foto_balanza_input" accept="image/*" capture="environment" onchange="onFotoBalanzaSeleccionada(event)" class="hidden">
                                 <div id="foto-balanza-preview-wrap" class="hidden-view mb-2 grid grid-cols-3 gap-1.5"></div>
-                                <button type="button" id="btn-foto-balanza" onclick="document.getElementById('foto_balanza_input').click()" class="btn-secondary w-full py-2 text-xs bg-white border border-gray-300">
+                                <button type="button" id="btn-foto-balanza" onclick="abrirCamaraBalanza()" class="btn-secondary w-full py-2 text-xs bg-white border border-gray-300">
                                     <i class="fa-solid fa-camera mr-1"></i> <span id="txt-btn-foto-balanza">Tomar / Adjuntar Foto</span>
+                                </button>
+                                <button type="button" id="link-foto-balanza-fallback" onclick="document.getElementById('foto_balanza_input').click()" class="w-full text-center text-[10px] text-gray-400 hover:text-gray-600 underline mt-1">
+                                    ¿No funciona la cámara? Selecciona un archivo
                                 </button>
                                 <p id="foto-balanza-status" class="text-[10px] text-gray-400 mt-1"></p>
                             </div>
@@ -545,6 +555,41 @@
             <div class="p-4 overflow-y-auto bg-white flex-grow">
                 <div id="reader"></div>
                 <p class="text-center text-xs text-gray-400 mt-2">Apunta la cámara al código de barras del artículo.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL WIDGET: CÁMARA GUIADA PARA LA FOTO DE LA BÁSCULA -->
+    <div id="modal-camara-balanza" class="fixed inset-0 modal-backdrop z-[60] hidden-view flex items-end sm:items-center justify-center p-0 sm:p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white w-full max-w-md rounded-t-2xl sm:rounded-2xl shadow-2xl transform translate-y-full sm:translate-y-0 transition-transform duration-300 flex flex-col max-h-[95vh]" id="modal-camara-balanza-content">
+            <div class="px-4 py-2.5 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-weight-scale text-teal-600"></i>
+                    <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Foto de la Báscula</h3>
+                </div>
+                <button onclick="cerrarCamaraBalanza()" class="text-gray-400 hover:text-gray-700 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-4 bg-white flex-grow overflow-y-auto">
+                <div id="camara-balanza-video-wrap" class="relative w-full bg-black rounded-lg overflow-hidden" style="aspect-ratio: 4/3;">
+                    <video id="video-balanza" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                    <!-- Recuadro guía: acá adentro debe quedar el número de la pantalla de la
+                    báscula. No sirve para leer un código de barras (como el escáner), es solo
+                    una guía visual para encuadrar bien antes de capturar. -->
+                    <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
+                        <div id="guia-balanza" class="border-4 border-teal-400 rounded-lg" style="width:78%; height:30%; box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);"></div>
+                    </div>
+                    <div class="absolute top-2 left-0 right-0 text-center pointer-events-none px-2">
+                        <span class="bg-black/60 text-white text-[11px] px-3 py-1 rounded-full font-semibold">Encuadra el número de la báscula en el recuadro</span>
+                    </div>
+                </div>
+                <canvas id="canvas-balanza" class="hidden"></canvas>
+                <p id="camara-balanza-status" class="text-center text-xs text-gray-500 mt-2 min-h-[16px]"></p>
+                <div class="flex gap-2 mt-3">
+                    <button type="button" onclick="cerrarCamaraBalanza()" class="w-1/3 btn-secondary py-2.5 text-sm bg-white border border-gray-300">Cancelar</button>
+                    <button type="button" id="btn-capturar-balanza" onclick="capturarFotoBalanza()" class="w-2/3 btn-primary py-2.5 text-sm shadow-md">
+                        <i class="fa-solid fa-camera mr-2"></i> Capturar Foto
+                    </button>
+                </div>
             </div>
         </div>
     </div>
@@ -1026,6 +1071,179 @@
             setTimeout(() => modal.classList.add('hidden-view'), 300);
         }
 
+        // --- 4C. CÁMARA GUIADA PARA LA FOTO DE LA BÁSCULA ---
+        // A diferencia del escáner de arriba (que decodifica un código de barras), acá el
+        // objetivo es simplemente ayudar al operador a encuadrar bien la pantalla de la
+        // báscula antes de sacar la foto -- por eso un recuadro guía en vez de detección
+        // automática. Después de capturar, se corre un OCR liviano (Tesseract.js) SOLO sobre
+        // el recuadro para confirmar que haya al menos un dígito legible ahí adentro: es una
+        // forma barata de detectar "esto no es la pantalla de la báscula" (foto de la pared,
+        // del piso, dedo tapando la cámara, etc.) sin depender de un servicio externo pagado.
+        //
+        // El OCR sobre dígitos de pantallas LCD/7-segmentos no es perfecto (Tesseract está
+        // entrenado sobre todo con texto impreso), así que si no detecta ningún número NO se
+        // bloquea al operador de forma definitiva: se le avisa y se le da la opción de
+        // reintentar o de usar la foto igual, para no trabar el conteo real por un falso
+        // negativo del OCR.
+        let streamBalanza = null;
+
+        async function abrirCamaraBalanza() {
+            const modal = document.getElementById('modal-camara-balanza');
+            const content = document.getElementById('modal-camara-balanza-content');
+            modal.classList.remove('hidden-view');
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            modal.classList.add('opacity-100');
+            content.classList.remove('translate-y-full');
+
+            document.getElementById('camara-balanza-status').textContent = '';
+            document.getElementById('btn-capturar-balanza').disabled = false;
+
+            try {
+                streamBalanza = await navigator.mediaDevices.getUserMedia({
+                    video: { facingMode: 'environment', width: { ideal: 1280 }, height: { ideal: 960 } },
+                    audio: false
+                });
+                document.getElementById('video-balanza').srcObject = streamBalanza;
+            } catch (err) {
+                cerrarCamaraBalanza();
+                Swal.fire({
+                    icon: 'error',
+                    title: 'No se pudo acceder a la cámara',
+                    html: 'Verifica que hayas dado permiso de cámara al navegador.<br><br>Puedes usar el enlace "¿No funciona la cámara? Selecciona un archivo" como alternativa.'
+                });
+            }
+        }
+
+        function cerrarCamaraBalanza() {
+            const modal = document.getElementById('modal-camara-balanza');
+            const content = document.getElementById('modal-camara-balanza-content');
+
+            modal.classList.remove('opacity-100');
+            modal.classList.add('opacity-0');
+            content.classList.add('translate-y-full');
+
+            if (streamBalanza) {
+                streamBalanza.getTracks().forEach(t => t.stop());
+                streamBalanza = null;
+            }
+
+            setTimeout(() => modal.classList.add('hidden-view'), 300);
+        }
+
+        // Traduce el recuadro guía (posición en pantalla, con el video mostrado en
+        // object-fit:cover) a un rectángulo en píxeles NATIVOS del video, para poder recortar
+        // justo esa zona con canvas antes de mandarla al OCR.
+        function calcularRectanguloNativoBalanza() {
+            const video = document.getElementById('video-balanza');
+            const wrap = document.getElementById('camara-balanza-video-wrap');
+            const guia = document.getElementById('guia-balanza');
+
+            const wrapRect = wrap.getBoundingClientRect();
+            const guiaRect = guia.getBoundingClientRect();
+
+            const vw = video.videoWidth, vh = video.videoHeight;
+            const cw = wrapRect.width, ch = wrapRect.height;
+
+            // object-fit:cover -> el video se escala para CUBRIR el contenedor (recortando lo
+            // que sobra), con el mismo factor de escala en ambos ejes.
+            const escala = Math.max(cw / vw, ch / vh);
+            const renderW = vw * escala, renderH = vh * escala;
+            const offsetX = (renderW - cw) / 2;
+            const offsetY = (renderH - ch) / 2;
+
+            const gx = guiaRect.left - wrapRect.left;
+            const gy = guiaRect.top - wrapRect.top;
+
+            return {
+                sx: Math.max(0, (gx + offsetX) / escala),
+                sy: Math.max(0, (gy + offsetY) / escala),
+                sw: Math.min(vw, guiaRect.width / escala),
+                sh: Math.min(vh, guiaRect.height / escala)
+            };
+        }
+
+        async function capturarFotoBalanza() {
+            const video = document.getElementById('video-balanza');
+            if (!video.videoWidth) return; // la cámara todavía no está lista
+
+            const btn = document.getElementById('btn-capturar-balanza');
+            const status = document.getElementById('camara-balanza-status');
+            btn.disabled = true;
+
+            // 1) El cuadro COMPLETO es la foto que realmente se va a comprimir/guardar.
+            const canvasCompleto = document.createElement('canvas');
+            canvasCompleto.width = video.videoWidth;
+            canvasCompleto.height = video.videoHeight;
+            canvasCompleto.getContext('2d').drawImage(video, 0, 0);
+
+            // 2) Se recorta SOLO la zona del recuadro guía para el OCR: más rápido y más
+            // preciso que analizar la foto entera (menos ruido alrededor del número).
+            const rect = calcularRectanguloNativoBalanza();
+            const canvasRecorte = document.getElementById('canvas-balanza');
+            canvasRecorte.width = Math.max(1, Math.round(rect.sw));
+            canvasRecorte.height = Math.max(1, Math.round(rect.sh));
+            canvasRecorte.getContext('2d').drawImage(video, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, canvasRecorte.width, canvasRecorte.height);
+
+            status.textContent = 'Verificando que se vea un número...';
+
+            let huboDigito = false;
+            try {
+                const resultado = await Tesseract.recognize(canvasRecorte, 'eng', {
+                    tessedit_char_whitelist: '0123456789.,-'
+                });
+                huboDigito = /\d/.test((resultado.data && resultado.data.text) || '');
+            } catch (err) {
+                console.warn('OCR de la báscula no disponible/falló; se deja pasar sin bloquear:', err);
+                huboDigito = true; // si el OCR falla (ej. sin conexión para el modelo), no se bloquea al operador
+            }
+
+            btn.disabled = false;
+            status.textContent = '';
+
+            if (!huboDigito) {
+                const resp = await Swal.fire({
+                    icon: 'warning',
+                    title: 'No se detectó ningún número',
+                    text: 'No pudimos confirmar que dentro del recuadro se vea un número de la báscula. Revisa el encuadre, el enfoque y la luz, e inténtalo de nuevo.',
+                    showCancelButton: true,
+                    confirmButtonText: 'Volver a intentar',
+                    cancelButtonText: 'Usar esta foto igual',
+                    confirmButtonColor: '#0d9488',
+                    reverseButtons: true
+                });
+                if (resp.isConfirmed) return; // se queda en la cámara para reintentar
+                // si elige "Usar esta foto igual" (cancelButton), sigue con la foto capturada
+            }
+
+            canvasCompleto.toBlob(async (blob) => {
+                if (!blob) {
+                    Swal.fire('Error', 'No se pudo capturar la foto.', 'error');
+                    return;
+                }
+                cerrarCamaraBalanza();
+                await procesarFotoBalanzaCapturada(blob);
+            }, 'image/jpeg', 0.85);
+        }
+
+        // Reutiliza el mismo pipeline de compresión que ya existía para fotos elegidas por
+        // archivo (comprimirImagenBascula), envolviendo el blob capturado en un File.
+        async function procesarFotoBalanzaCapturada(blobOriginal) {
+            const status = document.getElementById('foto-balanza-status');
+            status.textContent = 'Comprimiendo imagen...';
+            try {
+                const archivo = new File([blobOriginal], 'balanza.jpg', { type: 'image/jpeg' });
+                const blob = await comprimirImagenBascula(archivo);
+                fotosBalanzaPendientes.push({ blob, previewUrl: URL.createObjectURL(blob) });
+                renderFotosBalanzaPreview();
+                const kb = (blob.size / 1024).toFixed(0);
+                status.textContent = `Foto agregada (${kb} KB). Puedes agregar otra si pesaste en varias partes.`;
+            } catch (err) {
+                status.textContent = '';
+                Swal.fire('Error', 'No se pudo procesar la foto: ' + err.message, 'error');
+            }
+        }
+
         // --- 5. MODAL WIDGET GRID Y CALCULADORA (OPERADOR HILADOS) ---
         // Los tipos de cono/bolsa y su tara ya no están fijos acá: se cargan desde
         // hilado_config.tipos_cono/tipos_bolsa (configurables desde el Panel de Administrador)
@@ -1213,6 +1431,7 @@
             document.getElementById('foto_balanza_input').disabled = false;
             document.getElementById('btn-foto-balanza').disabled = false;
             document.getElementById('btn-foto-balanza').classList.remove('opacity-50', 'cursor-not-allowed');
+            document.getElementById('link-foto-balanza-fallback').classList.remove('hidden-view');
         }
 
         function abrirModalConteo(index) {
@@ -1266,6 +1485,7 @@
                     const btnFoto = document.getElementById('btn-foto-balanza');
                     btnFoto.disabled = true;
                     btnFoto.classList.add('opacity-50', 'cursor-not-allowed');
+                    document.getElementById('link-foto-balanza-fallback').classList.add('hidden-view');
                     document.getElementById('txt-btn-foto-balanza').textContent = fotosBalanzaGuardadas.length > 0 ? 'Foto(s) ya registrada(s)' : 'Sin foto registrada';
                 }
 
@@ -1382,6 +1602,7 @@
             const btnFoto = document.getElementById('btn-foto-balanza');
             btnFoto.disabled = false;
             btnFoto.classList.remove('opacity-50', 'cursor-not-allowed');
+            document.getElementById('link-foto-balanza-fallback').classList.remove('hidden-view');
             document.getElementById('txt-btn-foto-balanza').textContent = 'Agregar Otra Foto';
 
             calcTargetInput = document.getElementById('peso_bruto');
