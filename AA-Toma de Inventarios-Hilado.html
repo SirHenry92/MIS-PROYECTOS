@@ -393,19 +393,15 @@
                                     <label class="smart-label text-[10px]">Nro de Conos</label>
                                     <input type="number" step="1" min="0" id="nro_conos" oninput="calcularModal()" class="smart-input font-mono font-bold text-teal-700 mb-2" placeholder="0">
                                     <label class="smart-label text-[10px]">Tipo de Cono</label>
-                                    <select id="tipo_cono" onchange="onTipoConoChange(); calcularModal();" class="smart-input text-xs mb-1">
-                                        <option value="">Sin cono</option>
+                                    <select id="tipo_cono" onchange="calcularModal();" class="smart-input text-xs mb-1">
                                     </select>
-                                    <input type="number" step="0.001" min="0" id="tipo_cono_manual" oninput="calcularModal()" class="smart-input text-xs hidden-view" placeholder="Tara x cono (kg)">
                                 </div>
                                 <div class="border border-gray-200 rounded-lg p-2.5">
                                     <label class="smart-label text-[10px]">Nro de Bolsas</label>
                                     <input type="number" step="1" min="0" id="nro_bolsas" oninput="calcularModal()" class="smart-input font-mono font-bold text-teal-700 mb-2" placeholder="0">
                                     <label class="smart-label text-[10px]">Tipo de Bolsa</label>
-                                    <select id="tipo_bolsa" onchange="onTipoBolsaChange(); calcularModal();" class="smart-input text-xs mb-1">
-                                        <option value="">Sin bolsa</option>
+                                    <select id="tipo_bolsa" onchange="calcularModal();" class="smart-input text-xs mb-1">
                                     </select>
-                                    <input type="number" step="0.001" min="0" id="tipo_bolsa_manual" oninput="calcularModal()" class="smart-input text-xs hidden-view" placeholder="Tara x bolsa (kg)">
                                 </div>
                             </div>
 
@@ -619,8 +615,8 @@
 
             TARA_VALORES_CONO = construirMapaTara(configuracionApp.tipos_cono);
             TARA_VALORES_BOLSA = construirMapaTara(configuracionApp.tipos_bolsa);
-            poblarSelectTipo('tipo_cono', configuracionApp.tipos_cono, 'Sin cono');
-            poblarSelectTipo('tipo_bolsa', configuracionApp.tipos_bolsa, 'Sin bolsa');
+            poblarSelectTipo('tipo_cono', configuracionApp.tipos_cono);
+            poblarSelectTipo('tipo_bolsa', configuracionApp.tipos_bolsa);
 
             return configuracionApp;
         }
@@ -1033,46 +1029,25 @@
         // hilado_config.tipos_cono/tipos_bolsa (configurables desde el Panel de Administrador)
         // dentro de cargarConfiguracion(). Arrancan vacíos y se llenan al cargar la página.
         let TARA_VALORES_CONO = { 'Otro': 0, '': 0 };
-        let TARA_VALORES_BOLSA = { 'Otro': 0, '': 0 };
+        let TARA_VALORES_BOLSA = {};
 
+        // Solo se usan los tipos configurados en Supabase (hilado_config.tipos_cono/tipos_bolsa,
+        // editables desde el Panel de Administrador) -- sin "Otro (tara manual)" ni "Sin cono"/
+        // "Sin bolsa": el operador siempre elige uno de los tipos configurados.
         function construirMapaTara(lista) {
-            const mapa = { 'Otro': 0, '': 0 };
+            const mapa = {};
             (lista || []).forEach(t => { mapa[t.tipo] = t.tara; });
             return mapa;
         }
 
         // Reconstruye las <option> de un <select> de tipo (cono o bolsa) a partir de la lista
         // configurable, conservando el valor ya elegido si sigue existiendo en la lista nueva.
-        function poblarSelectTipo(selectId, tipos, etiquetaSinTipo) {
+        function poblarSelectTipo(selectId, tipos) {
             const select = document.getElementById(selectId);
             if (!select) return;
             const valorPrevio = select.value;
-            select.innerHTML = (tipos || []).map(t => `<option value="${esc(t.tipo)}">${esc(t.tipo)}</option>`).join('')
-                + `<option value="Otro">Otro (tara manual)</option>`
-                + `<option value="">${etiquetaSinTipo}</option>`;
+            select.innerHTML = (tipos || []).map(t => `<option value="${esc(t.tipo)}">${esc(t.tipo)}</option>`).join('');
             if ([...select.options].some(o => o.value === valorPrevio)) select.value = valorPrevio;
-        }
-
-        function onTipoConoChange() {
-            const tipo = document.getElementById('tipo_cono').value;
-            const inputManual = document.getElementById('tipo_cono_manual');
-            if (tipo === 'Otro') {
-                inputManual.classList.remove('hidden-view');
-            } else {
-                inputManual.classList.add('hidden-view');
-                inputManual.value = '';
-            }
-        }
-
-        function onTipoBolsaChange() {
-            const tipo = document.getElementById('tipo_bolsa').value;
-            const inputManual = document.getElementById('tipo_bolsa_manual');
-            if (tipo === 'Otro') {
-                inputManual.classList.remove('hidden-view');
-            } else {
-                inputManual.classList.add('hidden-view');
-                inputManual.value = '';
-            }
         }
 
         function activarCalcPesoBruto() {
@@ -1246,10 +1221,7 @@
                     document.getElementById('txt-btn-foto-balanza').textContent = fotoBalanzaUrlActual ? 'Foto ya registrada' : 'Sin foto registrada';
                 }
 
-                onTipoConoChange();
-                onTipoBolsaChange();
-
-                const inputs = ['nro_conos', 'tipo_cono', 'tipo_cono_manual', 'nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones'];
+                const inputs = ['nro_conos', 'tipo_cono', 'nro_bolsas', 'tipo_bolsa', 'peso_bruto', 'ubicacion', 'observaciones'];
                 const btnGuardar = document.getElementById('btnGuardar');
                 const btnModificar = document.getElementById('btnModificar');
                 const badgeEstado = document.getElementById('modal-estado-badge');
@@ -1330,7 +1302,7 @@
             // contraseña + datos en una sola operación atómica (función modificar_conteo_hilado).
             claveModificacionPendiente = password;
 
-            const inputs = ['nro_conos', 'tipo_cono', 'tipo_cono_manual', 'nro_bolsas', 'tipo_bolsa', 'tipo_bolsa_manual', 'peso_bruto', 'ubicacion', 'observaciones'];
+            const inputs = ['nro_conos', 'tipo_cono', 'nro_bolsas', 'tipo_bolsa', 'peso_bruto', 'ubicacion', 'observaciones'];
             inputs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
@@ -1436,18 +1408,12 @@
         function calcularModal() {
             const nroConos = parseFloat(document.getElementById('nro_conos').value) || 0;
             const tipoCono = document.getElementById('tipo_cono').value;
-            let taraConoUnit = TARA_VALORES_CONO[tipoCono] || 0;
-            if (tipoCono === 'Otro') {
-                taraConoUnit = parseFloat(document.getElementById('tipo_cono_manual').value) || 0;
-            }
+            const taraConoUnit = TARA_VALORES_CONO[tipoCono] || 0;
             const taraConos = nroConos * taraConoUnit;
 
             const nroBolsas = parseFloat(document.getElementById('nro_bolsas').value) || 0;
             const tipoBolsa = document.getElementById('tipo_bolsa').value;
-            let taraBolsaUnit = TARA_VALORES_BOLSA[tipoBolsa] || 0;
-            if (tipoBolsa === 'Otro') {
-                taraBolsaUnit = parseFloat(document.getElementById('tipo_bolsa_manual').value) || 0;
-            }
+            const taraBolsaUnit = TARA_VALORES_BOLSA[tipoBolsa] || 0;
             const taraBolsa = nroBolsas * taraBolsaUnit;
 
             const pesoBruto = parseFloat(document.getElementById('peso_bruto').value) || 0;
@@ -1547,18 +1513,12 @@
 
             const nroConos = parseFloat(document.getElementById('nro_conos').value) || 0;
             const tipoCono = document.getElementById('tipo_cono').value;
-            let taraConoUnit = TARA_VALORES_CONO[tipoCono] || 0;
-            if (tipoCono === 'Otro') {
-                taraConoUnit = parseFloat(document.getElementById('tipo_cono_manual').value) || 0;
-            }
+            const taraConoUnit = TARA_VALORES_CONO[tipoCono] || 0;
             const taraConos = nroConos * taraConoUnit;
 
             const nroBolsas = parseFloat(document.getElementById('nro_bolsas').value) || 0;
             const tipoBolsa = document.getElementById('tipo_bolsa').value;
-            let taraBolsaUnit = TARA_VALORES_BOLSA[tipoBolsa] || 0;
-            if (tipoBolsa === 'Otro') {
-                taraBolsaUnit = parseFloat(document.getElementById('tipo_bolsa_manual').value) || 0;
-            }
+            const taraBolsaUnit = TARA_VALORES_BOLSA[tipoBolsa] || 0;
             const taraBolsa = nroBolsas * taraBolsaUnit;
             const pesoNeto = Math.max(0, pesoBruto - taraConos - taraBolsa);
             const sap = parseFloat(document.getElementById('resumen-stock-sap').dataset.valor) || 0;
