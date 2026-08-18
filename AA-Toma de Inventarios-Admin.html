@@ -825,14 +825,37 @@
         // Muestra la foto de la báscula junto con el peso que quedó registrado para ese
         // artículo, para poder corroborar de un vistazo que el número de la foto coincide
         // con lo que se guardó en el sistema.
+        // Lista y posición actual dentro del visor de fotos, para poder navegar con
+        // "Anterior"/"Siguiente" sin cerrar y volver a abrir manualmente cada vez.
+        let fotoBalanzaLista = [];
+        let fotoBalanzaIndice = -1;
+
         function verFotoBalanza(id) {
-            const item = todosLosDatosReporte.find(i => i.id === id);
+            // Se navega dentro de lo que está filtrado en pantalla (respeta grupo/estado/fecha/
+            // búsqueda), y solo entre los que sí tienen foto.
+            fotoBalanzaLista = datosFiltradosParaExportar.filter(i => i['Foto Balanza']);
+            fotoBalanzaIndice = fotoBalanzaLista.findIndex(i => i.id === id);
+            if (fotoBalanzaIndice === -1) return;
+            mostrarFotoBalanzaActual();
+        }
+
+        function navegarFotoBalanza(delta) {
+            const nuevo = fotoBalanzaIndice + delta;
+            if (nuevo < 0 || nuevo >= fotoBalanzaLista.length) return;
+            fotoBalanzaIndice = nuevo;
+            mostrarFotoBalanzaActual();
+        }
+
+        function mostrarFotoBalanzaActual() {
+            const item = fotoBalanzaLista[fotoBalanzaIndice];
             if (!item) return;
             const pesoNeto = parseFloat(item['Peso Neto'] ?? item['Peso Neto Inv'] ?? 0);
             const pesoBruto = parseFloat(item['Peso Bruto'] || 0);
             const sap = parseFloat(item['Stock SAP'] || 0);
             const dif = parseFloat(item['Diferencia'] || 0);
             const difColor = Math.abs(dif) < 0.001 ? '#0d9488' : (dif < 0 ? '#ef4444' : '#0d9488');
+            const hayAnterior = fotoBalanzaIndice > 0;
+            const haySiguiente = fotoBalanzaIndice < fotoBalanzaLista.length - 1;
 
             Swal.fire({
                 showConfirmButton: false,
@@ -840,20 +863,27 @@
                 width: 'min(95vw, 780px)',
                 padding: '1.25rem',
                 html: `
-                    <div style="display:flex; gap:16px; flex-wrap:wrap; text-align:left;">
-                        <div style="flex:1 1 200px; min-width:180px;">
-                            <div style="font-family:monospace; font-weight:800; color:#0f766e; font-size:1.1rem;">${esc(item['Código de Item'] || '')}</div>
-                            <div style="color:#64748b; font-size:0.8rem; margin-bottom:10px;">${esc(item['Descripción'] || '')}</div>
-                            <table style="width:100%; font-size:0.85rem;">
-                                <tr><td style="color:#64748b; padding:3px 0;">Peso Bruto</td><td style="text-align:right; font-family:monospace; font-weight:700;">${pesoBruto.toFixed(3)} kg</td></tr>
-                                <tr><td style="color:#64748b; padding:3px 0;">Peso Neto (registrado)</td><td style="text-align:right; font-family:monospace; font-weight:800; color:#0f766e;">${pesoNeto.toFixed(3)} kg</td></tr>
-                                <tr><td style="color:#64748b; padding:3px 0;">Stock SAP (teórico)</td><td style="text-align:right; font-family:monospace;">${sap.toFixed(3)} kg</td></tr>
-                                <tr><td style="color:#64748b; padding:3px 0;">Diferencia</td><td style="text-align:right; font-family:monospace; font-weight:700; color:${difColor};">${dif > 0 ? '+' : ''}${dif.toFixed(3)} kg</td></tr>
-                            </table>
+                    <div style="display:flex; align-items:center; justify-content:space-between; margin-bottom:8px;">
+                        <span style="font-size:0.75rem; color:#94a3b8; font-weight:700;">${fotoBalanzaIndice + 1} / ${fotoBalanzaLista.length}</span>
+                    </div>
+                    <div style="display:flex; align-items:center; gap:8px;">
+                        <button onclick="navegarFotoBalanza(-1)" ${hayAnterior ? '' : 'disabled'} style="flex-shrink:0; width:36px; height:36px; border-radius:50%; border:1px solid #e2e8f0; background:${hayAnterior ? '#fff' : '#f1f5f9'}; color:${hayAnterior ? '#0f766e' : '#cbd5e1'}; cursor:${hayAnterior ? 'pointer' : 'not-allowed'}; font-size:1.1rem;">‹</button>
+                        <div style="display:flex; gap:16px; flex-wrap:wrap; text-align:left; flex:1;">
+                            <div style="flex:1 1 200px; min-width:180px;">
+                                <div style="font-family:monospace; font-weight:800; color:#0f766e; font-size:1.1rem;">${esc(item['Código de Item'] || '')}</div>
+                                <div style="color:#64748b; font-size:0.8rem; margin-bottom:10px;">${esc(item['Descripción'] || '')}</div>
+                                <table style="width:100%; font-size:0.85rem;">
+                                    <tr><td style="color:#64748b; padding:3px 0;">Peso Bruto</td><td style="text-align:right; font-family:monospace; font-weight:700;">${pesoBruto.toFixed(3)} kg</td></tr>
+                                    <tr><td style="color:#64748b; padding:3px 0;">Peso Neto (registrado)</td><td style="text-align:right; font-family:monospace; font-weight:800; color:#0f766e;">${pesoNeto.toFixed(3)} kg</td></tr>
+                                    <tr><td style="color:#64748b; padding:3px 0;">Stock SAP (teórico)</td><td style="text-align:right; font-family:monospace;">${sap.toFixed(3)} kg</td></tr>
+                                    <tr><td style="color:#64748b; padding:3px 0;">Diferencia</td><td style="text-align:right; font-family:monospace; font-weight:700; color:${difColor};">${dif > 0 ? '+' : ''}${dif.toFixed(3)} kg</td></tr>
+                                </table>
+                            </div>
+                            <div style="flex:1 1 260px; min-width:220px;">
+                                <img src="${esc(item['Foto Balanza'])}" alt="Foto de la báscula" style="width:100%; max-height:55vh; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0;">
+                            </div>
                         </div>
-                        <div style="flex:1 1 260px; min-width:220px;">
-                            <img src="${esc(item['Foto Balanza'])}" alt="Foto de la báscula" style="width:100%; max-height:60vh; object-fit:contain; border-radius:8px; border:1px solid #e2e8f0;">
-                        </div>
+                        <button onclick="navegarFotoBalanza(1)" ${haySiguiente ? '' : 'disabled'} style="flex-shrink:0; width:36px; height:36px; border-radius:50%; border:1px solid #e2e8f0; background:${haySiguiente ? '#fff' : '#f1f5f9'}; color:${haySiguiente ? '#0f766e' : '#cbd5e1'}; cursor:${haySiguiente ? 'pointer' : 'not-allowed'}; font-size:1.1rem;">›</button>
                     </div>
                 `
             });
