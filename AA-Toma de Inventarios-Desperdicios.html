@@ -459,12 +459,6 @@
                                 <input type="text" id="observaciones" oninput="this.value = this.value.toUpperCase()" class="smart-input py-1.5 px-2 text-sm" placeholder="Ej. Cono dañado, lote mixto, etc.">
                             </div>
 
-                            <!-- Bloqueo -->
-                            <label class="flex items-center gap-2 bg-gray-50 p-3 rounded-lg border border-gray-100 cursor-pointer select-none">
-                                <input type="checkbox" id="bloqueo" class="w-4 h-4 accent-red-500">
-                                <span class="text-xs font-semibold text-gray-600"><i class="fa-solid fa-lock text-red-400 mr-1"></i> Marcar como Bloqueado (material no disponible / observado)</span>
-                            </label>
-
                             <!-- Foto del desperdicio (opcional salvo que el admin la exija) -->
                             <div class="border border-gray-200 rounded-lg p-2.5 bg-gray-50">
                                 <label class="smart-label text-[10px] text-gray-500 mb-1 flex items-center gap-1">
@@ -1205,7 +1199,6 @@
                 setVal('peso_bruto', completado ? (item['Peso Bruto'] || '') : '');
                 setVal('ubicacion', completado ? (item['Ubicación'] || '') : '');
                 setVal('observaciones', completado ? (item['Observaciones'] || '') : '');
-                document.getElementById('bloqueo').checked = completado ? !!item['Bloqueo'] : false;
 
                 // Foto del desperdicio: si el registro ya tiene una, se muestra de una vez.
                 fotoDesperdicioUrlActual = item['Foto Desperdicio'] || null;
@@ -1215,7 +1208,7 @@
                     document.getElementById('foto-desperdicio-status').textContent = completado ? 'Foto registrada al momento del conteo' : '';
                 }
 
-                const inputs = ['nro_conos', 'tipo_cono', 'nro_bolsas', 'tipo_bolsa', 'peso_bruto', 'ubicacion', 'observaciones', 'bloqueo'];
+                const inputs = ['nro_conos', 'tipo_cono', 'nro_bolsas', 'tipo_bolsa', 'peso_bruto', 'ubicacion', 'observaciones'];
                 const btnGuardar = document.getElementById('btnGuardar');
                 const btnModificar = document.getElementById('btnModificar');
                 const badgeEstado = document.getElementById('modal-estado-badge');
@@ -1316,7 +1309,7 @@
             // modificar_conteo_desperdicios).
             claveModificacionPendiente = password;
 
-            const inputs = ['nro_conos', 'tipo_cono', 'nro_bolsas', 'tipo_bolsa', 'peso_bruto', 'ubicacion', 'observaciones', 'bloqueo'];
+            const inputs = ['nro_conos', 'tipo_cono', 'nro_bolsas', 'tipo_bolsa', 'peso_bruto', 'ubicacion', 'observaciones'];
             inputs.forEach(id => {
                 const el = document.getElementById(id);
                 if (el) {
@@ -1547,8 +1540,6 @@
             const s = String(now.getSeconds()).padStart(2, '0');
             const fechaLocal = `${y}-${m}-${d} ${h}:${min}:${s}`;
 
-            const bloqueoValor = document.getElementById('bloqueo').checked;
-
             try {
                 let data, error;
 
@@ -1574,7 +1565,6 @@
                         p_nro_bolsas: nroBolsas,
                         p_tipo_bolsa: tipoBolsa,
                         p_ubicacion: ubicacionValor,
-                        p_bloqueo: bloqueoValor,
                         p_foto_desperdicio: fotoDesperdicioUrlFinal
                     });
                     data = resp.data ? [resp.data] : null;
@@ -1598,7 +1588,6 @@
                         "Diferencia": diferencia,
                         "Ubicación": ubicacionValor,
                         "Observaciones": document.getElementById('observaciones').value.trim().toUpperCase(),
-                        "Bloqueo": bloqueoValor,
                         "Foto Desperdicio": fotoDesperdicioUrlFinal,
                         "Registro": fechaLocal
                     };

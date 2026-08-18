@@ -625,7 +625,6 @@
                     { label: 'Código', get: it => it['Código de Item'] || '', class: 'text-teal-700 font-bold' },
                     { label: 'Descripción', get: it => it['Descripción'] || '', truncate: true },
                     { label: 'Lote', get: it => it['Lote'] || '-', mono: true },
-                    { label: 'Bloqueo', get: it => it['Bloqueo'] ? '<span class="bg-red-100 text-red-700 px-1.5 py-0.5 rounded text-[10px] font-bold">SÍ</span>' : '', html: true, center: true },
                 ],
                 getFisico: (it, completado) => completado ? parseFloat(it['Peso Neto'] ?? it['Peso Neto Inv'] ?? 0) : null,
                 exportColumns: [
@@ -642,7 +641,6 @@
                     { header: 'Nro Bolsas', get: (it, c) => c ? `${it['Nro de Bolsas'] || 0} (${it['Tipo de Bolsa'] || ''})` : '-', group: 'conteo' },
                     { header: 'Tara Bolsa', get: (it, c) => c ? num3(it['Tara Bolsa'] ?? it['Tara Bolsa Inv']) : '-', group: 'conteo' },
                     { header: 'Peso Neto', get: (it, c) => c ? num3(it['Peso Neto'] ?? it['Peso Neto Inv']) : '-', group: 'resultado', big: true },
-                    { header: 'Bloqueo', get: it => it['Bloqueo'] ? 'SI' : 'NO', group: 'notas' },
                     { header: 'Diferencia', get: (it, c) => c ? (parseFloat(it['Diferencia'] || 0) > 0 ? '+' : '') + num3(it['Diferencia']) : '-', group: 'resultado', big: true },
                     { header: 'Ubicación', get: it => it['Ubicación'] || '-', group: 'notas' },
                     { header: 'Observaciones', get: it => it['Observaciones'] || '-', group: 'notas' },
@@ -1481,71 +1479,97 @@
         }
 
         async function exportarReporteFotografico() {
-            const app = APPS[currentApp];
-            const items = datosFiltradosParaExportar.filter(i => i.Registro != null);
-            if (items.length === 0) {
-                return Swal.fire('Vacío', 'No hay artículos inventariados con los filtros actuales para incluir en el reporte.', 'info');
-            }
+            // TODA la función va envuelta en un try/catch: antes, si algo fallaba ANTES del
+            // diálogo de confirmación (por ejemplo, un dato inesperado al contar las fotos), la
+            // promesa se rechazaba sin que nadie la capturara -- el botón parecía "no hacer nada"
+            // y el único rastro quedaba en la consola del navegador (invisible para el usuario).
+            try {
+                const app = APPS[currentApp];
+                const items = datosFiltradosParaExportar.filter(i => i.Registro != null);
+                if (items.length === 0) {
+                    Swal.fire('Vacío', 'No hay artículos inventariados con los filtros actuales para incluir en el reporte.', 'info');
+                    return;
+                }
 
-            const urlsUnicas = new Set();
-            let itemsConFoto = 0;
-            if (app.tieneFoto && app.getFotos) {
-                items.forEach(it => {
-                    const fotos = app.getFotos(it);
-                    if (fotos.length > 0) itemsConFoto++;
-                    fotos.forEach(u => urlsUnicas.add(u));
+                const urlsUnicas = new Set();
+                let itemsConFoto = 0;
+                if (app.tieneFoto && app.getFotos) {
+                    items.forEach(it => {
+                        const fotos = app.getFotos(it);
+                        if (fotos.length > 0) itemsConFoto++;
+                        fotos.forEach(u => urlsUnicas.add(u));
+                    });
+                }
+                const pesoEstimadoMB = (urlsUnicas.size * 0.035).toFixed(1);
+
+                const confirmacion = await Swal.fire({
+                    title: 'Reporte Fotográfico (PDF)',
+                    html: `
+                        <div style="text-align:left; font-size:13px; color:#475569; line-height:1.5;">
+                            <p>Genera una ficha por artículo con el detalle del conteo${app.tieneFoto ? ' y su(s) foto(s)' : ''}, respetando los filtros de la tabla actual (estado, grupo, fecha, texto).</p>
+                            <table style="width:100%; margin-top:10px; font-size:12.5px; border-collapse:collapse;">
+                                <tr><td style="padding:3px 0;">Artículos a incluir:</td><td style="text-align:right; font-weight:700;">${items.length}</td></tr>
+                                ${app.tieneFoto ? `<tr><td style="padding:3px 0;">Con foto adjunta:</td><td style="text-align:right; font-weight:700;">${itemsConFoto}</td></tr>
+                                <tr><td style="padding:3px 0;">Peso estimado del PDF:</td><td style="text-align:right; font-weight:700;">~${pesoEstimadoMB} MB</td></tr>` : ''}
+                            </table>
+                            ${items.length > 400 ? `<p style="margin-top:10px; color:#b45309; font-size:12px;"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Son bastantes artículos: descargar las fotos puede tardar varios minutos. Para un archivo más liviano, filtra por Grupo o Fecha antes de generar.</p>` : ''}
+                        </div>`,
+                    icon: items.length > 400 ? 'warning' : 'question',
+                    showCancelButton: true,
+                    confirmButtonText: 'Generar PDF',
+                    cancelButtonText: 'Cancelar',
+                    confirmButtonColor: '#0d9488',
+                    width: 460
                 });
-            }
-            const pesoEstimadoMB = (urlsUnicas.size * 0.035).toFixed(1);
+                if (!confirmacion.isConfirmed) return;
 
-            const confirmacion = await Swal.fire({
-                title: 'Reporte Fotográfico (PDF)',
-                html: `
-                    <div style="text-align:left; font-size:13px; color:#475569; line-height:1.5;">
-                        <p>Genera una ficha por artículo con el detalle del conteo${app.tieneFoto ? ' y su(s) foto(s)' : ''}, respetando los filtros de la tabla actual (estado, grupo, fecha, texto).</p>
-                        <table style="width:100%; margin-top:10px; font-size:12.5px; border-collapse:collapse;">
-                            <tr><td style="padding:3px 0;">Artículos a incluir:</td><td style="text-align:right; font-weight:700;">${items.length}</td></tr>
-                            ${app.tieneFoto ? `<tr><td style="padding:3px 0;">Con foto adjunta:</td><td style="text-align:right; font-weight:700;">${itemsConFoto}</td></tr>
-                            <tr><td style="padding:3px 0;">Peso estimado del PDF:</td><td style="text-align:right; font-weight:700;">~${pesoEstimadoMB} MB</td></tr>` : ''}
-                        </table>
-                        ${items.length > 400 ? `<p style="margin-top:10px; color:#b45309; font-size:12px;"><i class="fa-solid fa-triangle-exclamation mr-1"></i>Son bastantes artículos: descargar las fotos puede tardar varios minutos. Para un archivo más liviano, filtra por Grupo o Fecha antes de generar.</p>` : ''}
-                    </div>`,
-                icon: items.length > 400 ? 'warning' : 'question',
-                showCancelButton: true,
-                confirmButtonText: 'Generar PDF',
-                cancelButtonText: 'Cancelar',
-                confirmButtonColor: '#0d9488',
-                width: 460
-            });
-            if (!confirmacion.isConfirmed) return;
+                const incluirFotos = app.tieneFoto && urlsUnicas.size > 0;
+                const mapaFotos = new Map();
 
-            const incluirFotos = app.tieneFoto && urlsUnicas.size > 0;
-            const mapaFotos = new Map();
+                if (incluirFotos) {
+                    const listaUrls = [...urlsUnicas];
+                    let completadas = 0;
+                    Swal.fire({
+                        title: 'Descargando fotos...',
+                        html: `<div id="prog-fotos-txt">0 / ${listaUrls.length}</div>`,
+                        allowOutsideClick: false,
+                        allowEscapeKey: false,
+                        didOpen: () => Swal.showLoading()
+                    });
+                    await mapConcurrente(listaUrls, 6, async (url) => {
+                        const b64 = await fotoABase64(url);
+                        if (b64) mapaFotos.set(url, b64);
+                        completadas++;
+                        const el = document.getElementById('prog-fotos-txt');
+                        if (el) el.textContent = `${completadas} / ${listaUrls.length}`;
+                    });
+                } else {
+                    Swal.fire({ title: 'Generando PDF...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+                }
 
-            if (incluirFotos) {
-                const listaUrls = [...urlsUnicas];
-                let completadas = 0;
+                Swal.update({ title: 'Armando fichas del PDF...', html: '<div>Esto puede tardar unos segundos...</div>' });
+                await new Promise(r => setTimeout(r, 30)); // deja pintar el mensaje antes de bloquear el hilo con jsPDF
+
+                generarPdfReporteFotografico(app, items, incluirFotos, mapaFotos);
+
+                Swal.close();
+            } catch (err) {
+                console.error('Error generando Reporte Fotográfico:', err);
                 Swal.fire({
-                    title: 'Descargando fotos...',
-                    html: `<div id="prog-fotos-txt">0 / ${listaUrls.length}</div>`,
-                    allowOutsideClick: false,
-                    allowEscapeKey: false,
-                    didOpen: () => Swal.showLoading()
+                    icon: 'error',
+                    title: 'No se pudo generar el PDF',
+                    html: `<div style="text-align:left; font-size:12.5px;">
+                        <p>${esc(err && err.message ? err.message : String(err))}</p>
+                        <p style="margin-top:8px; color:#64748b;">Si el error menciona "fetch" o "CORS", puede ser una foto que el navegador no pudo descargar (revisa que el archivo se esté abriendo desde un servidor http(s) y no directamente como archivo local). Si el problema persiste, intenta con menos artículos (filtra por Grupo o Fecha) y avísame el mensaje exacto.</p>
+                    </div>`
                 });
-                await mapConcurrente(listaUrls, 6, async (url) => {
-                    const b64 = await fotoABase64(url);
-                    if (b64) mapaFotos.set(url, b64);
-                    completadas++;
-                    const el = document.getElementById('prog-fotos-txt');
-                    if (el) el.textContent = `${completadas} / ${listaUrls.length}`;
-                });
-            } else {
-                Swal.fire({ title: 'Generando PDF...', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
             }
+        }
 
-            Swal.update({ title: 'Armando fichas del PDF...', html: '<div>Esto puede tardar unos segundos...</div>' });
-            await new Promise(r => setTimeout(r, 30)); // deja pintar el mensaje antes de bloquear el hilo con jsPDF
-
+        // Recibe los datos ya listos (items filtrados + fotos ya descargadas en base64) y solo
+        // se encarga de dibujar y guardar el PDF -- separado de exportarReporteFotografico() para
+        // que el try/catch de arriba cubra cualquier error de dibujo (no solo la descarga).
+        function generarPdfReporteFotografico(app, items, incluirFotos, mapaFotos) {
             const { jsPDF } = window.jspdf;
             const doc = new jsPDF('portrait', 'mm', 'a4');
             const pageWidth = doc.internal.pageSize.width;
@@ -1679,7 +1703,6 @@
                 doc.text(`Página ${i} de ${totalPaginas}`, pageWidth - margenX, 12, { align: 'right' });
             }
 
-            Swal.close();
             doc.save(`Reporte_Fotografico_${app.label}_${new Date().toISOString().split('T')[0]}.pdf`);
         }
 
