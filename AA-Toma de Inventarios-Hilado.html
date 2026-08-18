@@ -576,7 +576,7 @@
                     báscula. No sirve para leer un código de barras (como el escáner), es solo
                     una guía visual para encuadrar bien antes de capturar. -->
                     <div class="absolute inset-0 pointer-events-none flex items-center justify-center">
-                        <div id="guia-balanza" class="border-4 border-teal-400 rounded-lg" style="width:62%; aspect-ratio: 1 / 1; box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);"></div>
+                        <div id="guia-balanza" class="border-4 border-teal-400 rounded-lg" style="width:74%; aspect-ratio: 8 / 5; box-shadow: 0 0 0 2000px rgba(0,0,0,0.45);"></div>
                     </div>
                     <div class="absolute top-2 left-0 right-0 text-center pointer-events-none px-2">
                         <span class="bg-black/60 text-white text-[11px] px-3 py-1 rounded-full font-semibold">Encuadra el número de la báscula en el recuadro</span>
@@ -1179,16 +1179,32 @@
         // El worker de Tesseract se crea una sola vez (la primera foto de la sesión) y se
         // reutiliza en las siguientes: crearlo descarga el modelo de OCR (unos MB), así que
         // hacerlo de nuevo en cada captura sería lento e innecesario.
+        //
+        // OJO: a propósito NO se restringe el reconocimiento con tessedit_char_whitelist a
+        // solo dígitos. Forzar el whitelist hace que Tesseract "encaje" cada trazo que ve en
+        // el carácter permitido más parecido -- es decir, una foto de puro texto (letras)
+        // igual devolvía algo con dígitos, porque el motor no tenía opción de decir "esto no
+        // es un número". Por eso antes una foto de texto no disparaba la alerta. Ahora se deja
+        // reconocer texto libre y se exige que la MAYORÍA de los caracteres reconocidos sean
+        // dígitos (no que aparezca uno solo perdido entre letras).
         let workerBalanzaOcrPromesa = null;
         function obtenerWorkerBalanzaOcr() {
             if (!workerBalanzaOcrPromesa) {
-                workerBalanzaOcrPromesa = (async () => {
-                    const worker = await Tesseract.createWorker('eng');
-                    await worker.setParameters({ tessedit_char_whitelist: '0123456789.,-' });
-                    return worker;
-                })();
+                workerBalanzaOcrPromesa = Tesseract.createWorker('eng');
             }
             return workerBalanzaOcrPromesa;
+        }
+
+        // Analiza el texto reconocido y decide si "parece" la pantalla de la báscula: exige al
+        // menos un dígito Y que los dígitos sean mayoría entre los caracteres alfanuméricos
+        // reconocidos (así una foto de texto normal, donde predominan letras, no pasa aunque
+        // el OCR confunda alguna letra suelta con un número).
+        function pareceNumeroDeBalanza(texto) {
+            const alfanumerico = (texto || '').replace(/[^0-9A-Za-z]/g, '');
+            const digitos = (texto || '').match(/\d/g) || [];
+            if (digitos.length === 0) return false;
+            if (alfanumerico.length === 0) return true;
+            return (digitos.length / alfanumerico.length) >= 0.5;
         }
 
         async function capturarFotoBalanza() {
@@ -1211,24 +1227,33 @@
             status.textContent = 'Verificando que se vea un número...';
 
             let huboDigito = false;
+            let ocrFallo = false;
+            let textoReconocido = '';
             try {
                 const worker = await obtenerWorkerBalanzaOcr();
                 const { data } = await worker.recognize(canvasRecorte);
-                huboDigito = /\d/.test((data && data.text) || '');
+                textoReconocido = (data && data.text) || '';
+                huboDigito = pareceNumeroDeBalanza(textoReconocido);
             } catch (err) {
-                console.warn('OCR de la báscula no disponible/falló; se deja pasar sin bloquear:', err);
-                status.textContent = 'No se pudo verificar automáticamente (sin conexión al servicio de OCR).';
-                huboDigito = true; // si el OCR falla (ej. sin conexión para el modelo), no se bloquea al operador
+                console.warn('OCR de la báscula falló:', err);
+                ocrFallo = true;
             }
 
             btn.disabled = false;
+            status.textContent = '';
 
-            if (!huboDigito) {
-                status.textContent = '';
+            // A diferencia de la versión anterior, ahora SIEMPRE se muestra un diálogo cuando
+            // no se pudo confirmar el número (antes, si el OCR fallaba, el aviso quedaba en un
+            // texto que se borraba casi al instante al cerrarse el modal -- prácticamente
+            // invisible). Igual se deja elegir "usar la foto igual" para no trabar el conteo
+            // real por una falla del OCR (batería baja, sin conexión para el modelo, etc.).
+            if (ocrFallo || !huboDigito) {
                 const resp = await Swal.fire({
                     icon: 'warning',
-                    title: 'No se detectó ningún número',
-                    text: 'No pudimos confirmar que dentro del recuadro se vea un número de la báscula. Revisa el encuadre, el enfoque y la luz, e inténtalo de nuevo.',
+                    title: ocrFallo ? 'No se pudo verificar la foto' : 'No se detectó ningún número',
+                    text: ocrFallo
+                        ? 'No se pudo revisar automáticamente si hay un número en la foto (falló el verificador). Puedes reintentar o usarla igual.'
+                        : 'No pudimos confirmar que dentro del recuadro se vea un número de la báscula. Revisa el encuadre, el enfoque y la luz, e inténtalo de nuevo.',
                     showCancelButton: true,
                     confirmButtonText: 'Volver a intentar',
                     cancelButtonText: 'Usar esta foto igual',
@@ -1237,8 +1262,6 @@
                 });
                 if (resp.isConfirmed) return; // se queda en la cámara para reintentar
                 // si elige "Usar esta foto igual" (cancelButton), sigue con la foto capturada
-            } else if (status.textContent === 'Verificando que se vea un número...') {
-                status.textContent = '';
             }
 
             canvasRecorte.toBlob(async (blob) => {
