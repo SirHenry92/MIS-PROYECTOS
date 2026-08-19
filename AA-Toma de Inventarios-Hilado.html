@@ -1332,15 +1332,14 @@
 
         function comprimirImagenBascula(file) {
             return new Promise((resolve, reject) => {
-                // Ahora la foto ya viene recortada por la cámara guiada a solo la zona del
-                // recuadro (la pantalla de la báscula de cerca, no la foto completa) -- al ser
-                // un encuadre más cerrado se puede comprimir bastante más que antes y el número
-                // se sigue leyendo bien. 360px de lado mayor y escala de grises (sin color que
-                // aportar) alcanzan de sobra. Al permitir varias fotos por conteo, cada una pesa
-                // menos para no multiplicar el consumo del plan gratuito de Storage (1GB),
-                // compartido con Avíos.
-                const MAX_LADO = 360;
-                const TARGET_KB = 12;
+                // La foto viene recortada por la cámara guiada a solo la zona del recuadro (la
+                // pantalla de la báscula de cerca, no la foto completa), así que igual pesa
+                // poco sin necesidad de comprimirla tan agresivo -- se subió la calidad porque
+                // el número quedaba muy pixelado / difícil de leer con el ajuste anterior.
+                // Escala de grises (sin color que aportar) sigue ayudando a bajar el peso sin
+                // perder nitidez del dígito.
+                const MAX_LADO = 640;
+                const TARGET_KB = 45;
                 const img = new Image();
                 const url = URL.createObjectURL(file);
                 img.onload = async () => {
@@ -1365,8 +1364,8 @@
 
                         // Baja la calidad JPEG en pasos hasta acercarse al peso objetivo, sin
                         // pasar de una calidad mínima que ya no se leería bien.
-                        let blob = await canvasToBlob(canvas, 0.35);
-                        for (const calidad of [0.25, 0.15]) {
+                        let blob = await canvasToBlob(canvas, 0.75);
+                        for (const calidad of [0.6, 0.45]) {
                             if (blob.size / 1024 <= TARGET_KB) break;
                             blob = await canvasToBlob(canvas, calidad);
                         }
