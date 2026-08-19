@@ -26,6 +26,12 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
     <style>
+        /* Evita el zoom por pellizco o doble toque accidental en celulares -- toques falsos
+        durante el conteo desencuadraban el formulario. Deja el scroll normal intacto. */
+        html, body {
+            touch-action: manipulation;
+        }
+
         body {
             background-color: #f4f7f6;
             color: #2d3748;
@@ -744,6 +750,11 @@
                     }
                 }
             }, true);
+
+            // Respaldo para iOS Safari: "touch-action: manipulation" del CSS ya bloquea el zoom
+            // por pellizco/doble-toque en la mayoría de navegadores, pero Safari en iPhone tiene
+            // su propio evento de gesto que a veces igual dispara el zoom -- se bloquea acá.
+            document.addEventListener('gesturestart', (e) => e.preventDefault());
         });
 
         // --- UTILIDADES DE SEGURIDAD ---
