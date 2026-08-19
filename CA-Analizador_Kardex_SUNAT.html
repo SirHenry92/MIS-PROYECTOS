@@ -530,6 +530,7 @@ const ERR_COLS = [
   {k:'entCant', l:'Ent.Cant', num:true}, {k:'entCU', l:'Ent.C.U.', num:true}, {k:'entCT', l:'Ent.C.T.', num:true},
   {k:'salCant', l:'Sal.Cant', num:true}, {k:'salCU', l:'Sal.C.U.', num:true}, {k:'salCT', l:'Sal.C.T.', num:true},
   {k:'saldoCant', l:'Saldo.Cant', num:true}, {k:'saldoCU', l:'Saldo.C.U.', num:true}, {k:'saldoCT', l:'Saldo.C.T.', num:true},
+  {k:'costoPromCorrecto', l:'C.U. Correcto', num:true},
   {k:'sevMax', l:'Severidad'}, {k:'errores', l:'Errores detectados'},
 ];
 
@@ -588,6 +589,7 @@ function renderErrTable(){
       <td class="num">${fmtNum(r.saldoCant,2)}</td>
       <td class="num">${fmtNum(r.saldoCU,4)}</td>
       <td class="num">${fmtNum(r.saldoCT,2)}</td>
+      <td class="num">${fmtNum(r.costoPromCorrecto,4)}</td>
       <td><span class="sev sev-${r.sevMax}">${SEV_LABEL[r.sevMax]||''}</span></td>
       <td class="errlist">${r.errores.map(e=>`<div>• ${esc(e.msg)}</div>`).join('')}</td>
     </tr>`).join('');
@@ -652,7 +654,7 @@ function handleGroupResponse(msg){
 
 function renderDetTable(records, metaErrs){
   const table = document.getElementById('detTable');
-  const cols = ['Fecha','T.Doc','Serie','Número','Tipo Op.','Ent.Cant','Ent.C.U.','Ent.C.T.','Sal.Cant','Sal.C.U.','Sal.C.T.','Saldo.Cant','Saldo.C.U.','Saldo.C.T.','Severidad','Errores'];
+  const cols = ['Fecha','T.Doc','Serie','Número','Tipo Op.','Ent.Cant','Ent.C.U.','Ent.C.T.','Sal.Cant','Sal.C.U.','Sal.C.T.','Saldo.Cant','Saldo.C.U.','Saldo.C.T.','C.U. Correcto','Severidad','Errores'];
   table.querySelector('thead').innerHTML = '<tr>' + cols.map(c=>`<th class="${/Cant|C\.U\.|C\.T\./.test(c)?'num':''}">${c}</th>`).join('') + '</tr>';
   let html = '';
   if(metaErrs && metaErrs.length){
@@ -679,6 +681,7 @@ function renderDetTable(records, metaErrs){
       <td class="num">${fmtNum(r.saldoCant,2)}</td>
       <td class="num">${fmtNum(r.saldoCU,4)}</td>
       <td class="num">${fmtNum(r.saldoCT,2)}</td>
+      <td class="num">${fmtNum(r.costoPromCorrecto,4)}</td>
       <td>${hasErr?`<span class="sev sev-${r.sevMax}">${SEV_LABEL[r.sevMax]}</span>`:''}</td>
       <td class="errlist">${hasErr? r.errores.map(e=>`<div>• ${esc(e.msg)}</div>`).join(''):''}</td>
     </tr>`;
@@ -1029,6 +1032,7 @@ async function addErroresSheet(wb, rows, name){
     {header:'Saldo.Cant', key:'saldoCant', width:12, numFmt:'#,##0.00', align:'right'},
     {header:'Saldo.C.U.', key:'saldoCU', width:12, numFmt:'#,##0.0000', align:'right'},
     {header:'Saldo.C.T.', key:'saldoCT', width:12, numFmt:'#,##0.00', align:'right'},
+    {header:'C.U. Correcto', key:'costoPromCorrecto', width:13, numFmt:'#,##0.0000', align:'right'},
     {header:'Severidad', key:'severidad', width:11, align:'center'},
     {header:'Errores detectados', key:'erroresTxt', width:70},
   ];
@@ -1036,7 +1040,7 @@ async function addErroresSheet(wb, rows, name){
     origen:r.origen, codigo:r.codigo, descripcion:r.descripcion, almacen:r.almacen, archivo:r.archivo,
     fecha: r.fecha ? new Date(r.fecha) : null, tipoDoc:r.tipoDoc, serie:r.serie, numero:r.numero, tipoOperacion:r.tipoOperacion,
     entCant:r.entCant, entCU:r.entCU, entCT:r.entCT, salCant:r.salCant, salCU:r.salCU, salCT:r.salCT,
-    saldoCant:r.saldoCant, saldoCU:r.saldoCU, saldoCT:r.saldoCT,
+    saldoCant:r.saldoCant, saldoCU:r.saldoCU, saldoCT:r.saldoCT, costoPromCorrecto:r.costoPromCorrecto,
     severidad: SEV_LABEL[r.sevMax]||'', erroresTxt: r.errores.map(e=>'• '+e.msg).join('\n')
   }));
   const chunks = chunkArray(allData, EXPORT_CHUNK_SIZE);
@@ -1044,11 +1048,11 @@ async function addErroresSheet(wb, rows, name){
     const data = chunks[ci];
     const sheetName = (chunks.length>1 ? `${name} (${ci+1} de ${chunks.length})` : name).substring(0,31);
     const ws = wb.addWorksheet(sheetName);
-    await styleDataSheet(ws, columns, data, {sevKey:'severidad', sevCol:20});
+    await styleDataSheet(ws, columns, data, {sevKey:'severidad', sevCol:21});
     for(let i=0;i<data.length;i++){
       const d = data[i];
       if(d.fecha){ ws.getRow(i+2).getCell(6).numFmt = 'dd/mm/yyyy hh:mm'; }
-      ws.getRow(i+2).getCell(21).alignment = {wrapText:true, vertical:'top'};
+      ws.getRow(i+2).getCell(22).alignment = {wrapText:true, vertical:'top'};
       if(i % 3000 === 2999) await tick();
     }
     await tick();
@@ -1164,6 +1168,7 @@ document.getElementById('exportDetBtn').addEventListener('click', async ()=>{
       {header:'Saldo.Cant', key:'saldoCant', width:12, numFmt:'#,##0.00', align:'right'},
       {header:'Saldo.C.U.', key:'saldoCU', width:12, numFmt:'#,##0.0000', align:'right'},
       {header:'Saldo.C.T.', key:'saldoCT', width:12, numFmt:'#,##0.00', align:'right'},
+      {header:'C.U. Correcto', key:'costoPromCorrecto', width:13, numFmt:'#,##0.0000', align:'right'},
       {header:'Severidad', key:'severidad', width:11, align:'center'},
       {header:'Errores detectados', key:'erroresTxt', width:70},
     ];
@@ -1171,17 +1176,17 @@ document.getElementById('exportDetBtn').addEventListener('click', async ()=>{
     const data2 = state.currentDetalleRecords.map(r=>({
       fecha: r.fecha? new Date(r.fecha): null, tipoDoc:r.tipoDoc, serie:r.serie, numero:r.numero, tipoOperacion:r.tipoOperacion,
       entCant:r.entCant, entCU:r.entCU, entCT:r.entCT, salCant:r.salCant, salCU:r.salCU, salCT:r.salCT,
-      saldoCant:r.saldoCant, saldoCU:r.saldoCU, saldoCT:r.saldoCT,
+      saldoCant:r.saldoCant, saldoCU:r.saldoCU, saldoCT:r.saldoCT, costoPromCorrecto:r.costoPromCorrecto,
       severidad: r.errores&&r.errores.length? (SEV_LABEL[r.sevMax]||'') : 'OK',
       erroresTxt: (r.errores||[]).map(e=>'• '+e.msg).join('\n')
     }));
-    await styleDataSheet(ws2, columns, data2, {sevKey:'severidad', sevCol:15});
+    await styleDataSheet(ws2, columns, data2, {sevKey:'severidad', sevCol:16});
     for(let i=0;i<data2.length;i++){
       const d = data2[i];
       if(d.fecha) ws2.getRow(i+2).getCell(1).numFmt = 'dd/mm/yyyy hh:mm';
-      ws2.getRow(i+2).getCell(16).alignment = {wrapText:true, vertical:'top'};
+      ws2.getRow(i+2).getCell(17).alignment = {wrapText:true, vertical:'top'};
       if(d.severidad==='OK'){
-        const c = ws2.getRow(i+2).getCell(15);
+        const c = ws2.getRow(i+2).getCell(16);
         c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.ok}};
         c.font = {bold:true, color:{argb:XC.okFg}};
         c.alignment = {horizontal:'center'};
@@ -1584,10 +1589,29 @@ function analyzeGroup(recs, tolAbs, tolRel){
   }
   let prev = {cant:0, cu:0, ct:0};
   let prevFecha = null;
+  // Simulación paralela del promedio ponderado correcto: en vez de arrastrar el
+  // saldo tal como viene registrado (que puede venir arrastrando el error), se
+  // recalcula cantidad y costo total desde cero movimiento a movimiento, así se
+  // ve el efecto acumulado real de los errores sobre el costo promedio.
+  let corr = {cant:0, ct:0};
   recs.forEach((r, idx) => {
     const errs = [];
     const entCant=r.entCant, entCU=r.entCU, entCT=r.entCT, salCant=r.salCant, salCU=r.salCU, salCT=r.salCT,
           saldoCant=r.saldoCant, saldoCU=r.saldoCU, saldoCT=r.saldoCT;
+
+    if(idx === 0){
+      corr.cant = saldoCant;
+      corr.ct = saldoCT;
+    } else {
+      corr.cant += entCant;
+      corr.ct += entCT;
+      if(salCant > 0){
+        const cuCorrecto = corr.cant > 0.0000001 ? corr.ct / corr.cant : 0;
+        corr.ct -= cuCorrecto * salCant;
+        corr.cant -= salCant;
+      }
+    }
+    r.costoPromCorrecto = round(corr.cant > 0.0000001 ? corr.ct / corr.cant : 0);
 
     if(entCant < 0) errs.push(E('CANT_NEG_ENT','CRITICA','Cantidad de ingreso negativa'));
     if(salCant < 0) errs.push(E('CANT_NEG_SAL','CRITICA','Cantidad de salida negativa'));
