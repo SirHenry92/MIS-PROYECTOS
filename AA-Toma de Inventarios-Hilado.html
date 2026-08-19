@@ -1258,13 +1258,15 @@
 
         function comprimirImagenBascula(file) {
             return new Promise((resolve, reject) => {
-                // Solo hace falta leer el número en la pantalla de la báscula: 520px de lado
-                // mayor y escala de grises (sin color que aportar) ya dejan el dígito legible
-                // y reducen bastante el peso del archivo frente a una foto a color de cámara.
-                // Al permitir varias fotos por conteo, cada una pesa menos para no multiplicar
-                // el consumo del plan gratuito de Storage (1GB), compartido con Avíos.
-                const MAX_LADO = 520;
-                const TARGET_KB = 25;
+                // Ahora la foto ya viene recortada por la cámara guiada a solo la zona del
+                // recuadro (la pantalla de la báscula de cerca, no la foto completa) -- al ser
+                // un encuadre más cerrado se puede comprimir bastante más que antes y el número
+                // se sigue leyendo bien. 360px de lado mayor y escala de grises (sin color que
+                // aportar) alcanzan de sobra. Al permitir varias fotos por conteo, cada una pesa
+                // menos para no multiplicar el consumo del plan gratuito de Storage (1GB),
+                // compartido con Avíos.
+                const MAX_LADO = 360;
+                const TARGET_KB = 12;
                 const img = new Image();
                 const url = URL.createObjectURL(file);
                 img.onload = async () => {
@@ -1289,8 +1291,8 @@
 
                         // Baja la calidad JPEG en pasos hasta acercarse al peso objetivo, sin
                         // pasar de una calidad mínima que ya no se leería bien.
-                        let blob = await canvasToBlob(canvas, 0.4);
-                        for (const calidad of [0.3, 0.2]) {
+                        let blob = await canvasToBlob(canvas, 0.35);
+                        for (const calidad of [0.25, 0.15]) {
                             if (blob.size / 1024 <= TARGET_KB) break;
                             blob = await canvasToBlob(canvas, calidad);
                         }
@@ -1340,20 +1342,33 @@
             renderFotosBalanzaPreview();
         }
 
-        // Dibuja las miniaturas: primero las ya guardadas en el registro (sin opción de quitar,
-        // son historial), luego las nuevas pendientes de subir (con botón "×" para descartarlas
-        // antes de guardar el conteo).
+        // Quita una foto YA GUARDADA del registro (solo tiene sentido durante una edición
+        // autorizada con contraseña -- ver modoEdicionAutorizada). No borra nada de Storage acá:
+        // simplemente deja de incluirse en la lista que se manda a guardar; si el operador
+        // cierra el modal sin guardar, no se pierde (fotosBalanzaGuardadas se recarga desde el
+        // registro la próxima vez que se abra la ficha).
+        function quitarFotoBalanzaGuardada(index) {
+            fotosBalanzaGuardadas.splice(index, 1);
+            renderFotosBalanzaPreview();
+        }
+
+        // Dibuja las miniaturas: primero las ya guardadas en el registro, luego las nuevas
+        // pendientes de subir. Las guardadas solo muestran el botón "×" para quitarlas cuando
+        // el registro está desbloqueado para edición (modoEdicionAutorizada) -- si es un
+        // registro recién contado (sin desbloquear), quedan de solo lectura como historial.
         function renderFotosBalanzaPreview() {
             const wrap = document.getElementById('foto-balanza-preview-wrap');
             const total = fotosBalanzaGuardadas.length + fotosBalanzaPendientes.length;
             wrap.classList.toggle('hidden-view', total === 0);
             wrap.innerHTML = '';
 
-            fotosBalanzaGuardadas.forEach((url) => {
+            fotosBalanzaGuardadas.forEach((url, index) => {
                 const div = document.createElement('div');
                 div.className = 'relative';
                 div.innerHTML = `<img src="${esc(url)}" class="w-full h-20 object-cover rounded border border-gray-200 bg-white">
-                    <span class="absolute bottom-0.5 left-0.5 bg-teal-600 text-white text-[8px] px-1 rounded font-bold">GUARDADA</span>`;
+                    <span class="absolute bottom-0.5 left-0.5 bg-teal-600 text-white text-[8px] px-1 rounded font-bold">GUARDADA</span>
+                    ${modoEdicionAutorizada ? `<button type="button" class="absolute -top-1.5 -right-1.5 w-5 h-5 bg-red-500 text-white rounded-full text-[10px] flex items-center justify-center shadow" title="Quitar">×</button>` : ''}`;
+                if (modoEdicionAutorizada) div.querySelector('button').onclick = () => quitarFotoBalanzaGuardada(index);
                 wrap.appendChild(div);
             });
             fotosBalanzaPendientes.forEach((item, index) => {
@@ -1574,6 +1589,7 @@
 
             calcTargetInput = document.getElementById('peso_bruto');
             modoEdicionAutorizada = true;
+            renderFotosBalanzaPreview(); // vuelve a dibujar las miniaturas para que aparezca el "×" en las guardadas
 
             Swal.fire({
                 toast: true,
