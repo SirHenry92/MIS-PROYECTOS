@@ -269,6 +269,7 @@
     <script>
         const { jsPDF } = window.jspdf;
         const peFormatter = new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        const nombresMeses = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
 
         let umMappingGlobal = {};
         let saldosImportadosGlobal = {};
@@ -430,6 +431,190 @@
         const workerCode = `
             self.importScripts('https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js');
 
+            // ===================================================================
+            // LECTOR ALTERNO POR STREAMING (para hojas .xlsx cuyo XML interno es
+            // enorme, cientos de MB sin comprimir). XLSX.read necesita construir
+            // ese XML completo como UN SOLO string de JS, y el motor V8 tiene un
+            // limite de longitud de string (~512 millones de caracteres); al
+            // superarlo, la lectura falla en silencio y devuelve una hoja vacia,
+            // lo que puede verse como "no se detectaron datos" o colgar/colapsar
+            // la pestana con archivos muy grandes. Esta ruta evita el problema:
+            // descomprime y procesa el ZIP/XML del .xlsx en trozos pequenos
+            // (streaming), sin tener nunca el archivo completo como un string.
+            // Se activa solo cuando la hoja supera BIG_SHEET_THRESHOLD; para
+            // archivos normales se sigue usando XLSX.read + sheet_to_json de
+            // siempre (mas simple y ya suficientemente rapido).
+            // ===================================================================
+            const BIG_SHEET_THRESHOLD = 150 * 1024 * 1024; // 150 MB sin comprimir
+
+            function zipFindEntry(buf, entryName){
+                const dv = new DataView(buf);
+                const u8 = new Uint8Array(buf);
+                let eocd = -1;
+                for(let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 22 - 65557); i--){
+                    if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+                }
+                if(eocd < 0) return null;
+                const cdOffset = dv.getUint32(eocd+16, true);
+                const cdCount = dv.getUint16(eocd+10, true);
+                let p = cdOffset;
+                const enc = new TextDecoder('utf-8');
+                for(let i=0;i<cdCount;i++){
+                    const compMethod = dv.getUint16(p+10, true);
+                    const compSize = dv.getUint32(p+20, true);
+                    const uncompSize = dv.getUint32(p+24, true);
+                    const nameLen = dv.getUint16(p+28, true);
+                    const extraLen = dv.getUint16(p+30, true);
+                    const commentLen = dv.getUint16(p+32, true);
+                    const localHeaderOffset = dv.getUint32(p+42, true);
+                    const name = enc.decode(u8.subarray(p+46, p+46+nameLen));
+                    if(name === entryName) return {compMethod: compMethod, compSize: compSize, uncompSize: uncompSize, localHeaderOffset: localHeaderOffset};
+                    p += 46 + nameLen + extraLen + commentLen;
+                }
+                return null;
+            }
+            function zipEntryDataStart(buf, localHeaderOffset){
+                const dv = new DataView(buf);
+                const nameLen = dv.getUint16(localHeaderOffset+26, true);
+                const extraLen = dv.getUint16(localHeaderOffset+28, true);
+                return localHeaderOffset + 30 + nameLen + extraLen;
+            }
+            function zipEntryByteStream(buf, entry){
+                const dataStart = zipEntryDataStart(buf, entry.localHeaderOffset);
+                const slice = new Uint8Array(buf, dataStart, entry.compSize);
+                const rawStream = new Blob([slice]).stream();
+                if(entry.compMethod === 0) return rawStream;
+                if(entry.compMethod === 8) return rawStream.pipeThrough(new DecompressionStream('deflate-raw'));
+                throw new Error('Metodo de compresion ZIP no soportado: ' + entry.compMethod);
+            }
+            async function zipEntryReadText(buf, entry){
+                const stream = zipEntryByteStream(buf, entry).pipeThrough(new TextDecoderStream());
+                const reader = stream.getReader();
+                let text = '';
+                while(true){ const r = await reader.read(); if(r.done) break; text += r.value; }
+                return text;
+            }
+            function xmlUnescapeStream(s){
+                return s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'")
+                    .replace(/&#x([0-9a-fA-F]+);/g, function(_, h){ return String.fromCodePoint(parseInt(h,16)); })
+                    .replace(/&#(\\d+);/g, function(_, d){ return String.fromCodePoint(parseInt(d,10)); })
+                    .replace(/&amp;/g,'&');
+            }
+            function colLettersToIndex(letters){
+                let n = 0;
+                for(let i=0;i<letters.length;i++){ n = n*26 + (letters.charCodeAt(i)-64); }
+                return n-1;
+            }
+            function parseSharedStringsXml(xml){
+                const strings = [];
+                const siRe = /<si>([\\s\\S]*?)<\\/si>/g;
+                let m;
+                while((m = siRe.exec(xml))){
+                    let text = '';
+                    const tRe = /<t[^>]*>([\\s\\S]*?)<\\/t>/g; let tm;
+                    while((tm = tRe.exec(m[1]))) text += tm[1];
+                    strings.push(xmlUnescapeStream(text));
+                }
+                return strings;
+            }
+            function extractCompleteRowsXml(buffer){
+                const re = /<row\\b[^>]*?\\/>|<row\\b[^>]*?>[\\s\\S]*?<\\/row>/g;
+                const rowsXml = [];
+                let lastEnd = 0, m;
+                while((m = re.exec(buffer))){ rowsXml.push(m[0]); lastEnd = re.lastIndex; }
+                return {rowsXml: rowsXml, rest: buffer.slice(lastEnd)};
+            }
+            function parseRowXmlWithNum(rowXml, sharedStrings){
+                const rowNumMatch = /^<row r="(\\d+)"/.exec(rowXml);
+                const rowNum = rowNumMatch ? parseInt(rowNumMatch[1],10) : 0;
+                const cells = [];
+                let maxCol = -1;
+                const cellRe = /<c r="([A-Z]+)\\d+"([^>]*)\\/>|<c r="([A-Z]+)\\d+"([^>]*)>([\\s\\S]*?)<\\/c>/g;
+                let m;
+                while((m = cellRe.exec(rowXml))){
+                    let colLetters, attrs, inner;
+                    if(m[1] !== undefined){ colLetters = m[1]; attrs = m[2]; inner = null; }
+                    else { colLetters = m[3]; attrs = m[4]; inner = m[5]; }
+                    const col = colLettersToIndex(colLetters);
+                    if(col > maxCol) maxCol = col;
+                    let type = 'n';
+                    const tMatch = /\\st="([a-zA-Z]+)"/.exec(attrs);
+                    if(tMatch) type = tMatch[1];
+                    let value = null;
+                    if(inner != null){
+                        const vMatch = /<v>([\\s\\S]*?)<\\/v>/.exec(inner);
+                        if(vMatch){
+                            const raw = vMatch[1];
+                            if(type === 's'){ const idx = parseInt(raw,10); value = sharedStrings[idx]; if(value===undefined) value=''; }
+                            else if(type === 'b'){ value = raw === '1'; }
+                            else if(type === 'str' || type === 'e'){ value = xmlUnescapeStream(raw); }
+                            else { value = parseFloat(raw); }
+                        } else {
+                            const isMatch = /<is>([\\s\\S]*?)<\\/is>/.exec(inner);
+                            if(isMatch){
+                                let text = '';
+                                const tRe = /<t[^>]*>([\\s\\S]*?)<\\/t>/g; let tm2;
+                                while((tm2 = tRe.exec(isMatch[1]))) text += tm2[1];
+                                value = xmlUnescapeStream(text);
+                            }
+                        }
+                    }
+                    cells[col] = value;
+                }
+                const rowArr = new Array(maxCol+1).fill(null);
+                for(let i=0;i<cells.length;i++){ if(cells[i]!==undefined) rowArr[i]=cells[i]; }
+                return {rowNum: rowNum, values: rowArr};
+            }
+            async function streamSheetRows(buf, sheetPath, statusLabel){
+                let sharedStrings = [];
+                const ssEntry = zipFindEntry(buf, 'xl/sharedStrings.xml');
+                if(ssEntry){
+                    sharedStrings = parseSharedStringsXml(await zipEntryReadText(buf, ssEntry));
+                }
+                const sheetEntry = zipFindEntry(buf, sheetPath);
+                if(!sheetEntry) throw new Error('No se encontro la hoja de datos: ' + sheetPath);
+                const stream = zipEntryByteStream(buf, sheetEntry).pipeThrough(new TextDecoderStream());
+                const reader = stream.getReader();
+                let strBuffer = '';
+                const rows = [];
+                let lastRowNum = 0;
+                let processed = 0;
+                while(true){
+                    const r = await reader.read();
+                    if(r.done) break;
+                    strBuffer += r.value;
+                    const parsed = extractCompleteRowsXml(strBuffer);
+                    strBuffer = parsed.rest;
+                    for(let k=0;k<parsed.rowsXml.length;k++){
+                        const rn = parseRowXmlWithNum(parsed.rowsXml[k], sharedStrings);
+                        while(rn.rowNum - lastRowNum > 1){ rows.push([]); lastRowNum++; }
+                        rows.push(rn.values);
+                        lastRowNum = rn.rowNum;
+                        processed++;
+                    }
+                    if(parsed.rowsXml.length && processed % 20000 < parsed.rowsXml.length){
+                        self.postMessage({ type: 'progress', percent: 5, detail: 'Leyendo (modo optimizado) ' + statusLabel + ': ' + processed + ' filas...' });
+                        await new Promise(function(res){ setTimeout(res,0); });
+                    }
+                }
+                return rows;
+            }
+            async function readSheetRowsSmart(buf, sheetIndex, sheetLabel){
+                const path = 'xl/worksheets/sheet' + (sheetIndex+1) + '.xml';
+                let entry = null;
+                try { entry = zipFindEntry(buf, path); } catch(e) { entry = null; }
+                const canStream = (typeof DecompressionStream === 'function');
+                if(entry && entry.uncompSize > BIG_SHEET_THRESHOLD && canStream){
+                    self.postMessage({ type: 'progress', percent: 5, detail: 'Hoja grande detectada, usando lectura optimizada...' });
+                    try{
+                        return await streamSheetRows(buf, path, sheetLabel);
+                    }catch(err){
+                        self.postMessage({ type: 'progress', percent: 5, detail: 'Lectura optimizada fallo, usando metodo estandar...' });
+                    }
+                }
+                return null; // null = usar sheet_to_json normal, como antes
+            }
+
             const parseExcelDate = (val) => {
                 if (val == null) return null;
                 if (val instanceof Date) return isNaN(val.getTime()) ? null : val;
@@ -562,7 +747,7 @@
                 }
             }
 
-            self.onmessage = function(e) {
+            self.onmessage = async function(e) {
                 if (e.data.cmd === 'cancel') { cancelado = true; return; }
                 
                 if (e.data.cmd === 'reset_chunk') {
@@ -596,15 +781,20 @@
 
                 try {
                     self.postMessage({ type: 'progress', percent: 2, detail: 'Procesando Data...' });
-                    const wbInfo = XLSX.read(rawBuffer, { 
-                        type: 'array', dense: true, cellDates: true, cellText: false, cellNF: false, cellStyles: false, cellFormula: false, bookVBA: false
+                    const wbInfo = XLSX.read(rawBuffer, {
+                        type: 'array', dense: true, cellDates: true, cellText: false, cellNF: false, cellStyles: false, cellFormula: false, bookVBA: false, sheetStubs: false
                     });
                     const hojas = wbInfo.SheetNames;
 
                     for (let h = 0; h < hojas.length; h++) {
                         if (cancelado) { self.postMessage({ type: 'cancelled' }); return; }
-                        let sheet = wbInfo.Sheets[hojas[h]];
-                        let filas = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+                        // Intenta primero la lectura optimizada por streaming (solo se activa
+                        // sola si la hoja es enorme); si no aplica, usa el metodo normal.
+                        let filas = await readSheetRowsSmart(rawBuffer, h, hojas[h]);
+                        if (filas === null) {
+                            let sheet = wbInfo.Sheets[hojas[h]];
+                            filas = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+                        }
                         const basePct = 5 + Math.round((h / hojas.length) * 55);
                         procesarDatosHoja(filas, (i, total) => {
                             if(i%5000===0) self.postMessage({ type: 'progress', percent: basePct, detail: \`Leyendo: \${hojas[h]}...\` });
@@ -880,12 +1070,34 @@
             reader.readAsArrayBuffer(archivoKardexBase);
         });
 
+        // Escribe un Excel con SheetJS dividiendo automáticamente en varias hojas
+        // cuando hay demasiadas filas. SheetJS puede fallar ("Invalid array length")
+        // o volverse extremadamente lento al escribir una sola hoja con más de
+        // ~100,000-200,000 filas de texto; dividir en pestañas de tamaño acotado
+        // evita el problema sin perder ni una fila de información.
+        function writeChunkedXlsx(data, sheetBaseName, fileName) {
+            const CHUNK = 50000;
+            const wb = XLSX.utils.book_new();
+            if (data.length <= CHUNK) {
+                const ws = XLSX.utils.json_to_sheet(data);
+                XLSX.utils.book_append_sheet(wb, ws, sheetBaseName.substring(0, 31));
+            } else {
+                const numChunks = Math.ceil(data.length / CHUNK);
+                for (let c = 0; c < numChunks; c++) {
+                    const slice = data.slice(c * CHUNK, (c + 1) * CHUNK);
+                    const ws = XLSX.utils.json_to_sheet(slice);
+                    const name = (sheetBaseName + ' (' + (c + 1) + ' de ' + numChunks + ')').substring(0, 31);
+                    XLSX.utils.book_append_sheet(wb, ws, name);
+                }
+            }
+            XLSX.writeFile(wb, fileName);
+        }
+
         document.getElementById('btnExportarSaldos').addEventListener('click', () => {
             if (!window.saldosFinalesData || window.saldosFinalesData.length === 0) { alert("No hay saldos para exportar."); return; }
-            const ws = XLSX.utils.json_to_sheet(window.saldosFinalesData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Saldos");
             let anioFiltro = document.getElementById('inputAnio').value.trim();
             if(!anioFiltro) { anioFiltro = new Date().getFullYear(); } else { anioFiltro = anioFiltro.split(',')[0].trim(); }
-            XLSX.writeFile(wb, `Saldo final año ${anioFiltro}.xlsx`);
+            writeChunkedXlsx(window.saldosFinalesData, 'Saldos', `Saldo final año ${anioFiltro}.xlsx`);
         });
 
         async function initiateProcessing(pdf, excelResumen, excelDetallado) {
@@ -1042,8 +1254,8 @@
                 flatRow['SALDO FINAL CANT'] = r.SALDO_FIN_CANT; flatRow['SALDO FINAL TOTAL'] = r.SALDO_FIN_TOTAL;
                 return flatRow;
             });
-            const ws = XLSX.utils.json_to_sheet(finalData); const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Resumen_Kardex");
-            let rucStr = empDataGlobal.ruc || 'SIN_RUC'; XLSX.writeFile(wb, `${rucStr}_Resumen_Kardex.xlsx`);
+            let rucStr = empDataGlobal.ruc || 'SIN_RUC';
+            writeChunkedXlsx(finalData, 'Resumen_Kardex', `${rucStr}_Resumen_Kardex.xlsx`);
         }
 
         async function consumirCola() {
@@ -1063,9 +1275,7 @@
                             doc = null; 
                         }
                         if (generateOptions.excelDetallado && excelDetalladoMesRaw.length > 0) {
-                            const ws = XLSX.utils.json_to_sheet(excelDetalladoMesRaw);
-                            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Detalle");
-                            XLSX.writeFile(wb, `${rucStr}_${anioReal}_${mesSplit}_Detallado.xlsx`);
+                            writeChunkedXlsx(excelDetalladoMesRaw, 'Detalle', `${rucStr}_${anioReal}_${mesSplit}_Detallado.xlsx`);
                             excelDetalladoMesRaw = [];
                         }
 
@@ -1101,9 +1311,7 @@
                         if (generateOptions.excelDetallado && currentMonthInPdf !== null && excelDetalladoMesRaw.length > 0) {
                             let rucStr = empDataGlobal.ruc || 'SIN_RUC';
                             let anioReal = currentMonthInPdf.split('-')[0]; let mesSplit = currentMonthInPdf.split('-')[1];
-                            const ws = XLSX.utils.json_to_sheet(excelDetalladoMesRaw);
-                            const wb = XLSX.utils.book_new(); XLSX.utils.book_append_sheet(wb, ws, "Detalle");
-                            XLSX.writeFile(wb, `${rucStr}_${anioReal}_${mesSplit}_Detallado.xlsx`);
+                            writeChunkedXlsx(excelDetalladoMesRaw, 'Detalle', `${rucStr}_${anioReal}_${mesSplit}_Detallado.xlsx`);
                             excelDetalladoMesRaw = [];
                         }
                         if (generateOptions.excel) { await finalizarExcelMasivo(); }

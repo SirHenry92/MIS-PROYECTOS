@@ -11,30 +11,33 @@
         ::-webkit-scrollbar-track { background: #f8fafc; border-radius: 8px; }
         ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; border: 2px solid #f8fafc; }
         ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
+
         .table-container { max-height: 600px; overflow-y: auto; overflow-x: auto; }
-        
-        th { 
-            position: sticky; 
-            top: 0; 
-            z-index: 10; 
-            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05); 
-            background-color: #f8fafc; 
+
+        th {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
+            background-color: #f8fafc;
             color: #475569;
         }
-        
+
         table { border-spacing: 0; }
         td, th { border-bottom: 1px solid #f1f5f9; }
-        
+
         .row-detail:hover td { background-color: #f8fafc; }
         .row-summary { border-bottom: 3px solid #cbd5e1; }
         .row-summary:hover td { background-color: #f1f5f9; }
+
+        .progress-bar-track { background: #e2e8f0; border-radius: 999px; height: 6px; overflow: hidden; margin-top: 6px; }
+        .progress-bar-fill { background: #2563eb; height: 100%; border-radius: 999px; transition: width .25s ease; }
     </style>
 </head>
 <body class="p-4 md:p-8 min-h-screen bg-slate-50 font-sans text-slate-800">
 
     <div class="max-w-[1600px] w-full mx-auto space-y-6">
-        
+
         <!-- Encabezado -->
         <div class="bg-white p-6 rounded-2xl shadow-sm border border-slate-200 flex flex-col md:flex-row justify-between items-center relative overflow-hidden gap-4">
             <div class="absolute top-0 left-0 w-1.5 h-full bg-blue-600"></div>
@@ -49,7 +52,7 @@
         </div>
 
         <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            
+
             <!-- CARGA FÍSICA -->
             <div class="bg-white p-5 rounded-2xl shadow-sm border border-slate-200">
                 <div class="mb-4 flex justify-between items-center">
@@ -63,7 +66,8 @@
                     </label>
                 </div>
                 <div class="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100" id="statusFisico">
-                    Esperando archivos... 
+                    Esperando archivos...
+                    <div class="progress-bar-track hidden" id="progressFisicoTrack"><div class="progress-bar-fill" id="progressFisicoFill" style="width:0%"></div></div>
                 </div>
             </div>
 
@@ -81,15 +85,16 @@
                 </div>
                 <div class="text-xs text-slate-500 bg-slate-50 p-3 rounded-lg border border-slate-100" id="statusKardex">
                     Esperando archivos...
+                    <div class="progress-bar-track hidden" id="progressKardexTrack"><div class="progress-bar-fill" id="progressKardexFill" style="width:0%"></div></div>
                 </div>
             </div>
         </div>
 
         <!-- RESULTADOS Y FILTROS -->
         <div class="bg-white rounded-2xl shadow-sm border border-slate-200 overflow-hidden">
-            
+
             <div class="bg-white border-b border-slate-200 p-4 flex flex-col md:flex-row justify-between items-center gap-4">
-                
+
                 <div class="relative w-full md:w-96">
                     <div class="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
                         <svg class="w-4 h-4 text-slate-400" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
@@ -107,6 +112,8 @@
                     </button>
                 </div>
             </div>
+
+            <div class="px-4 pt-3 text-[11px] text-slate-400 font-medium hidden" id="displayLimitNotice"></div>
 
             <div class="table-container">
                 <table class="w-full text-[11px] xl:text-xs text-left whitespace-nowrap" id="mainTable">
@@ -135,108 +142,395 @@
 
     <script>
         const formatNum = new Intl.NumberFormat('es-PE', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-        
+
+        // Límite de códigos (no de filas de detalle) que se dibujan en pantalla.
+        // Con catálogos muy grandes, generar miles de <tr> sin virtualización es
+        // pesado para el DOM. El Excel exportado siempre incluye el 100% de los
+        // datos; esto solo protege la vista previa en el navegador.
+        const DISPLAY_LIMIT = 1000;
+
         let dbFisicoCrudo = [];
         let dbKardexGlobal = {};
         let dataResultante = [];
         let filtroSoloFisico = false;
 
+        /* ============================================================
+           WEB WORKER — toda la lectura de Excel (física + kardex) se
+           hace fuera del hilo principal, con una ruta de streaming que
+           se activa sola cuando una hoja es enorme (cientos de MB sin
+           comprimir). Esto es lo mismo que se aplicó al Analizador de
+           Kardex y a los dos Generadores: XLSX.read necesita construir
+           el XML de la hoja como UN SOLO string de JS, y el motor V8
+           tiene un límite de longitud de string (~512 millones de
+           caracteres). Al superarlo, la lectura falla en silencio y
+           devuelve una hoja vacía — lo que antes se veía como "no se
+           detectaron datos" o directamente colgaba/colapsaba la pestaña
+           con archivos de Kardex grandes. La ruta de streaming evita el
+           problema procesando el ZIP/XML en trozos pequeños.
+           ============================================================ */
+        const workerCode = `
+            self.importScripts('https://cdn.jsdelivr.net/npm/xlsx-js-style@1.2.0/dist/xlsx.bundle.js');
+
+            const BIG_SHEET_THRESHOLD = 150 * 1024 * 1024; // 150 MB sin comprimir
+
+            function zipFindEntry(buf, entryName){
+                const dv = new DataView(buf);
+                const u8 = new Uint8Array(buf);
+                let eocd = -1;
+                for(let i = buf.byteLength - 22; i >= Math.max(0, buf.byteLength - 22 - 65557); i--){
+                    if(dv.getUint32(i, true) === 0x06054b50){ eocd = i; break; }
+                }
+                if(eocd < 0) return null;
+                const cdOffset = dv.getUint32(eocd+16, true);
+                const cdCount = dv.getUint16(eocd+10, true);
+                let p = cdOffset;
+                const enc = new TextDecoder('utf-8');
+                for(let i=0;i<cdCount;i++){
+                    const compMethod = dv.getUint16(p+10, true);
+                    const compSize = dv.getUint32(p+20, true);
+                    const uncompSize = dv.getUint32(p+24, true);
+                    const nameLen = dv.getUint16(p+28, true);
+                    const extraLen = dv.getUint16(p+30, true);
+                    const commentLen = dv.getUint16(p+32, true);
+                    const localHeaderOffset = dv.getUint32(p+42, true);
+                    const name = enc.decode(u8.subarray(p+46, p+46+nameLen));
+                    if(name === entryName) return {compMethod: compMethod, compSize: compSize, uncompSize: uncompSize, localHeaderOffset: localHeaderOffset};
+                    p += 46 + nameLen + extraLen + commentLen;
+                }
+                return null;
+            }
+            function zipEntryDataStart(buf, localHeaderOffset){
+                const dv = new DataView(buf);
+                const nameLen = dv.getUint16(localHeaderOffset+26, true);
+                const extraLen = dv.getUint16(localHeaderOffset+28, true);
+                return localHeaderOffset + 30 + nameLen + extraLen;
+            }
+            function zipEntryByteStream(buf, entry){
+                const dataStart = zipEntryDataStart(buf, entry.localHeaderOffset);
+                const slice = new Uint8Array(buf, dataStart, entry.compSize);
+                const rawStream = new Blob([slice]).stream();
+                if(entry.compMethod === 0) return rawStream;
+                if(entry.compMethod === 8) return rawStream.pipeThrough(new DecompressionStream('deflate-raw'));
+                throw new Error('Metodo de compresion ZIP no soportado: ' + entry.compMethod);
+            }
+            async function zipEntryReadText(buf, entry){
+                const stream = zipEntryByteStream(buf, entry).pipeThrough(new TextDecoderStream());
+                const reader = stream.getReader();
+                let text = '';
+                while(true){ const r = await reader.read(); if(r.done) break; text += r.value; }
+                return text;
+            }
+            function xmlUnescapeStream(s){
+                return s.replace(/&lt;/g,'<').replace(/&gt;/g,'>').replace(/&quot;/g,'"').replace(/&apos;/g,"'")
+                    .replace(/&#x([0-9a-fA-F]+);/g, function(_, h){ return String.fromCodePoint(parseInt(h,16)); })
+                    .replace(/&#(\\d+);/g, function(_, d){ return String.fromCodePoint(parseInt(d,10)); })
+                    .replace(/&amp;/g,'&');
+            }
+            function colLettersToIndex(letters){
+                let n = 0;
+                for(let i=0;i<letters.length;i++){ n = n*26 + (letters.charCodeAt(i)-64); }
+                return n-1;
+            }
+            function parseSharedStringsXml(xml){
+                const strings = [];
+                const siRe = /<si>([\\s\\S]*?)<\\/si>/g;
+                let m;
+                while((m = siRe.exec(xml))){
+                    let text = '';
+                    const tRe = /<t[^>]*>([\\s\\S]*?)<\\/t>/g; let tm;
+                    while((tm = tRe.exec(m[1]))) text += tm[1];
+                    strings.push(xmlUnescapeStream(text));
+                }
+                return strings;
+            }
+            function extractCompleteRowsXml(buffer){
+                const re = /<row\\b[^>]*?\\/>|<row\\b[^>]*?>[\\s\\S]*?<\\/row>/g;
+                const rowsXml = [];
+                let lastEnd = 0, m;
+                while((m = re.exec(buffer))){ rowsXml.push(m[0]); lastEnd = re.lastIndex; }
+                return {rowsXml: rowsXml, rest: buffer.slice(lastEnd)};
+            }
+            function parseRowXmlWithNum(rowXml, sharedStrings){
+                const rowNumMatch = /^<row r="(\\d+)"/.exec(rowXml);
+                const rowNum = rowNumMatch ? parseInt(rowNumMatch[1],10) : 0;
+                const cells = [];
+                let maxCol = -1;
+                const cellRe = /<c r="([A-Z]+)\\d+"([^>]*)\\/>|<c r="([A-Z]+)\\d+"([^>]*)>([\\s\\S]*?)<\\/c>/g;
+                let m;
+                while((m = cellRe.exec(rowXml))){
+                    let colLetters, attrs, inner;
+                    if(m[1] !== undefined){ colLetters = m[1]; attrs = m[2]; inner = null; }
+                    else { colLetters = m[3]; attrs = m[4]; inner = m[5]; }
+                    const col = colLettersToIndex(colLetters);
+                    if(col > maxCol) maxCol = col;
+                    let type = 'n';
+                    const tMatch = /\\st="([a-zA-Z]+)"/.exec(attrs);
+                    if(tMatch) type = tMatch[1];
+                    let value = null;
+                    if(inner != null){
+                        const vMatch = /<v>([\\s\\S]*?)<\\/v>/.exec(inner);
+                        if(vMatch){
+                            const raw = vMatch[1];
+                            if(type === 's'){ const idx = parseInt(raw,10); value = sharedStrings[idx]; if(value===undefined) value=''; }
+                            else if(type === 'b'){ value = raw === '1'; }
+                            else if(type === 'str' || type === 'e'){ value = xmlUnescapeStream(raw); }
+                            else { value = parseFloat(raw); }
+                        } else {
+                            const isMatch = /<is>([\\s\\S]*?)<\\/is>/.exec(inner);
+                            if(isMatch){
+                                let text = '';
+                                const tRe = /<t[^>]*>([\\s\\S]*?)<\\/t>/g; let tm2;
+                                while((tm2 = tRe.exec(isMatch[1]))) text += tm2[1];
+                                value = xmlUnescapeStream(text);
+                            }
+                        }
+                    }
+                    cells[col] = value;
+                }
+                const rowArr = new Array(maxCol+1).fill(null);
+                for(let i=0;i<cells.length;i++){ if(cells[i]!==undefined) rowArr[i]=cells[i]; }
+                return {rowNum: rowNum, values: rowArr};
+            }
+            async function streamSheetRows(buf, sheetPath, statusLabel, which){
+                let sharedStrings = [];
+                const ssEntry = zipFindEntry(buf, 'xl/sharedStrings.xml');
+                if(ssEntry){
+                    sharedStrings = parseSharedStringsXml(await zipEntryReadText(buf, ssEntry));
+                }
+                const sheetEntry = zipFindEntry(buf, sheetPath);
+                if(!sheetEntry) throw new Error('No se encontro la hoja de datos: ' + sheetPath);
+                const stream = zipEntryByteStream(buf, sheetEntry).pipeThrough(new TextDecoderStream());
+                const reader = stream.getReader();
+                let strBuffer = '';
+                const rows = [];
+                let lastRowNum = 0;
+                let processed = 0;
+                while(true){
+                    const r = await reader.read();
+                    if(r.done) break;
+                    strBuffer += r.value;
+                    const parsed = extractCompleteRowsXml(strBuffer);
+                    strBuffer = parsed.rest;
+                    for(let k=0;k<parsed.rowsXml.length;k++){
+                        const rn = parseRowXmlWithNum(parsed.rowsXml[k], sharedStrings);
+                        while(rn.rowNum - lastRowNum > 1){ rows.push([]); lastRowNum++; }
+                        rows.push(rn.values);
+                        lastRowNum = rn.rowNum;
+                        processed++;
+                    }
+                    if(parsed.rowsXml.length && processed % 20000 < parsed.rowsXml.length){
+                        self.postMessage({ type: 'progress', which: which, detail: 'Leyendo (modo optimizado) ' + statusLabel + ': ' + processed + ' filas...' });
+                        await new Promise(function(res){ setTimeout(res,0); });
+                    }
+                }
+                return rows;
+            }
+            async function readSheetRowsSmart(buf, sheetIndex, sheetLabel, which){
+                const path = 'xl/worksheets/sheet' + (sheetIndex+1) + '.xml';
+                let entry = null;
+                try { entry = zipFindEntry(buf, path); } catch(e) { entry = null; }
+                const canStream = (typeof DecompressionStream === 'function');
+                if(entry && entry.uncompSize > BIG_SHEET_THRESHOLD && canStream){
+                    self.postMessage({ type: 'progress', which: which, detail: 'Hoja grande detectada en ' + sheetLabel + ', usando lectura optimizada...' });
+                    try{
+                        return await streamSheetRows(buf, path, sheetLabel, which);
+                    }catch(err){
+                        self.postMessage({ type: 'progress', which: which, detail: 'Lectura optimizada fallo, usando metodo estandar...' });
+                    }
+                }
+                return null; // null = usar sheet_to_json normal
+            }
+            function tick(){ return new Promise(function(res){ setTimeout(res,0); }); }
+
+            function findColIndex(headerRow, name){
+                if(!headerRow) return -1;
+                for(let i=0;i<headerRow.length;i++){
+                    if(headerRow[i]!=null && String(headerRow[i]).trim() === name) return i;
+                }
+                return -1;
+            }
+
+            async function leerFilasDeHoja(buf, wbInfo, sheetIndex, sheetName, which){
+                let filas = await readSheetRowsSmart(buf, sheetIndex, sheetName, which);
+                if(filas === null){
+                    const sheet = wbInfo.Sheets[sheetName];
+                    filas = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: true, defval: null });
+                }
+                return filas;
+            }
+
+            async function procesarArchivoFisico(f){
+                const registros = [];
+                const wbInfo = XLSX.read(f.buffer, {
+                    type: 'array', dense: true, cellText: false, cellNF: false,
+                    cellStyles: false, cellFormula: false, bookVBA: false, sheetStubs: false
+                });
+                const sheetName = wbInfo.SheetNames[0];
+                if(!sheetName) return registros;
+                const filas = await leerFilasDeHoja(f.buffer, wbInfo, 0, sheetName, 'fisico');
+                if(!filas || filas.length === 0) return registros;
+                const header = filas[0];
+                const idxItem = findColIndex(header, 'Item');
+                const idxDesc = findColIndex(header, 'DescripcionLocal');
+                const idxCant = findColIndex(header, 'Cantidad');
+                const idxMonto = findColIndex(header, 'MontoLocal');
+                for(let i=1;i<filas.length;i++){
+                    const row = filas[i];
+                    if(!row) continue;
+                    const cod = (idxItem>=0 && row[idxItem]!=null) ? String(row[idxItem]).trim() : '';
+                    if(!cod) continue;
+                    registros.push({
+                        codigo: cod,
+                        descripcion: idxDesc>=0 && row[idxDesc]!=null ? String(row[idxDesc]) : '',
+                        cantidad: idxCant>=0 ? (parseFloat(row[idxCant]) || 0) : 0,
+                        valor: idxMonto>=0 ? (parseFloat(row[idxMonto]) || 0) : 0,
+                        origen: f.name
+                    });
+                    if(i % 20000 === 0) await tick();
+                }
+                return registros;
+            }
+
+            async function procesarArchivoKardex(f){
+                const db = {};
+                const wbInfo = XLSX.read(f.buffer, {
+                    type: 'array', dense: true, cellDates: true, cellText: false, cellNF: false,
+                    cellStyles: false, cellFormula: false, bookVBA: false, sheetStubs: false
+                });
+                const hojas = wbInfo.SheetNames;
+                for(let h=0; h<hojas.length; h++){
+                    const filas = await leerFilasDeHoja(f.buffer, wbInfo, h, hojas[h], 'kardex');
+                    let itemActual = null;
+                    for(let i=0;i<filas.length;i++){
+                        const row = filas[i];
+                        if(!row || row.length===0) continue;
+                        const val0 = (row[0]!=null) ? String(row[0]).trim().toUpperCase() : '';
+                        if(val0.indexOf('ITEM:')===0){
+                            const codigoStr = val0.substring(5).trim();
+                            if(!db[codigoStr]){
+                                db[codigoStr] = { codigo: codigoStr, desc:'', um:'', saldoCant:0, saldoValor:0, origen: f.name };
+                            }
+                            itemActual = db[codigoStr];
+                            continue;
+                        }
+                        if(!itemActual) continue;
+                        if(val0 === 'DESCRIPCIÓN:' && !itemActual.desc) itemActual.desc = (row[1]!=null) ? String(row[1]).trim() : '';
+                        if(val0 === 'U.M. (TABLA 6):' && !itemActual.um) itemActual.um = (row[1]!=null) ? String(row[1]).trim() : '';
+                        if(val0 === 'FECHA' || val0.indexOf('FECHA')>=0 || val0.indexOf('TOTALES')>=0) continue;
+                        if(typeof row[11] === 'number') itemActual.saldoCant = row[11];
+                        if(typeof row[13] === 'number') itemActual.saldoValor = row[13];
+                        if(i % 20000 === 0) await tick();
+                    }
+                    await tick();
+                }
+                return db;
+            }
+
+            // Cola secuencial: si el usuario dispara la carga de Fisica y de
+            // Kardex casi al mismo tiempo, un self.onmessage async normal
+            // dejaria que ambas tareas se ejecuten entrelazadas (cada await
+            // le cede el turno a la otra), y la tarea chica (Fisica) queda
+            // "muerta de hambre" detras de la tarea grande (Kardex) durante
+            // mucho tiempo. Encolar y procesar un comando a la vez evita eso
+            // y hace el progreso predecible.
+            const colaComandos = [];
+            let procesandoComando = false;
+
+            self.onmessage = function(e){
+                colaComandos.push(e.data);
+                procesarColaComandos();
+            };
+
+            async function procesarColaComandos(){
+                if(procesandoComando) return;
+                procesandoComando = true;
+                while(colaComandos.length){
+                    const msg = colaComandos.shift();
+                    try{
+                        if(msg.cmd === 'parseFisico'){
+                            let todos = [];
+                            for(let i=0;i<msg.files.length;i++){
+                                self.postMessage({ type:'progress', which:'fisico', detail: 'Leyendo ' + msg.files[i].name + '...', done:i, total: msg.files.length });
+                                const regs = await procesarArchivoFisico(msg.files[i]);
+                                todos = todos.concat(regs);
+                                await tick();
+                            }
+                            self.postMessage({ type:'doneFisico', which:'fisico', data: todos });
+                        } else if(msg.cmd === 'parseKardex'){
+                            const acumulado = {};
+                            for(let j=0;j<msg.files.length;j++){
+                                self.postMessage({ type:'progress', which:'kardex', detail: 'Leyendo ' + msg.files[j].name + '...', done:j, total: msg.files.length });
+                                const parcial = await procesarArchivoKardex(msg.files[j]);
+                                const keys = Object.keys(parcial);
+                                for(let k=0;k<keys.length;k++){ acumulado[keys[k]] = parcial[keys[k]]; }
+                                await tick();
+                            }
+                            self.postMessage({ type:'doneKardex', which:'kardex', data: acumulado });
+                        }
+                    }catch(err){
+                        self.postMessage({ type:'error', which: msg.cmd==='parseFisico'?'fisico':'kardex', message: err.message });
+                    }
+                }
+                procesandoComando = false;
+            }
+        `;
+
+        const worker = new Worker(URL.createObjectURL(new Blob([workerCode], { type: 'application/javascript' })));
+
+        worker.onmessage = function(e) {
+            const msg = e.data;
+            const isFisico = msg.which === 'fisico';
+            const statusEl = document.getElementById(isFisico ? 'statusFisico' : 'statusKardex');
+            const prefix = isFisico ? 'Fisico' : 'Kardex';
+
+            if (msg.type === 'progress') {
+                const pct = msg.total ? Math.round(((msg.done + 0.5) / msg.total) * 100) : 5;
+                statusEl.innerHTML = `<span class="text-blue-600 font-bold">Procesando...</span> ${msg.detail}` +
+                    `<div class="progress-bar-track" id="progress${prefix}Track"><div class="progress-bar-fill" id="progress${prefix}Fill" style="width:${pct}%"></div></div>`;
+                return;
+            }
+            if (msg.type === 'error') {
+                statusEl.innerHTML = `<span class="text-red-600 font-bold">Error:</span> ${msg.message}`;
+                return;
+            }
+            if (msg.type === 'doneFisico') {
+                dbFisicoCrudo = msg.data;
+                statusEl.innerHTML = `<span class="text-emerald-600 font-bold">¡Listo!</span> ${dbFisicoCrudo.length.toLocaleString('es-PE')} registros físicos.`;
+                return;
+            }
+            if (msg.type === 'doneKardex') {
+                dbKardexGlobal = msg.data;
+                statusEl.innerHTML = `<span class="text-emerald-600 font-bold">¡Listo!</span> ${Object.keys(dbKardexGlobal).length.toLocaleString('es-PE')} artículos en Kardex.`;
+                return;
+            }
+        };
+
         /* --- 1. LECTURA FÍSICA --- */
-        document.getElementById('fileInputFisico').addEventListener('change', function(e) {
+        document.getElementById('fileInputFisico').addEventListener('change', async function(e) {
             const archivos = e.target.files;
             if (archivos.length === 0) return;
-            
-            dbFisicoCrudo = [];
-            let procesados = 0;
-            document.getElementById('statusFisico').innerHTML = `<span class="text-blue-600 font-bold">Procesando estaciones...</span>`;
+            document.getElementById('statusFisico').innerHTML = `<span class="text-blue-600 font-bold">Cargando archivos en memoria...</span>`;
 
-            Array.from(archivos).forEach(archivo => {
-                const lector = new FileReader();
-                lector.onload = function(e) {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    const hoja = workbook.Sheets[workbook.SheetNames[0]];
-                    const datosJson = XLSX.utils.sheet_to_json(hoja, { raw: false, defval: "" });
-                    
-                    datosJson.forEach(fila => {
-                        let cod = fila['Item'] !== undefined ? String(fila['Item']).trim() : '';
-                        if(cod) {
-                            dbFisicoCrudo.push({
-                                codigo: cod,
-                                descripcion: fila['DescripcionLocal'] || '',
-                                cantidad: parseFloat(fila['Cantidad']) || 0,
-                                valor: parseFloat(fila['MontoLocal']) || 0,
-                                origen: archivo.name
-                            });
-                        }
-                    });
-
-                    procesados++;
-                    if (procesados === archivos.length) {
-                        document.getElementById('statusFisico').innerHTML = `<span class="text-emerald-600 font-bold">¡Listo!</span> ${archivos.length} archivos | ${dbFisicoCrudo.length} registros físicos.`;
-                    }
-                };
-                lector.readAsArrayBuffer(archivo);
-            });
+            const filesPayload = [];
+            for (const archivo of archivos) {
+                const buf = await archivo.arrayBuffer();
+                filesPayload.push({ name: archivo.name, buffer: buf });
+            }
+            worker.postMessage({ cmd: 'parseFisico', files: filesPayload }, filesPayload.map(f => f.buffer));
         });
 
         /* --- 2. LECTURA KARDEX --- */
-        document.getElementById('fileInputKardex').addEventListener('change', function(e) {
+        document.getElementById('fileInputKardex').addEventListener('change', async function(e) {
             const archivos = e.target.files;
             if (archivos.length === 0) return;
-            
-            dbKardexGlobal = {};
-            let procesados = 0;
-            document.getElementById('statusKardex').innerHTML = `<span class="text-blue-600 font-bold">Procesando Kardex...</span>`;
+            document.getElementById('statusKardex').innerHTML = `<span class="text-blue-600 font-bold">Cargando archivos en memoria...</span>`;
 
-            Array.from(archivos).forEach(archivo => {
-                const lector = new FileReader();
-                lector.onload = function(e) {
-                    const data = new Uint8Array(e.target.result);
-                    const workbook = XLSX.read(data, { type: 'array' });
-                    
-                    workbook.SheetNames.forEach(nombreHoja => {
-                        const hoja = workbook.Sheets[nombreHoja];
-                        const filas = XLSX.utils.sheet_to_json(hoja, { header: 1, raw: true, defval: null });
-                        
-                        let itemActual = null;
-                        for (let i = 0; i < filas.length; i++) {
-                            const row = filas[i];
-                            if (!row || row.length === 0) continue;
-                            const val0 = (row[0] != null) ? String(row[0]).trim().toUpperCase() : '';
-                            
-                            if (val0.startsWith('ITEM:')) {
-                                const codigoStr = val0.substring(5).trim();
-                                if (!dbKardexGlobal[codigoStr]) {
-                                    dbKardexGlobal[codigoStr] = { 
-                                        codigo: codigoStr, 
-                                        desc: '', 
-                                        um: '', 
-                                        saldoCant: 0, 
-                                        saldoValor: 0,
-                                        origen: archivo.name
-                                    };
-                                }
-                                itemActual = dbKardexGlobal[codigoStr];
-                                continue;
-                            }
-                            if (!itemActual) continue;
-                            if (val0 === 'DESCRIPCIÓN:' && !itemActual.desc) itemActual.desc = (row[1] != null) ? String(row[1]).trim() : '';
-                            if (val0 === 'U.M. (TABLA 6):' && !itemActual.um) itemActual.um = (row[1] != null) ? String(row[1]).trim() : '';
-                            if (val0 === 'FECHA' || val0.includes('FECHA') || val0.includes('TOTALES')) continue;
-
-                            if (typeof row[11] === 'number') itemActual.saldoCant = row[11];
-                            if (typeof row[13] === 'number') itemActual.saldoValor = row[13];
-                        }
-                    });
-
-                    procesados++;
-                    if (procesados === archivos.length) {
-                        document.getElementById('statusKardex').innerHTML = `<span class="text-emerald-600 font-bold">¡Listo!</span> ${Object.keys(dbKardexGlobal).length} artículos en Kardex.`;
-                    }
-                };
-                lector.readAsArrayBuffer(archivo);
-            });
+            const filesPayload = [];
+            for (const archivo of archivos) {
+                const buf = await archivo.arrayBuffer();
+                filesPayload.push({ name: archivo.name, buffer: buf });
+            }
+            worker.postMessage({ cmd: 'parseKardex', files: filesPayload }, filesPayload.map(f => f.buffer));
         });
 
         /* --- 3. PROCESAR Y CRUZAR --- */
@@ -250,7 +544,7 @@
                 }
                 físicosAgrupados[row.codigo].cantTotal += row.cantidad;
                 físicosAgrupados[row.codigo].valorTotal += row.valor;
-                
+
                 let detObj = físicosAgrupados[row.codigo].detallesPorEstacion;
                 if(!detObj[row.origen]) {
                     detObj[row.origen] = { cant: 0, val: 0 };
@@ -306,18 +600,27 @@
             const tbody = document.getElementById('tableBody');
             tbody.innerHTML = '';
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
+            const noticeEl = document.getElementById('displayLimitNotice');
 
-            dataResultante.forEach(item => {
-                if (filtroSoloFisico && !item.existeFisico) return;
+            const stylingDif = (val) => {
+                if (val > 0.01) return 'text-blue-600 font-bold';
+                if (val < -0.01) return 'text-red-600 font-bold';
+                return 'text-slate-400';
+            };
+
+            let codigosMostrados = 0;
+            let codigosCoincidentes = 0;
+            const frag = document.createDocumentFragment();
+
+            for (const item of dataResultante) {
+                if (filtroSoloFisico && !item.existeFisico) continue;
                 const origenesTxt = item.detalles.map(d => d.origen).join(' ');
                 const textoFila = `${item.codigo} ${item.descripcion} ${origenesTxt} ${item.k_origen}`.toLowerCase();
-                if (searchTerm && !textoFila.includes(searchTerm)) return;
+                if (searchTerm && !textoFila.includes(searchTerm)) continue;
 
-                const stylingDif = (val) => {
-                    if (val > 0.01) return 'text-blue-600 font-bold';
-                    if (val < -0.01) return 'text-red-600 font-bold';
-                    return 'text-slate-400';
-                };
+                codigosCoincidentes++;
+                if (codigosMostrados >= DISPLAY_LIMIT) continue;
+                codigosMostrados++;
 
                 // Detalle Físico en la vista Web
                 if (item.detalles.length > 0) {
@@ -337,7 +640,7 @@
                             <td class="p-2 px-3 text-right text-slate-200">-</td>
                             <td class="p-2 px-3 text-right text-slate-200">-</td>
                         `;
-                        tbody.appendChild(trDet);
+                        frag.appendChild(trDet);
                     });
                 }
 
@@ -357,8 +660,17 @@
                     <td class="p-3 text-right text-emerald-700 bg-emerald-200/40">${formatNum.format(item.k_val)}</td>
                     <td class="p-3 text-right ${stylingDif(item.dif_val)}">${formatNum.format(item.dif_val)}</td>
                 `;
-                tbody.appendChild(trSum);
-            });
+                frag.appendChild(trSum);
+            }
+
+            tbody.appendChild(frag);
+
+            if (codigosCoincidentes > DISPLAY_LIMIT) {
+                noticeEl.classList.remove('hidden');
+                noticeEl.textContent = `Mostrando ${DISPLAY_LIMIT.toLocaleString('es-PE')} de ${codigosCoincidentes.toLocaleString('es-PE')} códigos — por rendimiento, en pantalla solo se muestra una parte. El Excel exportado incluye la totalidad de los datos.`;
+            } else {
+                noticeEl.classList.add('hidden');
+            }
         }
 
         document.getElementById('searchInput').addEventListener('input', renderTable);
@@ -377,34 +689,50 @@
             renderTable();
         });
 
-        /* --- 5. DESCARGA EXCEL (Lógica actualizada para resumen y orden) --- */
+        /* --- 5. DESCARGA EXCEL --- */
+        // xlsx-js-style puede fallar ("Invalid array length") o volverse muy
+        // lento al escribir una sola hoja con demasiadas filas de texto/estilos.
+        // Esta función divide automáticamente en varias pestañas cuando hace
+        // falta, sin perder ni una fila de información.
+        const EXPORT_CHUNK_SIZE = 50000;
+        function appendChunkedAoaSheets(wb, headerRow, dataRows, baseName, colWidths) {
+            const chunks = [];
+            for (let i = 0; i < dataRows.length; i += EXPORT_CHUNK_SIZE) chunks.push(dataRows.slice(i, i + EXPORT_CHUNK_SIZE));
+            if (chunks.length === 0) chunks.push([]);
+            chunks.forEach((chunk, idx) => {
+                const aoa = [headerRow, ...chunk];
+                const ws = XLSX.utils.aoa_to_sheet(aoa);
+                if (colWidths) ws['!cols'] = colWidths;
+                const name = (chunks.length > 1 ? `${baseName} (${idx + 1} de ${chunks.length})` : baseName).substring(0, 31);
+                XLSX.utils.book_append_sheet(wb, ws, name);
+            });
+        }
+
         document.getElementById('btnExportarExcel').addEventListener('click', () => {
             const searchTerm = document.getElementById('searchInput').value.toLowerCase();
-            
+
             const wb = XLSX.utils.book_new();
             const styleHeader = { fill: { fgColor: { rgb: "1E293B" } }, font: { color: { rgb: "FFFFFF" }, bold: true }, alignment: { horizontal: "center" } };
 
             // ---------------------------------------------------------
             // HOJA 1: RESUMEN COMPARATIVO (Sin detalle de origen)
             // ---------------------------------------------------------
-            const wsVisualData = [];
             const styleItem = { font: { color: { rgb: "334155" } } };
             const styleDifPos = { font: { bold: true, color: { rgb: "2563EB" } } };
             const styleDifNeg = { font: { bold: true, color: { rgb: "DC2626" } } };
 
-            // Nuevas cabeceras sin los orígenes
-            wsVisualData.push([
-                {v: "Código", s: styleHeader}, {v: "Descripción", s: styleHeader}, {v: "U.M.", s: styleHeader}, 
+            const headerResumen = [
+                {v: "Código", s: styleHeader}, {v: "Descripción", s: styleHeader}, {v: "U.M.", s: styleHeader},
                 {v: "Cant. Física", s: styleHeader}, {v: "Cant. Kardex", s: styleHeader}, {v: "Diferencia Cant.", s: styleHeader},
                 {v: "Valor Físico", s: styleHeader}, {v: "Valor Kardex", s: styleHeader}, {v: "Diferencia Valor", s: styleHeader}
-            ]);
+            ];
 
+            const dataResumen = [];
             dataResultante.forEach(item => {
                 if (filtroSoloFisico && !item.existeFisico) return;
                 const origenesTxt = item.detalles.map(d => d.origen).join(' ');
                 if (searchTerm && !`${item.codigo} ${item.descripcion} ${origenesTxt} ${item.k_origen}`.toLowerCase().includes(searchTerm)) return;
 
-                // Lógica de color para diferencia
                 let sCantDif = styleItem;
                 if (item.dif_cant > 0.01) sCantDif = styleDifPos;
                 else if (item.dif_cant < -0.01) sCantDif = styleDifNeg;
@@ -413,72 +741,43 @@
                 if (item.dif_val > 0.01) sValDif = styleDifPos;
                 else if (item.dif_val < -0.01) sValDif = styleDifNeg;
 
-                // Insertamos solo el consolidado del artículo (1 línea por código)
-                wsVisualData.push([
-                    {v: item.codigo, s: styleItem}, {v: item.descripcion, s: styleItem}, {v: item.um, s: styleItem}, 
-                    {v: item.f_cant, t: 'n', s: styleItem}, {v: item.k_cant, t: 'n', s: styleItem}, {v: item.dif_cant, t: 'n', s: sCantDif}, 
+                dataResumen.push([
+                    {v: item.codigo, s: styleItem}, {v: item.descripcion, s: styleItem}, {v: item.um, s: styleItem},
+                    {v: item.f_cant, t: 'n', s: styleItem}, {v: item.k_cant, t: 'n', s: styleItem}, {v: item.dif_cant, t: 'n', s: sCantDif},
                     {v: item.f_val, t: 'n', s: styleItem}, {v: item.k_val, t: 'n', s: styleItem}, {v: item.dif_val, t: 'n', s: sValDif}
                 ]);
             });
 
-            if (wsVisualData.length <= 1) return alert("No hay datos para exportar.");
+            if (dataResumen.length === 0) return alert("No hay datos para exportar.");
 
-            const ws1 = XLSX.utils.aoa_to_sheet(wsVisualData);
-            // Ajustamos las columnas a 9 (quitando las 2 de origen)
-            ws1['!cols'] = [{wch: 15}, {wch: 45}, {wch: 8}, {wch: 12}, {wch: 12}, {wch: 15}, {wch: 12}, {wch: 12}, {wch: 15}];
-            XLSX.utils.book_append_sheet(wb, ws1, "Resumen_Comparativo");
-
+            const colsResumen = [{wch: 15}, {wch: 45}, {wch: 8}, {wch: 12}, {wch: 12}, {wch: 15}, {wch: 12}, {wch: 12}, {wch: 15}];
+            appendChunkedAoaSheets(wb, headerResumen, dataResumen, "Resumen_Comparativo", colsResumen);
 
             // ---------------------------------------------------------
             // HOJA 2: DETALLE DEL KARDEX (Ordenado por Código)
             // ---------------------------------------------------------
-            const wsKardexData = [];
-            wsKardexData.push([
-                {v: "Código", s: styleHeader}, 
-                {v: "Descripción", s: styleHeader}, 
-                {v: "U.M.", s: styleHeader}, 
-                {v: "Saldo Cantidad", s: styleHeader}, 
-                {v: "Saldo Valor", s: styleHeader}, 
-                {v: "Archivo Origen", s: styleHeader}
-            ]);
-            
-            // Extraer y ordenar el objeto Kardex
+            const headerKardex = [
+                {v: "Código", s: styleHeader}, {v: "Descripción", s: styleHeader}, {v: "U.M.", s: styleHeader},
+                {v: "Saldo Cantidad", s: styleHeader}, {v: "Saldo Valor", s: styleHeader}, {v: "Archivo Origen", s: styleHeader}
+            ];
             let kardexArray = Object.values(dbKardexGlobal);
             kardexArray.sort((a, b) => a.codigo.localeCompare(b.codigo));
-            
-            kardexArray.forEach(row => {
-                wsKardexData.push([row.codigo, row.desc, row.um, row.saldoCant, row.saldoValor, row.origen]);
-            });
-            
-            const ws2 = XLSX.utils.aoa_to_sheet(wsKardexData);
-            ws2['!cols'] = [{wch: 15}, {wch: 50}, {wch: 8}, {wch: 15}, {wch: 15}, {wch: 30}];
-            XLSX.utils.book_append_sheet(wb, ws2, "Detalle_Kardex");
-
+            const dataKardex = kardexArray.map(row => [row.codigo, row.desc, row.um, row.saldoCant, row.saldoValor, row.origen]);
+            const colsKardex = [{wch: 15}, {wch: 50}, {wch: 8}, {wch: 15}, {wch: 15}, {wch: 30}];
+            appendChunkedAoaSheets(wb, headerKardex, dataKardex, "Detalle_Kardex", colsKardex);
 
             // ---------------------------------------------------------
             // HOJA 3: DETALLE DE ESTACIONES (Ordenado por Código)
             // ---------------------------------------------------------
-            const wsFisicoData = [];
-            wsFisicoData.push([
-                {v: "Código", s: styleHeader}, 
-                {v: "Descripción", s: styleHeader}, 
-                {v: "Cantidad", s: styleHeader}, 
-                {v: "Valor", s: styleHeader}, 
-                {v: "Estación Origen", s: styleHeader}
-            ]);
-            
-            // Clonar y ordenar la data física cruda
+            const headerFisico = [
+                {v: "Código", s: styleHeader}, {v: "Descripción", s: styleHeader}, {v: "Cantidad", s: styleHeader},
+                {v: "Valor", s: styleHeader}, {v: "Estación Origen", s: styleHeader}
+            ];
             let fisicoArray = [...dbFisicoCrudo];
             fisicoArray.sort((a, b) => a.codigo.localeCompare(b.codigo));
-            
-            fisicoArray.forEach(row => {
-                wsFisicoData.push([row.codigo, row.descripcion, row.cantidad, row.valor, row.origen]);
-            });
-            
-            const ws3 = XLSX.utils.aoa_to_sheet(wsFisicoData);
-            ws3['!cols'] = [{wch: 15}, {wch: 50}, {wch: 12}, {wch: 12}, {wch: 30}];
-            XLSX.utils.book_append_sheet(wb, ws3, "Detalle_Estaciones");
-
+            const dataFisico = fisicoArray.map(row => [row.codigo, row.descripcion, row.cantidad, row.valor, row.origen]);
+            const colsFisico = [{wch: 15}, {wch: 50}, {wch: 12}, {wch: 12}, {wch: 30}];
+            appendChunkedAoaSheets(wb, headerFisico, dataFisico, "Detalle_Estaciones", colsFisico);
 
             // ---------------------------------------------------------
             // DESCARGAR ARCHIVO FINAL
