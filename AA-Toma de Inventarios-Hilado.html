@@ -1180,6 +1180,14 @@
         // reutiliza en las siguientes: crearlo descarga el modelo de OCR (unos MB), así que
         // hacerlo de nuevo en cada captura sería lento e innecesario.
         //
+        // Se usa el modelo "letsgodigital", entrenado específicamente para leer pantallas
+        // digitales de 7 segmentos (LCD/LED de básculas, multímetros, relojes, etc.) -- el
+        // modelo genérico "eng" está entrenado con tipografías impresas normales y le cuesta
+        // mucho leer ese estilo de número, que es justo el motivo por el que antes casi nunca
+        // detectaba nada en la pantalla de la báscula. Si por algún motivo no se puede
+        // descargar (sin internet, el mirror caído), se cae de vuelta al modelo estándar en
+        // vez de dejar el escáner sin funcionar.
+        //
         // OJO: a propósito NO se restringe el reconocimiento con tessedit_char_whitelist a
         // solo dígitos. Forzar el whitelist hace que Tesseract "encaje" cada trazo que ve en
         // el carácter permitido más parecido -- es decir, una foto de puro texto (letras)
@@ -1190,7 +1198,16 @@
         let workerBalanzaOcrPromesa = null;
         function obtenerWorkerBalanzaOcr() {
             if (!workerBalanzaOcrPromesa) {
-                workerBalanzaOcrPromesa = Tesseract.createWorker('eng');
+                workerBalanzaOcrPromesa = (async () => {
+                    try {
+                        return await Tesseract.createWorker('letsgodigital', 1, {
+                            langPath: 'https://cdn.jsdelivr.net/gh/Shreeshrii/tessdata_ssd@master'
+                        });
+                    } catch (err) {
+                        console.warn('No se pudo cargar el modelo OCR para pantallas digitales, se usa el modelo estándar:', err);
+                        return await Tesseract.createWorker('eng');
+                    }
+                })();
             }
             return workerBalanzaOcrPromesa;
         }
@@ -1205,6 +1222,70 @@
             if (digitos.length === 0) return false;
             if (alfanumerico.length === 0) return true;
             return (digitos.length / alfanumerico.length) >= 0.5;
+        }
+
+        // Prepara una copia de la imagen SOLO para el OCR (la foto que se sube a Supabase sigue
+        // siendo la original a color, esto no la reemplaza): la agranda y la convierte a
+        // blanco/negro con un umbral que se calcula automáticamente según cada foto (método de
+        // Otsu). El bajo contraste y el tamaño chico del recorte son, junto con la tipografía,
+        // la otra causa típica de que el OCR no detecte los números de una pantalla digital.
+        function prepararCanvasParaOcr(canvasOrigen) {
+            const factor = 2.5;
+            const destino = document.createElement('canvas');
+            destino.width = Math.max(1, Math.round(canvasOrigen.width * factor));
+            destino.height = Math.max(1, Math.round(canvasOrigen.height * factor));
+            const ctx = destino.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.drawImage(canvasOrigen, 0, 0, destino.width, destino.height);
+            binarizarConPolaridadAutomatica(destino);
+            return destino;
+        }
+
+        // Blanco/negro con umbral de Otsu (se adapta solo a la luz/exposición de cada foto, en
+        // vez de un número fijo que funcionaría bien en una foto y mal en otra) y con la
+        // polaridad normalizada: el fondo (el grupo de píxeles más grande) siempre queda
+        // blanco y el texto (el grupo más chico) negro, sea que la pantalla tenga números
+        // oscuros sobre fondo claro o al revés (números claros/LED sobre fondo oscuro).
+        function binarizarConPolaridadAutomatica(canvas) {
+            const ctx = canvas.getContext('2d');
+            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const d = img.data;
+            const n = d.length / 4;
+
+            const grises = new Uint8ClampedArray(n);
+            const hist = new Array(256).fill(0);
+            for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+                const g = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
+                grises[p] = g;
+                hist[g]++;
+            }
+
+            let sumaTotal = 0;
+            for (let t = 0; t < 256; t++) sumaTotal += t * hist[t];
+            let sumaB = 0, pesoB = 0, mejorVarianza = -1, umbral = 128;
+            for (let t = 0; t < 256; t++) {
+                pesoB += hist[t];
+                if (pesoB === 0) continue;
+                const pesoF = n - pesoB;
+                if (pesoF === 0) break;
+                sumaB += t * hist[t];
+                const mediaB = sumaB / pesoB;
+                const mediaF = (sumaTotal - sumaB) / pesoF;
+                const varianza = pesoB * pesoF * (mediaB - mediaF) * (mediaB - mediaF);
+                if (varianza > mejorVarianza) { mejorVarianza = varianza; umbral = t; }
+            }
+
+            let claros = 0;
+            for (let p = 0; p < n; p++) if (grises[p] >= umbral) claros++;
+            const fondoEsClaro = claros >= (n - claros);
+
+            for (let i = 0, p = 0; i < d.length; i += 4, p++) {
+                const esClaro = grises[p] >= umbral;
+                const esFondo = esClaro === fondoEsClaro;
+                const v = esFondo ? 255 : 0;
+                d[i] = d[i + 1] = d[i + 2] = v;
+            }
+            ctx.putImageData(img, 0, 0);
         }
 
         async function capturarFotoBalanza() {
@@ -1231,9 +1312,11 @@
             let textoReconocido = '';
             try {
                 const worker = await obtenerWorkerBalanzaOcr();
-                const { data } = await worker.recognize(canvasRecorte);
+                const canvasOcr = prepararCanvasParaOcr(canvasRecorte);
+                const { data } = await worker.recognize(canvasOcr);
                 textoReconocido = (data && data.text) || '';
                 huboDigito = pareceNumeroDeBalanza(textoReconocido);
+                console.log('OCR báscula:', JSON.stringify(textoReconocido));
             } catch (err) {
                 console.warn('OCR de la báscula falló:', err);
                 ocrFallo = true;
