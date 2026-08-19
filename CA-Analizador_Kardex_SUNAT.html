@@ -99,6 +99,7 @@
     <p>Detecta costos negativos, saldos negativos, errores en el costo promedio ponderado y campos obligatorios faltantes.</p>
   </div>
   <div class="headerbar-actions">
+    <button id="exportBtn" class="ghost" disabled>⬇ Exportar reporte completo (Excel)</button>
     <button id="restartBtn" class="secondary">↺ Cargar otro archivo</button>
   </div>
 </header>
@@ -156,7 +157,6 @@
           <div class="field"><label>Buscar (código / descripción / almacén)</label><input type="text" id="resumenSearch" class="searchcode" placeholder="Ej: 0000018962 o paracetamol"></div>
           <div class="field"><label>Solo con errores</label><select id="resumenSoloErrores"><option value="0">Todos</option><option value="1" selected>Con errores</option></select></div>
           <div class="field"><label>Origen</label><select id="resumenOrigen"><option value="">Todos</option></select></div>
-          <div class="field"><button class="secondary" id="exportResumenBtn">Exportar resumen (Excel)</button></div>
         </div>
         <div class="tablewrap"><table id="resumenTable"><thead></thead><tbody></tbody></table></div>
         <div class="pager" id="resumenPager"></div>
@@ -169,8 +169,6 @@
           <div class="field"><label>Tipo de error</label><select id="errTipo"><option value="">Todos</option></select></div>
           <div class="field"><label>Origen</label><select id="errOrigen"><option value="">Todos</option></select></div>
           <div class="field"><label>Archivo</label><select id="errArchivo"><option value="">Todos</option></select></div>
-          <div class="field"><button class="secondary" id="exportErrBtn">Exportar filtrados (Excel)</button></div>
-          <div class="field"><button class="ghost" id="exportAllErrBtn">Exportar todos (Excel)</button></div>
         </div>
         <div class="tablewrap"><table id="errTable"><thead></thead><tbody></tbody></table></div>
         <div class="pager" id="errPager"></div>
@@ -181,7 +179,6 @@
           <div class="field"><label>Código de artículo</label><input type="text" id="detCodigo" class="searchcode" list="codeList" placeholder="Escribe o pega un código"></div>
           <datalist id="codeList"></datalist>
           <div class="field"><button id="detLoadBtn">Ver kardex del artículo</button></div>
-          <div class="field"><button class="secondary" id="exportDetBtn" disabled>Exportar este artículo (Excel)</button></div>
         </div>
         <div id="detMeta" class="hint"></div>
         <div class="tablewrap"><table id="detTable"><thead></thead><tbody></tbody></table></div>
@@ -323,6 +320,7 @@ document.getElementById('restartBtn').addEventListener('click', () => {
   progressWrap2Reset();
   document.getElementById('resultsView').style.display = 'none';
   document.getElementById('restartBtn').style.display = 'none';
+  document.getElementById('exportBtn').disabled = true;
   document.getElementById('uploadView').style.display = 'block';
 });
 function progressWrap2Reset(){
@@ -405,6 +403,7 @@ function onAnalysisDone(){
   document.getElementById('uploadView').style.display = 'none';
   document.getElementById('resultsView').style.display = 'block';
   document.getElementById('restartBtn').style.display = 'inline-block';
+  document.getElementById('exportBtn').disabled = false;
   renderKpis(d.kpis);
   populateSelect('resumenOrigen', uniq(d.resumen.map(r=>r.origen)));
   populateSelect('errOrigen', uniq(d.errorRows.map(r=>r.origen)));
@@ -519,7 +518,7 @@ function renderResumenTable(){
       a.addEventListener('click', ()=> loadDetalleByKey(a.dataset.key, a.dataset.code));
     });
   }
-  renderLimitNotice('resumenPager', rows.length, total, 'artículo(s)', 'exportResumenBtn');
+  renderLimitNotice('resumenPager', rows.length, total, 'artículo(s)');
 }
 
 /* ---------------- Todos los errores ---------------- */
@@ -597,26 +596,19 @@ function renderErrTable(){
       a.addEventListener('click', ()=> loadDetalleByKey(a.dataset.key, a.dataset.code));
     });
   }
-  renderLimitNotice('errPager', rows.length, total, 'incidencia(s)', 'exportErrBtn');
+  renderLimitNotice('errPager', rows.length, total, 'incidencia(s)');
 }
 
-function renderLimitNotice(elId, shown, total, unidad, exportBtnId){
+function renderLimitNotice(elId, shown, total, unidad){
   const el = document.getElementById(elId);
   el.innerHTML = '';
   const info = document.createElement('span');
   if(total > shown){
-    info.innerHTML = `Mostrando <b>${shown}</b> de <b>${total.toLocaleString('es-PE')}</b> ${unidad} — por rendimiento, en pantalla solo se muestran los primeros ${DISPLAY_LIMIT}. El Excel exportado incluye la <b>totalidad</b> de los datos.`;
+    info.innerHTML = `Mostrando <b>${shown}</b> de <b>${total.toLocaleString('es-PE')}</b> ${unidad} — por rendimiento, en pantalla solo se muestran los primeros ${DISPLAY_LIMIT}. El botón "Exportar reporte completo (Excel)" del encabezado incluye la <b>totalidad</b> de los datos.`;
   } else {
     info.textContent = `${total.toLocaleString('es-PE')} ${unidad} en pantalla.`;
   }
   el.appendChild(info);
-  if(total > shown && exportBtnId){
-    const btn = document.createElement('button');
-    btn.className = 'ghost';
-    btn.textContent = 'Exportar todo a Excel';
-    btn.onclick = ()=> document.getElementById(exportBtnId).click();
-    el.appendChild(btn);
-  }
 }
 
 /* ---------------- Detalle por artículo ---------------- */
@@ -648,7 +640,6 @@ function handleGroupResponse(msg){
   const meta = state.data.resumen.find(r=>r.key===msg.key);
   document.getElementById('detMeta').innerHTML = meta ?
     `<b>${esc(meta.codigo)}</b> — ${esc(meta.descripcion||'(sin descripción)')} · Almacén: ${esc(meta.almacen||'-')} · Archivo: ${esc(meta.archivo)} · ${meta.movimientos} movimientos · ${meta.errores} incidencias` : '';
-  document.getElementById('exportDetBtn').disabled = false;
   renderDetTable(msg.records, msg.metaErrs || []);
 }
 
@@ -973,17 +964,17 @@ async function downloadStyledWorkbook(filename, buildFn){
   setTimeout(()=>URL.revokeObjectURL(url), 4000);
 }
 
-function kpisPara(rows, universo, kpisGlobal){
+function kpisPara(universo, kpisGlobal){
   const k = kpisGlobal || {};
   const totalLineas = k.totalMovimientos || 0;
   const lineasConError = k.lineasConError || 0;
   const lineasSinError = k.lineasSinError!=null ? k.lineasSinError : Math.max(0, totalLineas-lineasConError);
-  const conErrores = rows.filter(r=>r.errores>0);
+  const conErrores = universo.filter(r=>r.errores>0);
   const sinErrores = universo.filter(r=>r.errores===0);
-  const crit = rows.reduce((s,r)=>s+(r.criticos||0),0);
-  const alta = rows.reduce((s,r)=>s+(r.altos||0),0);
-  const media = rows.reduce((s,r)=>s+(r.medios||0),0);
-  const baja = rows.reduce((s,r)=>s+(r.bajos||0),0);
+  const crit = universo.reduce((s,r)=>s+(r.criticos||0),0);
+  const alta = universo.reduce((s,r)=>s+(r.altos||0),0);
+  const media = universo.reduce((s,r)=>s+(r.medios||0),0);
+  const baja = universo.reduce((s,r)=>s+(r.bajos||0),0);
   return [
     {label:'Total de líneas analizadas', value: totalLineas},
     {label:'Líneas con incidencias', value: lineasConError, color: lineasConError? XC.critFg : XC.okFg},
@@ -998,61 +989,19 @@ function kpisPara(rows, universo, kpisGlobal){
   ];
 }
 
-document.getElementById('exportResumenBtn').addEventListener('click', async ()=>{
-  await downloadStyledWorkbook('Kardex_Resumen_por_articulo.xlsx', async (wb)=>{
-    addPortada(wb, {
-      titulo:'Detector de Errores de Kardex',
-      subtitulo:'Reporte de Validación — SUNAT (Registro 13.1)',
-      kpis: kpisPara(state.resumenFiltered, state.data.resumen, state.data.kpis),
-      nota:'"Detalle de Líneas" incluye el kardex completo, movimiento por movimiento, con y sin observaciones: el costo promedio correcto, el valor del movimiento tal como está en el kardex (ingresos en positivo, salidas en negativo), el valor correcto y la diferencia entre ambos. "Resumen por Artículo" agrupa esa información por artículo/almacén, clasificando líneas con y sin error, severidad y el efecto total sobre el saldo valorizado.'
-    });
-    await addLineasSheet(wb, state.data.allRows, 'Detalle de Líneas');
-    await addResumenArticulosSheet(wb, state.resumenFiltered, 'Resumen por Artículo');
-  });
-});
-document.getElementById('exportErrBtn').addEventListener('click', async ()=>{
-  await downloadStyledWorkbook('Kardex_Errores_filtrados.xlsx', async (wb)=>{
-    addPortada(wb, {
-      titulo:'Detector de Errores de Kardex',
-      subtitulo:'Detalle de Errores (filtrados) — Validación SUNAT (Registro 13.1)',
-      kpis: kpisPara(state.resumenFiltered, state.data.resumen, state.data.kpis),
-      nota:'Incluye únicamente las incidencias que cumplen con los filtros aplicados en el momento de exportar. Ver "Resumen por Artículo" para el detalle agregado por artículo.'
-    });
-    await addLineasSheet(wb, state.errFiltered, 'Detalle de Errores (Filtro)');
-    await addResumenArticulosSheet(wb, state.resumenFiltered, 'Resumen por Artículo');
-  });
-});
-document.getElementById('exportAllErrBtn').addEventListener('click', async ()=>{
+// Único botón de exportación: siempre genera el reporte completo (sin filtros),
+// con todas las líneas del kardex (con y sin error) juntas.
+document.getElementById('exportBtn').addEventListener('click', async ()=>{
+  if(!state.data) return;
   await downloadStyledWorkbook('Kardex_Reporte_completo.xlsx', async (wb)=>{
     addPortada(wb, {
       titulo:'Detector de Errores de Kardex',
       subtitulo:'Reporte Completo de Validación — SUNAT (Registro 13.1)',
-      kpis: kpisPara(state.data.resumen, state.data.resumen, state.data.kpis),
-      nota:'Reporte completo, sin filtros: todas las líneas analizadas (con y sin observaciones) en "Detalle de Líneas", y el resumen agregado por artículo en "Resumen por Artículo".'
+      kpis: kpisPara(state.data.resumen, state.data.kpis),
+      nota:'"Detalle de Líneas" incluye el kardex completo, movimiento por movimiento, con y sin observaciones: el costo promedio correcto, el valor del movimiento tal como está en el kardex (ingresos en positivo, salidas en negativo), el valor correcto y la diferencia entre ambos. "Resumen por Artículo" agrupa esa información por artículo/almacén, clasificando líneas con y sin error, severidad y el efecto total sobre el saldo valorizado.'
     });
     await addLineasSheet(wb, state.data.allRows, 'Detalle de Líneas');
     await addResumenArticulosSheet(wb, state.data.resumen, 'Resumen por Artículo');
-  });
-});
-document.getElementById('exportDetBtn').addEventListener('click', async ()=>{
-  if(!state.currentDetalleRecords) return;
-  const meta = state.data.resumen.find(r=>r.key===state.currentDetalleKey);
-  const okCount = state.currentDetalleRecords.filter(r=>!r.errores||!r.errores.length).length;
-  await downloadStyledWorkbook(`Kardex_Detalle_${(meta&&meta.codigo)||''}.xlsx`.replace(/[\\/:*?"<>|]/g,'_'), async (wb)=>{
-    addPortada(wb, {
-      titulo:'Detector de Errores de Kardex',
-      subtitulo: 'Artículo ' + ((meta&&meta.codigo)||'') + (meta&&meta.descripcion? ' — '+meta.descripcion : ''),
-      kpis: [
-        {label:'Almacén', value:(meta&&meta.almacen)||'-'},
-        {label:'Archivo de origen', value:(meta&&meta.archivo)||'-'},
-        {label:'Movimientos totales', value: state.currentDetalleRecords.length},
-        {label:'Movimientos sin observaciones', value: okCount, color:XC.okFg},
-        {label:'Movimientos con observaciones', value: state.currentDetalleRecords.length-okCount, color: (state.currentDetalleRecords.length-okCount)?XC.critFg:XC.okFg},
-      ],
-      nota: (state.currentDetalleRecords.length-okCount)===0 ? 'Este artículo no presenta ninguna observación: todos sus movimientos son consistentes con los criterios validados.' : 'Todas las líneas del kardex de este artículo, con y sin observaciones, junto con el costo promedio correcto y el efecto en valorizado de cada movimiento.'
-    });
-    // hoja única con TODO el kardex del artículo (con y sin error, juntas)
-    await addLineasSheet(wb, state.currentDetalleRecords, 'Detalle de Líneas');
   });
 });
 
