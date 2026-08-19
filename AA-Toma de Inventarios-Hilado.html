@@ -572,8 +572,8 @@
                 <button onclick="cerrarCamaraBalanza()" class="text-gray-400 hover:text-gray-700 transition-colors"><i class="fa-solid fa-xmark text-xl"></i></button>
             </div>
             <div class="p-4 bg-white flex-grow overflow-y-auto">
-                <div id="camara-balanza-video-wrap" class="relative w-full bg-black rounded-lg overflow-hidden" style="aspect-ratio: 4/3;">
-                    <video id="video-balanza" autoplay playsinline muted class="w-full h-full object-cover"></video>
+                <div id="camara-balanza-video-wrap" class="relative w-full bg-black rounded-lg overflow-hidden" style="aspect-ratio: 4/3; touch-action: none;">
+                    <video id="video-balanza" autoplay playsinline muted class="w-full h-full object-cover" style="transform-origin: center center;"></video>
                     <!-- Recuadro guía: acá adentro debe quedar el número de la pantalla de la
                     báscula. No sirve para leer un código de barras (como el escáner), es solo
                     una guía visual para encuadrar bien antes de capturar. -->
@@ -583,6 +583,7 @@
                     <div class="absolute top-2 left-0 right-0 text-center pointer-events-none px-2">
                         <span class="bg-black/60 text-white text-[11px] px-3 py-1 rounded-full font-semibold">Encuadra el número de la báscula en el recuadro</span>
                     </div>
+                    <div id="zoom-balanza-indicador" class="absolute bottom-2 right-2 bg-black/60 text-white text-[11px] px-2 py-1 rounded-full font-mono font-bold pointer-events-none hidden-view">1.0x</div>
                 </div>
                 <canvas id="canvas-balanza" class="hidden"></canvas>
                 <p id="camara-balanza-status" class="text-center text-xs text-gray-500 mt-2 min-h-[16px]"></p>
@@ -1090,6 +1091,52 @@
         // nada automáticamente.
         let streamBalanza = null;
 
+        // Zoom de la cámara con el clásico gesto de pellizco (pinch). No todos los celulares
+        // exponen el zoom óptico/de hardware al navegador (sobre todo iPhone), así que se hace
+        // "zoom digital" con CSS (escalar el <video>) -- funciona en cualquier equipo por
+        // igual. El recorte final (calcularRectanguloNativoBalanza) toma en cuenta este zoom
+        // para que la foto capturada sea consistente con lo que se ve acercado en pantalla.
+        let zoomBalanza = 1;
+        const ZOOM_BALANZA_MIN = 1;
+        const ZOOM_BALANZA_MAX = 4;
+        let zoomBalanzaDistanciaInicial = null;
+        let zoomBalanzaValorInicial = 1;
+
+        function aplicarZoomBalanza(nuevoZoom) {
+            zoomBalanza = Math.min(ZOOM_BALANZA_MAX, Math.max(ZOOM_BALANZA_MIN, nuevoZoom));
+            document.getElementById('video-balanza').style.transform = `scale(${zoomBalanza})`;
+            const indicador = document.getElementById('zoom-balanza-indicador');
+            indicador.textContent = zoomBalanza.toFixed(1) + 'x';
+            indicador.classList.toggle('hidden-view', zoomBalanza <= 1);
+        }
+
+        function distanciaEntreToques(touches) {
+            const dx = touches[0].clientX - touches[1].clientX;
+            const dy = touches[0].clientY - touches[1].clientY;
+            return Math.hypot(dx, dy);
+        }
+
+        function onTouchStartZoomBalanza(e) {
+            if (e.touches.length === 2) {
+                e.preventDefault();
+                zoomBalanzaDistanciaInicial = distanciaEntreToques(e.touches);
+                zoomBalanzaValorInicial = zoomBalanza;
+            }
+        }
+
+        function onTouchMoveZoomBalanza(e) {
+            if (e.touches.length === 2 && zoomBalanzaDistanciaInicial) {
+                e.preventDefault();
+                const distanciaActual = distanciaEntreToques(e.touches);
+                const factor = distanciaActual / zoomBalanzaDistanciaInicial;
+                aplicarZoomBalanza(zoomBalanzaValorInicial * factor);
+            }
+        }
+
+        function onTouchEndZoomBalanza(e) {
+            if (e.touches.length < 2) zoomBalanzaDistanciaInicial = null;
+        }
+
         async function abrirCamaraBalanza() {
             const modal = document.getElementById('modal-camara-balanza');
             const content = document.getElementById('modal-camara-balanza-content');
@@ -1101,6 +1148,7 @@
 
             document.getElementById('camara-balanza-status').textContent = '';
             document.getElementById('btn-capturar-balanza').disabled = false;
+            aplicarZoomBalanza(1); // cada vez que se abre la cámara arranca sin zoom
 
             try {
                 streamBalanza = await navigator.mediaDevices.getUserMedia({
@@ -1108,6 +1156,12 @@
                     audio: false
                 });
                 document.getElementById('video-balanza').srcObject = streamBalanza;
+
+                const wrap = document.getElementById('camara-balanza-video-wrap');
+                wrap.addEventListener('touchstart', onTouchStartZoomBalanza, { passive: false });
+                wrap.addEventListener('touchmove', onTouchMoveZoomBalanza, { passive: false });
+                wrap.addEventListener('touchend', onTouchEndZoomBalanza);
+                wrap.addEventListener('touchcancel', onTouchEndZoomBalanza);
             } catch (err) {
                 cerrarCamaraBalanza();
                 Swal.fire({
@@ -1131,6 +1185,13 @@
                 streamBalanza = null;
             }
 
+            const wrap = document.getElementById('camara-balanza-video-wrap');
+            wrap.removeEventListener('touchstart', onTouchStartZoomBalanza);
+            wrap.removeEventListener('touchmove', onTouchMoveZoomBalanza);
+            wrap.removeEventListener('touchend', onTouchEndZoomBalanza);
+            wrap.removeEventListener('touchcancel', onTouchEndZoomBalanza);
+            zoomBalanzaDistanciaInicial = null;
+
             setTimeout(() => modal.classList.add('hidden-view'), 300);
         }
 
@@ -1151,8 +1212,10 @@
             const cw = wrapRect.width, ch = wrapRect.height;
 
             // object-fit:cover -> el video se escala para CUBRIR el contenedor (recortando lo
-            // que sobra), con el mismo factor de escala en ambos ejes.
-            const escala = Math.max(cw / vw, ch / vh);
+            // que sobra), con el mismo factor de escala en ambos ejes. Se multiplica por
+            // zoomBalanza (el zoom digital aplicado con el pellizco, vía CSS transform:scale
+            // centrado) para que el recorte final coincida con lo que se ve acercado en pantalla.
+            const escala = Math.max(cw / vw, ch / vh) * zoomBalanza;
             const renderW = vw * escala, renderH = vh * escala;
             const offsetX = (renderW - cw) / 2;
             const offsetY = (renderH - ch) / 2;
