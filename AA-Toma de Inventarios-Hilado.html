@@ -25,10 +25,6 @@
     <!-- html5-qrcode: Escáner de código de barras/QR usando la cámara -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html5-qrcode/2.3.8/html5-qrcode.min.js"></script>
 
-    <!-- Tesseract.js: OCR liviano en el navegador, solo para confirmar que la foto de la
-         báscula capturada con la cámara guiada tenga al menos un número legible -->
-    <script src="https://cdn.jsdelivr.net/npm/tesseract.js@5/dist/tesseract.min.js"></script>
-
     <style>
         body {
             background-color: #f4f7f6;
@@ -1075,16 +1071,12 @@
         // A diferencia del escáner de arriba (que decodifica un código de barras), acá el
         // objetivo es simplemente ayudar al operador a encuadrar bien la pantalla de la
         // báscula antes de sacar la foto -- por eso un recuadro guía en vez de detección
-        // automática. Después de capturar, se corre un OCR liviano (Tesseract.js) SOLO sobre
-        // el recuadro para confirmar que haya al menos un dígito legible ahí adentro: es una
-        // forma barata de detectar "esto no es la pantalla de la báscula" (foto de la pared,
-        // del piso, dedo tapando la cámara, etc.) sin depender de un servicio externo pagado.
-        //
-        // El OCR sobre dígitos de pantallas LCD/7-segmentos no es perfecto (Tesseract está
-        // entrenado sobre todo con texto impreso), así que si no detecta ningún número NO se
-        // bloquea al operador de forma definitiva: se le avisa y se le da la opción de
-        // reintentar o de usar la foto igual, para no trabar el conteo real por un falso
-        // negativo del OCR.
+        // automática. Se probó agregar una verificación automática por OCR (Tesseract.js)
+        // para confirmar que hubiera un número dentro del recuadro, pero en la práctica no
+        // detectaba de forma confiable los dígitos de pantallas LCD/7-segmentos (y en algunos
+        // casos se colgaba esperando el modelo), así que se sacó por completo: ahora la
+        // cámara solo ayuda a encuadrar y captura la foto tal cual, sin bloquear ni verificar
+        // nada automáticamente.
         let streamBalanza = null;
 
         async function abrirCamaraBalanza() {
@@ -1133,10 +1125,9 @@
 
         // Traduce el recuadro guía (posición en pantalla, con el video mostrado en
         // object-fit:cover) a un rectángulo en píxeles NATIVOS del video, para poder recortar
-        // justo esa zona con canvas -- tanto para el OCR como para la foto que se sube. Se le
-        // agrega un pequeño margen extra alrededor por si el encuadre real quedó un poco
-        // corrido respecto al recuadro dibujado en pantalla, para no cortar el número justo
-        // en el borde.
+        // justo esa zona con canvas, que es la que finalmente se sube. Se le agrega un pequeño
+        // margen extra alrededor por si el encuadre real quedó un poco corrido respecto al
+        // recuadro dibujado en pantalla, para no cortar el número justo en el borde.
         function calcularRectanguloNativoBalanza() {
             const video = document.getElementById('video-balanza');
             const wrap = document.getElementById('camara-balanza-video-wrap');
@@ -1176,184 +1167,23 @@
             return { sx, sy, sw, sh };
         }
 
-        // El worker de Tesseract se crea una sola vez (la primera foto de la sesión) y se
-        // reutiliza en las siguientes: crearlo descarga el modelo de OCR (unos MB), así que
-        // hacerlo de nuevo en cada captura sería lento e innecesario.
-        //
-        // Se usa el modelo estándar "eng" (el que Tesseract.js sirve desde su propia CDN
-        // oficial, la misma de donde ya se cargó la librería). Se probó un modelo especial
-        // para pantallas digitales de 7 segmentos hospedado en un mirror externo de GitHub,
-        // pero ese mirror resultó poco confiable (se quedaba colgado sin cargar ni fallar) --
-        // mejor un modelo genérico que sí funciona siempre, apoyado en el preprocesamiento de
-        // imagen (blanco/negro + agrandado) de abajo, que es la mejora que más ayuda a leer
-        // ese tipo de números sin depender de un servicio externo poco fiable.
-        //
-        // OJO: a propósito NO se restringe el reconocimiento con tessedit_char_whitelist a
-        // solo dígitos. Forzar el whitelist hace que Tesseract "encaje" cada trazo que ve en
-        // el carácter permitido más parecido -- es decir, una foto de puro texto (letras)
-        // igual devolvía algo con dígitos, porque el motor no tenía opción de decir "esto no
-        // es un número". Por eso antes una foto de texto no disparaba la alerta. Ahora se deja
-        // reconocer texto libre y se exige que la MAYORÍA de los caracteres reconocidos sean
-        // dígitos (no que aparezca uno solo perdido entre letras).
-        let workerBalanzaOcrPromesa = null;
-        function obtenerWorkerBalanzaOcr() {
-            if (!workerBalanzaOcrPromesa) {
-                workerBalanzaOcrPromesa = Tesseract.createWorker('eng');
-            }
-            return workerBalanzaOcrPromesa;
-        }
-
-        // Evita que una promesa se quede esperando para siempre (por ejemplo si el modelo de
-        // OCR tarda en cargar por mala conexión): si no termina dentro de `ms`, se corta con un
-        // error en vez de dejar la pantalla de "Verificando..." pegada por minutos.
-        function conLimiteDeTiempo(promesa, ms, mensaje) {
-            let idTimeout;
-            const timeout = new Promise((_, reject) => {
-                idTimeout = setTimeout(() => reject(new Error(mensaje)), ms);
-            });
-            return Promise.race([promesa, timeout]).finally(() => clearTimeout(idTimeout));
-        }
-
-        // Analiza el texto reconocido y decide si "parece" la pantalla de la báscula: exige al
-        // menos un dígito Y que los dígitos sean mayoría entre los caracteres alfanuméricos
-        // reconocidos (así una foto de texto normal, donde predominan letras, no pasa aunque
-        // el OCR confunda alguna letra suelta con un número).
-        function pareceNumeroDeBalanza(texto) {
-            const alfanumerico = (texto || '').replace(/[^0-9A-Za-z]/g, '');
-            const digitos = (texto || '').match(/\d/g) || [];
-            if (digitos.length === 0) return false;
-            if (alfanumerico.length === 0) return true;
-            return (digitos.length / alfanumerico.length) >= 0.5;
-        }
-
-        // Prepara una copia de la imagen SOLO para el OCR (la foto que se sube a Supabase sigue
-        // siendo la original a color, esto no la reemplaza): la agranda y la convierte a
-        // blanco/negro con un umbral que se calcula automáticamente según cada foto (método de
-        // Otsu). El bajo contraste y el tamaño chico del recorte son, junto con la tipografía,
-        // la otra causa típica de que el OCR no detecte los números de una pantalla digital.
-        function prepararCanvasParaOcr(canvasOrigen) {
-            const factor = 2.5;
-            const destino = document.createElement('canvas');
-            destino.width = Math.max(1, Math.round(canvasOrigen.width * factor));
-            destino.height = Math.max(1, Math.round(canvasOrigen.height * factor));
-            const ctx = destino.getContext('2d');
-            ctx.imageSmoothingEnabled = true;
-            ctx.drawImage(canvasOrigen, 0, 0, destino.width, destino.height);
-            binarizarConPolaridadAutomatica(destino);
-            return destino;
-        }
-
-        // Blanco/negro con umbral de Otsu (se adapta solo a la luz/exposición de cada foto, en
-        // vez de un número fijo que funcionaría bien en una foto y mal en otra) y con la
-        // polaridad normalizada: el fondo (el grupo de píxeles más grande) siempre queda
-        // blanco y el texto (el grupo más chico) negro, sea que la pantalla tenga números
-        // oscuros sobre fondo claro o al revés (números claros/LED sobre fondo oscuro).
-        function binarizarConPolaridadAutomatica(canvas) {
-            const ctx = canvas.getContext('2d');
-            const img = ctx.getImageData(0, 0, canvas.width, canvas.height);
-            const d = img.data;
-            const n = d.length / 4;
-
-            const grises = new Uint8ClampedArray(n);
-            const hist = new Array(256).fill(0);
-            for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-                const g = Math.round(0.299 * d[i] + 0.587 * d[i + 1] + 0.114 * d[i + 2]);
-                grises[p] = g;
-                hist[g]++;
-            }
-
-            let sumaTotal = 0;
-            for (let t = 0; t < 256; t++) sumaTotal += t * hist[t];
-            let sumaB = 0, pesoB = 0, mejorVarianza = -1, umbral = 128;
-            for (let t = 0; t < 256; t++) {
-                pesoB += hist[t];
-                if (pesoB === 0) continue;
-                const pesoF = n - pesoB;
-                if (pesoF === 0) break;
-                sumaB += t * hist[t];
-                const mediaB = sumaB / pesoB;
-                const mediaF = (sumaTotal - sumaB) / pesoF;
-                const varianza = pesoB * pesoF * (mediaB - mediaF) * (mediaB - mediaF);
-                if (varianza > mejorVarianza) { mejorVarianza = varianza; umbral = t; }
-            }
-
-            let claros = 0;
-            for (let p = 0; p < n; p++) if (grises[p] >= umbral) claros++;
-            const fondoEsClaro = claros >= (n - claros);
-
-            for (let i = 0, p = 0; i < d.length; i += 4, p++) {
-                const esClaro = grises[p] >= umbral;
-                const esFondo = esClaro === fondoEsClaro;
-                const v = esFondo ? 255 : 0;
-                d[i] = d[i + 1] = d[i + 2] = v;
-            }
-            ctx.putImageData(img, 0, 0);
-        }
-
         async function capturarFotoBalanza() {
             const video = document.getElementById('video-balanza');
             if (!video.videoWidth) return; // la cámara todavía no está lista
 
             const btn = document.getElementById('btn-capturar-balanza');
-            const status = document.getElementById('camara-balanza-status');
             btn.disabled = true;
 
-            // Se recorta SOLO la zona del recuadro guía -- esta imagen recortada es a la vez
-            // lo que se le pasa al OCR y lo que finalmente se comprime y sube a Supabase (no
-            // se sube el cuadro completo de la cámara, solo lo que quedó encuadrado).
+            // Se recorta SOLO la zona del recuadro guía -- no se sube el cuadro completo de la
+            // cámara, solo lo que quedó encuadrado adentro del recuadro.
             const rect = calcularRectanguloNativoBalanza();
             const canvasRecorte = document.getElementById('canvas-balanza');
             canvasRecorte.width = Math.max(1, Math.round(rect.sw));
             canvasRecorte.height = Math.max(1, Math.round(rect.sh));
             canvasRecorte.getContext('2d').drawImage(video, rect.sx, rect.sy, rect.sw, rect.sh, 0, 0, canvasRecorte.width, canvasRecorte.height);
 
-            status.textContent = 'Verificando que se vea un número...';
-
-            let huboDigito = false;
-            let ocrFallo = false;
-            let textoReconocido = '';
-            try {
-                // 20s para crear/descargar el worker (solo tarda la primera vez de la sesión)
-                // y 12s para reconocer -- si se pasa de cualquiera de los dos, se corta acá en
-                // vez de dejar "Verificando..." pegado por minutos.
-                const worker = await conLimiteDeTiempo(obtenerWorkerBalanzaOcr(), 20000, 'El modelo de OCR tardó demasiado en cargar');
-                const canvasOcr = prepararCanvasParaOcr(canvasRecorte);
-                const { data } = await conLimiteDeTiempo(worker.recognize(canvasOcr), 12000, 'El OCR tardó demasiado en responder');
-                textoReconocido = (data && data.text) || '';
-                huboDigito = pareceNumeroDeBalanza(textoReconocido);
-                console.log('OCR báscula:', JSON.stringify(textoReconocido));
-            } catch (err) {
-                console.warn('OCR de la báscula falló:', err);
-                ocrFallo = true;
-                workerBalanzaOcrPromesa = null; // por si el worker quedó en mal estado, se recrea en el próximo intento
-            }
-
-            btn.disabled = false;
-            status.textContent = '';
-
-            // A diferencia de la versión anterior, ahora SIEMPRE se muestra un diálogo cuando
-            // no se pudo confirmar el número (antes, si el OCR fallaba, el aviso quedaba en un
-            // texto que se borraba casi al instante al cerrarse el modal -- prácticamente
-            // invisible). Igual se deja elegir "usar la foto igual" para no trabar el conteo
-            // real por una falla del OCR (batería baja, sin conexión para el modelo, etc.).
-            if (ocrFallo || !huboDigito) {
-                const resp = await Swal.fire({
-                    icon: 'warning',
-                    title: ocrFallo ? 'No se pudo verificar la foto' : 'No se detectó ningún número',
-                    text: ocrFallo
-                        ? 'No se pudo revisar automáticamente si hay un número en la foto (falló el verificador). Puedes reintentar o usarla igual.'
-                        : 'No pudimos confirmar que dentro del recuadro se vea un número de la báscula. Revisa el encuadre, el enfoque y la luz, e inténtalo de nuevo.',
-                    showCancelButton: true,
-                    confirmButtonText: 'Volver a intentar',
-                    cancelButtonText: 'Usar esta foto igual',
-                    confirmButtonColor: '#0d9488',
-                    reverseButtons: true
-                });
-                if (resp.isConfirmed) return; // se queda en la cámara para reintentar
-                // si elige "Usar esta foto igual" (cancelButton), sigue con la foto capturada
-            }
-
             canvasRecorte.toBlob(async (blob) => {
+                btn.disabled = false;
                 if (!blob) {
                     Swal.fire('Error', 'No se pudo capturar la foto.', 'error');
                     return;
