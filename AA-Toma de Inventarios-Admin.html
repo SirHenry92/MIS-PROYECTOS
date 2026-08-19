@@ -155,6 +155,9 @@
                 <div id="lbl-username" class="font-bold text-sm text-gray-800 leading-none">Usuario</div>
                 <div class="text-[11px] text-teal-600 font-bold uppercase mt-1">Administrador</div>
             </div>
+            <button onclick="abrirModalBackup()" class="text-gray-400 hover:text-teal-600 transition-colors bg-gray-50 hover:bg-teal-50 w-9 h-9 rounded-full flex items-center justify-center border border-gray-200" title="Respaldo y Restauración">
+                <i class="fa-solid fa-database"></i>
+            </button>
             <button onclick="logout()" class="text-gray-400 hover:text-red-500 transition-colors bg-gray-50 hover:bg-red-50 w-9 h-9 rounded-full flex items-center justify-center border border-gray-200" title="Cerrar Sesión">
                 <i class="fa-solid fa-power-off"></i>
             </button>
@@ -442,6 +445,39 @@
                             <i class="fa-solid fa-triangle-exclamation mr-2"></i> Borrar Base de Datos
                         </button>
                     </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL WIDGET: RESPALDO Y RESTAURACIÓN (todas las apps en un solo archivo) -->
+    <div id="modal-backup" class="fixed inset-0 modal-backdrop z-50 hidden-view flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white w-full max-w-lg rounded-2xl shadow-2xl flex flex-col max-h-[90vh]" id="modal-backup-content">
+            <div class="px-5 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-database text-gray-700"></i>
+                    <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Respaldo y Restauración</h3>
+                </div>
+                <button onclick="cerrarModalBackup()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-5 overflow-y-auto bg-white flex-grow space-y-5">
+
+                <div class="border border-gray-200 rounded-xl p-4">
+                    <h4 class="font-bold text-gray-800 text-sm mb-1"><i class="fa-solid fa-file-arrow-down mr-1.5 text-teal-600"></i> Generar Backup Completo</h4>
+                    <p class="text-xs text-gray-500 mb-3">Descarga <b>un solo archivo</b> con todos los datos de las 4 apps (Avíos, Hilado, Telas, Desperdicios): artículos, conteos, fotos (solo las URLs, no las imágenes) y configuración. Guárdalo en un lugar seguro fuera de este equipo.</p>
+                    <button onclick="generarBackupCompleto()" id="btn-generar-backup" class="btn-primary w-full py-2.5 text-sm bg-teal-600 hover:bg-teal-700">
+                        <i class="fa-solid fa-file-arrow-down mr-2"></i> Generar y Descargar Backup
+                    </button>
+                </div>
+
+                <div class="border border-amber-200 bg-amber-50/40 rounded-xl p-4">
+                    <h4 class="font-bold text-gray-800 text-sm mb-1"><i class="fa-solid fa-file-arrow-up mr-1.5 text-amber-600"></i> Restaurar desde Backup</h4>
+                    <p class="text-xs text-gray-500 mb-3">Sube un archivo generado con el botón de arriba. Vas a poder elegir <b>qué app(s)</b> restaurar (por ejemplo, solo Hilado). Los artículos del backup sobrescriben a los que coincidan por código/ID; los que no estén en el backup no se tocan ni se borran.</p>
+                    <input type="file" id="input-backup-file" accept="application/json" onchange="onArchivoBackupSeleccionado(event)" class="hidden">
+                    <button onclick="document.getElementById('input-backup-file').click()" class="btn-secondary w-full py-2.5 text-sm bg-white border border-gray-300">
+                        <i class="fa-solid fa-file-import mr-2"></i> Elegir Archivo de Backup
+                    </button>
+                    <div id="backup-restaurar-detalle" class="hidden-view mt-3 space-y-2"></div>
                 </div>
             </div>
         </div>
@@ -1035,6 +1071,194 @@
                 cargarReportesAdmin();
             } catch (err) {
                 Swal.fire('Error', err.message, 'error');
+            }
+        }
+
+        // --- 6B. RESPALDO Y RESTAURACIÓN (backup completo de las 4 apps en un solo archivo) ---
+        // Pensado como red de seguridad: un backup regular permite recuperar el trabajo de los
+        // operadores si algo sale mal (borrado accidental, una importación de CSV mal hecha,
+        // etc.), sin depender de que Supabase tenga su propio respaldo a mano en ese momento.
+        //
+        // El archivo incluye, por cada una de las 4 apps: la tabla completa (maestro + conteo,
+        // fila por fila, con las URLs de las fotos -- no las imágenes en sí, así el archivo es
+        // liviano), su configuración (taras, tolerancia, exigir foto, etc.) y su lista de
+        // personal (solo de referencia). Al restaurar, el admin elige QUÉ app(s) restaurar
+        // (puede ser solo una, ej. Hilado) y los artículos del backup se sobrescriben por ID
+        // sobre los actuales -- los artículos que no estén en el backup no se tocan ni se
+        // borran, para que restaurar nunca sea más destructivo de lo necesario.
+        function abrirModalBackup() {
+            const modal = document.getElementById('modal-backup');
+            modal.classList.remove('hidden-view');
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            document.getElementById('backup-restaurar-detalle').classList.add('hidden-view');
+            document.getElementById('backup-restaurar-detalle').innerHTML = '';
+            document.getElementById('input-backup-file').value = '';
+            backupCargado = null;
+        }
+
+        function cerrarModalBackup() {
+            const modal = document.getElementById('modal-backup');
+            modal.classList.add('opacity-0');
+            setTimeout(() => modal.classList.add('hidden-view'), 200);
+        }
+
+        async function generarBackupCompleto() {
+            const btn = document.getElementById('btn-generar-backup');
+            btn.disabled = true;
+            try {
+                const { data: userData } = await _supabase.auth.getUser();
+                const backup = {
+                    version: 1,
+                    generado: new Date().toISOString(),
+                    generadoPor: (userData && userData.user && userData.user.email) || 'admin',
+                    apps: {}
+                };
+
+                for (const key of Object.keys(APPS)) {
+                    const app = APPS[key];
+                    btn.innerHTML = `<i class="fa-solid fa-circle-notch fa-spin mr-2"></i> Descargando ${esc(app.label)}...`;
+                    const [tabla, configResp, personal] = await Promise.all([
+                        fetchAllSupabase(app.tabla),
+                        _supabase.from(app.tablaConfig).select('*').eq('id', 1).single(),
+                        fetchAllSupabase(app.tablaPersonal)
+                    ]);
+                    backup.apps[key] = {
+                        label: app.label,
+                        tabla,
+                        config: configResp.data || null,
+                        personal
+                    };
+                }
+
+                const blob = new Blob([JSON.stringify(backup)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `Backup_Inventarios_${new Date().toISOString().split('T')[0]}.json`;
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+
+                const totalFilas = Object.values(backup.apps).reduce((acc, a) => acc + a.tabla.length, 0);
+                Swal.fire({ toast: true, position: 'top', icon: 'success', title: `Backup descargado (${totalFilas} artículos en total)`, showConfirmButton: false, timer: 2500 });
+            } catch (err) {
+                Swal.fire('Error', 'No se pudo generar el backup: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fa-solid fa-file-arrow-down mr-2"></i> Generar y Descargar Backup';
+            }
+        }
+
+        let backupCargado = null;
+
+        function onArchivoBackupSeleccionado(event) {
+            const file = event.target.files && event.target.files[0];
+            if (!file) return;
+            const reader = new FileReader();
+            reader.onload = () => {
+                try {
+                    const data = JSON.parse(reader.result);
+                    if (!data || typeof data.apps !== 'object') throw new Error('El archivo no tiene el formato esperado.');
+                    backupCargado = data;
+                    renderizarDetalleBackup(data);
+                } catch (err) {
+                    backupCargado = null;
+                    document.getElementById('backup-restaurar-detalle').classList.add('hidden-view');
+                    Swal.fire('Archivo inválido', 'No se pudo leer el backup: ' + err.message, 'error');
+                }
+            };
+            reader.onerror = () => Swal.fire('Error', 'No se pudo leer el archivo.', 'error');
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        function renderizarDetalleBackup(data) {
+            const cont = document.getElementById('backup-restaurar-detalle');
+            const fecha = data.generado ? new Date(data.generado).toLocaleString('es-PE') : '-';
+            const filasApp = Object.keys(APPS).map(key => {
+                const info = data.apps[key];
+                if (!info) return '';
+                const app = APPS[key];
+                return `<label class="flex items-center gap-2 bg-white border border-gray-200 rounded-lg px-3 py-2 cursor-pointer hover:border-teal-300">
+                    <input type="checkbox" class="chk-restaurar-app w-4 h-4 accent-teal-600" value="${esc(key)}">
+                    <span class="flex-1 text-sm font-semibold text-gray-700"><i class="${app.icon} mr-1 text-gray-400"></i> ${esc(app.label)}</span>
+                    <span class="text-xs text-gray-400 font-mono">${(info.tabla || []).length} art.</span>
+                </label>`;
+            }).join('');
+
+            cont.innerHTML = `
+                <p class="text-xs text-gray-500">Backup generado: <b>${esc(fecha)}</b> ${data.generadoPor ? `por ${esc(data.generadoPor)}` : ''}</p>
+                <div class="space-y-1.5">${filasApp}</div>
+                <label class="flex items-center gap-2 text-xs text-gray-600 mt-1">
+                    <input type="checkbox" id="chk-restaurar-config" class="w-3.5 h-3.5 accent-teal-600" checked>
+                    También restaurar la configuración (taras, tolerancia, foto obligatoria) de cada app elegida
+                </label>
+                <p class="text-[10px] text-gray-400">La lista de personal queda guardada en el backup mas no se restaura automáticamente; revísala en la pestaña "Personal" si hace falta.</p>
+                <button onclick="confirmarRestaurarBackup()" class="btn-primary w-full py-2.5 text-sm bg-red-600 hover:bg-red-700 mt-1">
+                    <i class="fa-solid fa-clock-rotate-left mr-2"></i> Restaurar Seleccionados
+                </button>
+            `;
+            cont.classList.remove('hidden-view');
+        }
+
+        async function confirmarRestaurarBackup() {
+            if (!backupCargado) return;
+            const seleccionadas = [...document.querySelectorAll('.chk-restaurar-app:checked')].map(c => c.value);
+            if (seleccionadas.length === 0) {
+                Swal.fire('Nada seleccionado', 'Elige al menos una app para restaurar.', 'info');
+                return;
+            }
+            const incluirConfig = document.getElementById('chk-restaurar-config').checked;
+            const nombres = seleccionadas.map(k => APPS[k].label).join(', ');
+
+            const { value: confirmacion } = await Swal.fire({
+                title: `¿Restaurar ${nombres}?`,
+                html: `Esto sobrescribirá los artículos existentes que coincidan por ID con los del backup (los que no estén en el backup NO se tocan ni se borran).<br><br><b>Esta acción no se puede deshacer.</b><br><br>Escribe <b>RESTAURAR</b> para confirmar:`,
+                icon: 'warning', input: 'text', inputPlaceholder: 'RESTAURAR', showCancelButton: true,
+                confirmButtonColor: '#ef4444', cancelButtonColor: '#64748b',
+                confirmButtonText: 'Sí, restaurar', cancelButtonText: 'Cancelar',
+                preConfirm: (valor) => {
+                    if (valor !== 'RESTAURAR') { Swal.showValidationMessage('Debes escribir exactamente RESTAURAR para continuar'); return false; }
+                    return valor;
+                }
+            });
+            if (confirmacion !== 'RESTAURAR') return;
+
+            Swal.fire({ title: 'Restaurando...', html: '<div id="restaurar-progreso">Iniciando...</div>', allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+
+            try {
+                for (const key of seleccionadas) {
+                    const app = APPS[key];
+                    const info = backupCargado.apps[key];
+                    if (!info) continue;
+
+                    const filas = info.tabla || [];
+                    const CHUNK_SIZE = 500;
+                    let restauradas = 0;
+                    for (let i = 0; i < filas.length; i += CHUNK_SIZE) {
+                        const chunk = filas.slice(i, i + CHUNK_SIZE);
+                        const { error } = await _supabase.from(app.tabla).upsert(chunk, { onConflict: 'id' });
+                        if (error) throw new Error(`${app.label}: ${error.message}`);
+                        restauradas += chunk.length;
+                        const progreso = document.getElementById('restaurar-progreso');
+                        if (progreso) progreso.textContent = `${app.label}: ${restauradas} / ${filas.length} artículos...`;
+                    }
+
+                    if (incluirConfig && info.config) {
+                        const configSinId = { ...info.config };
+                        delete configSinId.id;
+                        const { error: errCfg } = await _supabase.from(app.tablaConfig).update(configSinId).eq('id', 1);
+                        if (errCfg) throw new Error(`${app.label} (configuración): ${errCfg.message}`);
+                    }
+                }
+
+                Swal.fire('¡Restaurado!', `Se restauraron: ${nombres}.`, 'success');
+                cerrarModalBackup();
+                cargarReportesAdmin();
+            } catch (err) {
+                Swal.fire('Error al restaurar', err.message, 'error');
             }
         }
 
