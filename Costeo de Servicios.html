@@ -109,13 +109,17 @@
         .btn-save { background: var(--primary); color: white; border: none; padding: 8px 18px; border-radius: 4px; font-weight: bold; cursor: pointer; }
         .btn-close { background: white; border: 1px solid var(--border); padding: 8px 14px; border-radius: 4px; cursor: pointer; }
 
-        #svg-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; }
-        .conn-group { cursor: pointer; pointer-events: bounding-box; }
-        .conn-path { fill: none; stroke-width: 3; stroke-linecap: round; pointer-events: none; }
+        #svg-canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 10; overflow: visible; }
+        .conn-group { cursor: pointer; pointer-events: auto; }
+        .conn-hit { fill: none; stroke: transparent; stroke-width: 16; pointer-events: stroke; }
+        .conn-path { fill: none; stroke-width: 3; stroke-linecap: round; pointer-events: none; transition: opacity 0.15s, stroke-width 0.15s; }
         .conn-path.parcial { stroke-dasharray: 5,4; }
-        .conn-group:hover .conn-path { stroke-width: 5; }
-        .conn-group:hover circle.hub { stroke-width: 4; }
-        .conn-group { filter: none; }
+        .conn-group:hover .conn-path, .conn-group.active .conn-path { stroke-width: 5.5; opacity: 1 !important; }
+        .conn-group:hover circle.hub, .conn-group.active circle.hub { stroke-width: 4; }
+        .conn-group { filter: none; transition: opacity 0.15s; }
+        #svg-canvas.has-hover .conn-group:not(.active) { opacity: 0.12; }
+
+        .row-highlight td { background: #FFF6C4 !important; box-shadow: inset 0 0 0 2px #E9A400; }
     </style>
 </head>
 <body>
@@ -321,7 +325,27 @@
                     <div class="form-group"><label>Fecha</label><input type="date" id="edit-fecha" class="form-control"></div>
                 </div>
                 <div id="edit-fac-fields" style="display:none;">
+                    <div class="form-group"><label>Concepto / Servicio</label><input type="text" id="edit-fac-concepto" class="form-control"></div>
                     <div class="form-group"><label>Proveedor (Facturas)</label><input type="text" id="edit-prov" class="form-control"></div>
+                    <div class="grid-2">
+                        <div class="form-group"><label>Moneda Original</label>
+                            <select id="edit-fac-moneda" class="form-control" onchange="calcFacEdit()">
+                                <option value="PEN">Soles (S/)</option><option value="USD">Dólares ($)</option>
+                            </select>
+                        </div>
+                        <div class="form-group"><label>Tipo de Cambio</label><input type="number" id="edit-fac-tc" class="form-control" step="0.001" oninput="calcFacEdit()"></div>
+                    </div>
+                    <div class="grid-2">
+                        <div class="form-group"><label>Importe (Moneda Origen)</label><input type="number" id="edit-fac-importe" class="form-control" step="0.01" oninput="calcFacEdit()"></div>
+                        <div class="form-group"><label style="color:var(--primary)">Costo Total (Soles)</label><input type="text" id="edit-fac-total" class="form-control" readonly style="background:#F5F6F7; font-weight:bold;"></div>
+                    </div>
+                </div>
+                <div id="edit-wip-fields" style="display:none;">
+                    <div class="form-group"><label>Servicio de Origen (Referencia)</label><input type="text" id="edit-wip-servicio" class="form-control" placeholder="Ej. S202605001"></div>
+                    <div class="grid-2">
+                        <div class="form-group"><label>Cantidad (Kg)</label><input type="number" id="edit-wip-cant" class="form-control" step="0.001"></div>
+                        <div class="form-group"><label>Costo Acumulado (S/)</label><input type="number" id="edit-wip-costo" class="form-control" step="0.01"></div>
+                    </div>
                 </div>
             </div>
             <div class="modal-footer">
@@ -524,12 +548,12 @@
             const descText = servicioRef ? `Saldo Anterior: ${ref} (Serv: ${servicioRef})` : `Saldo Anterior: ${ref}`;
 
             const html = `
-                <div class="card wip" id="${cardId}" data-doc="${ref}" data-fecha="${fechaDisplay}">
+                <div class="card wip" id="${cardId}" data-doc="${ref}" data-fecha="${fechaDisplay}" data-servicio="${servicioRef}">
                     <button class="btn-action-icon btn-edit" title="Editar Documento" onclick="editarDocumento('${cardId}')">✏️</button>
                     <button class="btn-action-icon btn-delete" title="Eliminar" onclick="eliminarElemento('${cardId}')">🗑️</button>
                     <div class="card-header-info" style="margin-bottom:4px; display:flex; flex-wrap:wrap; gap:8px;">
                         <span><strong style="color:var(--wip-text);">Lote Ant: </strong><span class="val-doc">${ref}</span></span>
-                        ${servicioRef ? `<span><strong style="color:var(--wip-text);">Serv: </strong><span>${servicioRef}</span></span>` : ''}
+                        ${servicioRef ? `<span class="val-serv-wrap"><strong style="color:var(--wip-text);">Serv: </strong><span class="val-serv">${servicioRef}</span></span>` : ''}
                         <span style="font-size:10px; color:var(--text-muted); margin-left:auto;"><strong>Fecha: </strong><span class="val-fecha">${fechaDisplay}</span></span>
                     </div>
                     <table class="card-table">
@@ -607,12 +631,23 @@
         // ==========================================
         // FUNCIONES DE EDICIÓN DEL ENCABEZADO
         // ==========================================
+        function calcFacEdit() {
+            const mon = document.getElementById('edit-fac-moneda').value;
+            const tcInput = document.getElementById('edit-fac-tc');
+            tcInput.disabled = (mon === 'PEN');
+            if(mon === 'PEN') tcInput.value = '1.000';
+            const imp = parseFloat(document.getElementById('edit-fac-importe').value) || 0;
+            const tc = parseFloat(tcInput.value) || 1;
+            document.getElementById('edit-fac-total').value = (imp * tc).toFixed(2);
+        }
+
         function editarDocumento(cardId) {
             const card = document.getElementById(cardId);
             const isFactura = card.classList.contains('factura');
+            const isWip = card.classList.contains('wip');
             const doc = card.dataset.doc;
             const fechaDisplay = card.dataset.fecha;
-            
+
             // Re-convertir DD/MM/YYYY a formato YYYY-MM-DD para el input tipo Date
             let fechaInput = "";
             if (fechaDisplay && fechaDisplay !== "-") {
@@ -624,11 +659,24 @@
             document.getElementById('edit-doc').value = doc !== "-" ? doc : "";
             document.getElementById('edit-fecha').value = fechaInput;
 
+            document.getElementById('edit-fac-fields').style.display = isFactura ? 'block' : 'none';
+            document.getElementById('edit-wip-fields').style.display = isWip ? 'block' : 'none';
+
             if (isFactura) {
-                document.getElementById('edit-fac-fields').style.display = 'block';
+                // Abre los mismos campos que se llenan al registrar la factura, precargados.
+                const row = card.querySelector('.selectable-row');
                 document.getElementById('edit-prov').value = card.dataset.prov !== "NO ESPECIFICADO" ? card.dataset.prov : "";
-            } else {
-                document.getElementById('edit-fac-fields').style.display = 'none';
+                document.getElementById('edit-fac-concepto').value = row.dataset.desc || '';
+                document.getElementById('edit-fac-moneda').value = card.dataset.mon || 'PEN';
+                document.getElementById('edit-fac-tc').value = card.dataset.tc || '1.000';
+                document.getElementById('edit-fac-importe').value = card.dataset.imp || '';
+                calcFacEdit();
+            } else if (isWip) {
+                // Abre los mismos campos que se llenan al registrar el saldo anterior (WIP).
+                const row = card.querySelector('.selectable-row');
+                document.getElementById('edit-wip-servicio').value = card.dataset.servicio || '';
+                document.getElementById('edit-wip-cant').value = row.dataset.cant || '';
+                document.getElementById('edit-wip-costo').value = row.dataset.costo || '';
             }
 
             document.getElementById('modal-edit-card').style.display = 'flex';
@@ -642,14 +690,15 @@
             const cardId = document.getElementById('edit-card-id').value;
             const card = document.getElementById(cardId);
             const isFactura = card.classList.contains('factura');
-            
+            const isWip = card.classList.contains('wip');
+
             const newDoc = document.getElementById('edit-doc').value.trim();
             const newFecha = document.getElementById('edit-fecha').value;
             const newFechaDisplay = formatoFechaDisplay(newFecha);
 
             card.dataset.doc = newDoc;
             card.dataset.fecha = newFechaDisplay;
-            
+
             // Actualizar visualmente la tarjeta
             card.querySelector('.val-doc').innerText = newDoc || "[Sin número]";
             card.querySelector('.val-fecha').innerText = newFechaDisplay;
@@ -658,9 +707,58 @@
                 const newProv = document.getElementById('edit-prov').value.trim() || 'NO ESPECIFICADO';
                 card.dataset.prov = newProv.toUpperCase();
                 card.querySelector('.val-prov').innerText = newProv.toUpperCase();
+
+                const newConcepto = (document.getElementById('edit-fac-concepto').value || 'Servicio').toUpperCase();
+                const newMon = document.getElementById('edit-fac-moneda').value;
+                const newTc = document.getElementById('edit-fac-tc').value;
+                const newImporte = document.getElementById('edit-fac-importe').value;
+                const newTotal = parseFloat(document.getElementById('edit-fac-total').value);
+
+                if (!newTotal) { alert("Ingrese el importe correctamente."); return; }
+
+                card.dataset.mon = newMon;
+                card.dataset.tc = newTc;
+                card.dataset.imp = newImporte;
+
+                const row = card.querySelector('.selectable-row');
+                row.dataset.desc = newConcepto;
+                row.dataset.costo = newTotal;
+                row.dataset.costoCalculado = newTotal;
+                const tds = row.querySelectorAll('td');
+                tds[0].querySelector('.col-art').innerText = newConcepto;
+                tds[0].querySelector('span').innerText = `Moneda: ${newMon} ${newImporte} (TC: ${newTc})`;
+                tds[1].innerText = formater.format(newTotal);
+            } else if (isWip) {
+                const newServicio = document.getElementById('edit-wip-servicio').value.trim();
+                const newCant = parseFloat(document.getElementById('edit-wip-cant').value);
+                const newCosto = parseFloat(document.getElementById('edit-wip-costo').value);
+
+                if (!newCant || !newCosto) { alert("Ingrese cantidades válidas."); return; }
+
+                const newCu = newCosto / newCant;
+                card.dataset.servicio = newServicio;
+
+                const row = card.querySelector('.selectable-row');
+                row.dataset.cant = newCant;
+                row.dataset.costo = newCosto;
+                row.dataset.costoCalculado = newCosto;
+                row.dataset.desc = newServicio ? `Saldo Anterior: ${newDoc || 'WIP'} (Serv: ${newServicio})` : `Saldo Anterior: ${newDoc || 'WIP'}`;
+                const tds = row.querySelectorAll('td');
+                tds[1].innerText = newCant.toFixed(3);
+                tds[2].innerText = formaterCU.format(newCu);
+                tds[3].innerText = formater.format(newCosto);
+
+                // Regenerar el bloque "Lote Ant / Serv / Fecha" (el badge "Serv:" es condicional)
+                const header = card.querySelector('.card-header-info');
+                header.innerHTML = `
+                    <span><strong style="color:var(--wip-text);">Lote Ant: </strong><span class="val-doc">${newDoc || 'WIP'}</span></span>
+                    ${newServicio ? `<span class="val-serv-wrap"><strong style="color:var(--wip-text);">Serv: </strong><span class="val-serv">${newServicio}</span></span>` : ''}
+                    <span style="font-size:10px; color:var(--text-muted); margin-left:auto;"><strong>Fecha: </strong><span class="val-fecha">${newFechaDisplay}</span></span>
+                `;
             }
 
             cerrarEditModal();
+            recalcularTodo();
         }
         // ==========================================
 
@@ -958,6 +1056,25 @@
             svg.innerHTML = '';
             const containerRect = captureArea.getBoundingClientRect();
 
+            const defs = document.createElementNS('http://www.w3.org/2000/svg', 'defs');
+            const arrowColors = { salida: '#0A6ED1', factura: '#E9730C', ingreso: '#1E8A44', devolucion: '#BB0000' };
+            Object.entries(arrowColors).forEach(([key, color]) => {
+                const marker = document.createElementNS('http://www.w3.org/2000/svg', 'marker');
+                marker.setAttribute('id', `arrow-${key}`);
+                marker.setAttribute('viewBox', '0 0 10 10');
+                marker.setAttribute('refX', '8');
+                marker.setAttribute('refY', '5');
+                marker.setAttribute('markerWidth', '7');
+                marker.setAttribute('markerHeight', '7');
+                marker.setAttribute('orient', 'auto-start-reverse');
+                const arrowPath = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                arrowPath.setAttribute('d', 'M 0 0 L 10 5 L 0 10 z');
+                arrowPath.setAttribute('fill', color);
+                marker.appendChild(arrowPath);
+                defs.appendChild(marker);
+            });
+            svg.appendChild(defs);
+
             linkGroups = linkGroups.filter(g => {
                 g.origins = g.origins.filter(id => document.getElementById(id));
                 g.dests = g.dests.filter(id => document.getElementById(id));
@@ -992,29 +1109,42 @@
                 const minDestLeft = Math.min(...destRects.map(r => r.left));
                 
                 const baseHubX = (maxOriRight - containerRect.left) + ((minDestLeft - maxOriRight) / 2);
-                const offset = (index % 2 === 0 ? -12 : 12);
+                const laneOffsets = [-24, 24, -8, 8];
+                const offset = laneOffsets[index % laneOffsets.length];
                 const hubX = baseHubX + offset;
-                
+
+                // Espacio mínimo vertical: radio del anillo (19) + alto del tag (12) + margen (6),
+                // a ambos lados del centro, para que el tag de un hub no choque con el círculo del siguiente.
+                const MIN_HUB_GAP = 58;
                 let idealHubY = g.calculatedAvgY - containerRect.top;
-                if (idealHubY < lastHubY + 45) idealHubY = lastHubY + 45;
+                if (idealHubY < lastHubY + MIN_HUB_GAP) idealHubY = lastHubY + MIN_HUB_GAP;
                 const hubY = idealHubY;
                 lastHubY = hubY;
                 
                 const gElement = document.createElementNS('http://www.w3.org/2000/svg', 'g');
                 gElement.setAttribute('class', 'conn-group');
 
-                const elbowOriX = hubX - 22 - (index % 4) * 4;
-                const elbowDestX = hubX + 22 + (index % 4) * 4;
+                const elbowOriX = hubX - 22 - (index % 5) * 7;
+                const elbowDestX = hubX + 22 + (index % 5) * 7;
 
                 elOris.forEach(el => {
                     const r = el.getBoundingClientRect();
                     const y = (r.top + r.height/2) - containerRect.top;
                     const x = r.right - containerRect.left;
+                    const tipo = el.dataset.tipo === 'factura' ? 'factura' : 'salida';
+                    const color = arrowColors[tipo];
+                    const d = `M ${x} ${y} L ${elbowOriX} ${y} L ${elbowOriX} ${hubY} L ${hubX - 12} ${hubY}`;
+
+                    const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    hit.setAttribute('d', d);
+                    hit.setAttribute('class', 'conn-hit');
+                    gElement.appendChild(hit);
+
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                    let color = el.dataset.tipo === 'factura' ? '#E9730C' : '#0A6ED1'; 
-                    path.setAttribute('d', `M ${x} ${y} L ${elbowOriX} ${y} L ${elbowOriX} ${hubY} L ${hubX - 12} ${hubY}`);
+                    path.setAttribute('d', d);
                     path.setAttribute('class', `conn-path`);
                     path.setAttribute('stroke', color);
+                    path.setAttribute('marker-end', `url(#arrow-${tipo})`);
                     if (isParcial) path.setAttribute('stroke-dasharray', '5,4');
                     gElement.appendChild(path);
                 });
@@ -1023,11 +1153,20 @@
                     const r = el.getBoundingClientRect();
                     const y = (r.top + r.height/2) - containerRect.top;
                     const x = r.left - containerRect.left;
+                    const tipo = el.dataset.tipo === 'devolucion' ? 'devolucion' : 'ingreso';
+                    const color = arrowColors[tipo];
+                    const d = `M ${hubX + 12} ${hubY} L ${elbowDestX} ${hubY} L ${elbowDestX} ${y} L ${x} ${y}`;
+
+                    const hit = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+                    hit.setAttribute('d', d);
+                    hit.setAttribute('class', 'conn-hit');
+                    gElement.appendChild(hit);
+
                     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
-                    let color = el.dataset.tipo === 'devolucion' ? '#BB0000' : '#1E8A44';
-                    path.setAttribute('d', `M ${hubX + 12} ${hubY} L ${elbowDestX} ${hubY} L ${elbowDestX} ${y} L ${x} ${y}`);
+                    path.setAttribute('d', d);
                     path.setAttribute('class', `conn-path`);
                     path.setAttribute('stroke', color);
+                    path.setAttribute('marker-end', `url(#arrow-${tipo})`);
                     if (isParcial) path.setAttribute('stroke-dasharray', '5,4');
                     gElement.appendChild(path);
                 });
@@ -1089,6 +1228,19 @@
                 gElement.addEventListener('click', () => {
                     if(confirm(`¿Eliminar la Relación N° ${g.number}?`)) { linkGroups = linkGroups.filter(x => x.id !== g.id); recalcularTodo(); }
                 });
+
+                const relatedRows = [...elOris, ...elDests];
+                gElement.addEventListener('mouseenter', () => {
+                    svg.classList.add('has-hover');
+                    gElement.classList.add('active');
+                    relatedRows.forEach(el => el.classList.add('row-highlight'));
+                });
+                gElement.addEventListener('mouseleave', () => {
+                    svg.classList.remove('has-hover');
+                    gElement.classList.remove('active');
+                    relatedRows.forEach(el => el.classList.remove('row-highlight'));
+                });
+
                 svg.appendChild(gElement);
             });
         }
@@ -1147,8 +1299,35 @@
             
             doc.setFontSize(10);
             doc.setFont("helvetica", "normal");
-            
-            doc.text(`Servicio N°: ${ticket}`, 15, 40);
+
+            // Caja editable (AcroForm) superpuesta sobre una celda/área ya dibujada.
+            // Solo dibuja el recuadro + campo de texto PDF; no reserva layout propio.
+            const addEditableDocField = (targetDoc, cell, fieldName, value, fontSize = 7) => {
+                const AF = window.jspdf.AcroFormTextField;
+                const pad = 0.7;
+                // Aislar el estado gráfico: autoTable reutiliza el color/grosor vigente en celdas
+                // posteriores si no lo redefine explícitamente, así que sin save/restore este color
+                // "se filtra" a bordes y textos siguientes (esto era la causa de que campos editables
+                // aparecieran en lugares o con colores incorrectos en intentos previos).
+                targetDoc.saveGraphicsState();
+                targetDoc.setDrawColor(10, 110, 209);
+                targetDoc.setFillColor(255, 255, 255);
+                targetDoc.setLineWidth(0.15);
+                targetDoc.rect(cell.x + pad, cell.y + pad, cell.width - pad * 2, cell.height - pad * 2, 'FD');
+                targetDoc.restoreGraphicsState();
+                const tf = new AF();
+                tf.Rect = [cell.x + pad + 0.4, cell.y + pad + 0.4, cell.width - pad * 2 - 0.8, cell.height - pad * 2 - 0.8];
+                tf.fieldName = fieldName;
+                tf.value = value || '';
+                tf.fontSize = fontSize;
+                tf.maxFontSize = fontSize;
+                targetDoc.addField(tf);
+            };
+
+            doc.text("Servicio N°:", 15, 40);
+            const servicioLblW = doc.getTextWidth("Servicio N°:");
+            addEditableDocField(doc, { x: 15 + servicioLblW + 2, y: 35.5, width: 42, height: 6 }, 'servicio_n', ticket);
+
             doc.text(`Fecha : ${fechaStr}`, 195, 40, { align: "right" });
             doc.text(`Hora : ${horaStr}`, 195, 45, { align: "right" });
 
@@ -1159,35 +1338,49 @@
 
             let startY = 55;
 
-            const getTableDataByDoc = (containerId, esFactura = false) => {
+            // Hueco reservado (en espacios) donde se posiciona la caja editable cuando el N° de
+            // documento aún no se conoce. Mantiene el mismo layout compacto de una sola línea
+            // que el diseño original — la caja se dibuja ENCIMA, tapando el hueco en blanco.
+            const DOC_GAP = '                              '; // 30 espacios
+
+            const getTableDataByDoc = (containerId, esFactura = false, totalCols = 4) => {
                 let rows = [];
+                let headerMeta = []; // {rowIndex, label, docRef, fieldName} -> se vuelve campo editable en didDrawCell
                 let totalKg = 0, totalCosto = 0;
                 let cards = Array.from(document.querySelectorAll(`#${containerId} .card`));
                 let hasUSD = false;
-                
+                // Único tipo que se mantiene fijo (no editable) en el PDF: Partes de Salida.
+                const esEditable = containerId !== 'col-salidas';
+                const grisHeader = { fillColor: [240, 240, 240], fontStyle: 'bold', textColor: [0,0,0] };
+
                 cards.forEach(card => {
                     let docRef = (card.dataset.doc || "-");
                     let fechaRef = card.dataset.fecha || "-";
-                    
-                    if(esFactura) {
+                    const headerRowIndex = rows.length;
+                    const label = esFactura ? 'FACTURA N°:' : 'DOCUMENTO:';
+                    const docDisplay = esEditable ? DOC_GAP : docRef;
+
+                    // Encabezado en UNA sola línea/celda (colSpan completo), igual que el diseño
+                    // original. Para los tipos editables se deja un hueco en blanco (DOC_GAP) del
+                    // mismo tamaño donde luego se superpone la caja de campo editable.
+                    let content;
+                    if (esFactura) {
                         let provRef = (card.dataset.prov || "NO ESPECIFICADO").toUpperCase();
                         if (card.dataset.mon === 'USD') hasUSD = true;
-                        
-                        // Encabezado de Factura (Puro Texto)
-                        rows.push([ { 
-                            content: `FACTURA N°:  ${docRef}       |       FECHA:  ${fechaRef}       |       PROV:  ${provRef}`, 
-                            colSpan: 5, 
-                            styles: { fillColor: [240, 240, 240], fontStyle: 'bold', textColor: [0,0,0] }
-                        } ]);
+                        content = `${label}  ${docDisplay}       |       FECHA:  ${fechaRef}       |       PROV:  ${provRef}`;
                     } else {
-                        // Encabezado Normal (Puro Texto)
-                        rows.push([ { 
-                            content: `DOCUMENTO:  ${docRef}       |       FECHA:  ${fechaRef}`, 
-                            colSpan: 4, 
-                            styles: { fillColor: [240, 240, 240], fontStyle: 'bold', textColor: [0,0,0] }
-                        } ]);
+                        content = `${label}  ${docDisplay}       |       FECHA:  ${fechaRef}`;
                     }
-                    
+                    rows.push([{ content, colSpan: totalCols, styles: grisHeader }]);
+
+                    if (esEditable) {
+                        headerMeta.push({
+                            rowIndex: headerRowIndex, label,
+                            docRef: docRef === '-' ? '' : docRef,
+                            fieldName: `doc_${card.id}`
+                        });
+                    }
+
                     card.querySelectorAll('.selectable-row').forEach(row => {
                         let art = row.dataset.art || row.querySelector('.col-art').innerText;
                         let desc = (row.dataset.desc || "").toUpperCase();
@@ -1237,13 +1430,33 @@
                         ]);
                     }
                 }
-                return { rows, hasUSD };
+                return { rows, hasUSD, headerMeta };
+            };
+
+            // Genera el hook didDrawCell que, para cada fila de encabezado de documento editable,
+            // superpone la caja de campo PDF justo encima del hueco en blanco (DOC_GAP) que ya
+            // imprimió autoTable — el resto de la línea (FECHA/PROV) queda intacta, tal como en
+            // el diseño original.
+            const makeDocFieldHook = (headerMeta) => (data) => {
+                if (data.section !== 'body' || data.column.index !== 0) return;
+                const meta = headerMeta.find(m => m.rowIndex === data.row.index);
+                if (!meta) return;
+
+                const cell = data.cell;
+                doc.setFont('helvetica', 'bold');
+                doc.setFontSize(7.5);
+                const prefixW = doc.getTextWidth(meta.label + '  ');
+                const gapW = doc.getTextWidth(DOC_GAP);
+                const startX = cell.x + cell.padding('left') + prefixW;
+                const boxW = Math.max(20, gapW - 2);
+
+                addEditableDocField(doc, { x: startX, y: cell.y, width: boxW, height: cell.height }, meta.fieldName, meta.docRef, 7);
             };
 
             const tableStyles = { fontSize: 7.5, cellPadding: 1, overflow: 'linebreak' };
             const headStyles = { fillColor: [210, 210, 210], textColor: [0, 0, 0], fontStyle: 'bold' };
 
-            let { rows: salidasRows } = getTableDataByDoc('col-salidas');
+            let { rows: salidasRows, headerMeta: salidasMeta } = getTableDataByDoc('col-salidas');
             if(salidasRows.length > 0) {
                 doc.setFont("helvetica", "bold");
                 doc.text("SALIDAS", 15, startY);
@@ -1251,12 +1464,13 @@
                     startY: startY + 2,
                     head: [['Concepto / Artículo', 'Cantidad (Kg)', 'Costo Unitario', 'Monto (S/)']],
                     body: salidasRows, theme: 'plain', styles: tableStyles, headStyles: headStyles,
-                    columnStyles: { 0: { cellWidth: 95, overflow: 'linebreak' }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } }
+                    columnStyles: { 0: { cellWidth: 95, overflow: 'linebreak' }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
+                    didDrawCell: makeDocFieldHook(salidasMeta)
                 });
                 startY = doc.lastAutoTable.finalY + 6;
             }
 
-            let { rows: devsRows } = getTableDataByDoc('col-devoluciones');
+            let { rows: devsRows, headerMeta: devsMeta } = getTableDataByDoc('col-devoluciones');
             if(devsRows.length > 0) {
                 if(startY > 250) { doc.addPage(); startY = 20; }
                 doc.setFont("helvetica", "bold");
@@ -1265,12 +1479,13 @@
                     startY: startY + 2,
                     head: [['Concepto / Artículo', 'Cantidad (Kg)', 'Costo Unitario', 'Monto (S/)']],
                     body: devsRows, theme: 'plain', styles: tableStyles, headStyles: headStyles,
-                    columnStyles: { 0: { cellWidth: 95, overflow: 'linebreak' }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } }
+                    columnStyles: { 0: { cellWidth: 95, overflow: 'linebreak' }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
+                    didDrawCell: makeDocFieldHook(devsMeta)
                 });
                 startY = doc.lastAutoTable.finalY + 6;
             }
 
-            let { rows: facRows, hasUSD } = getTableDataByDoc('col-facturas', true);
+            let { rows: facRows, hasUSD, headerMeta: facMeta } = getTableDataByDoc('col-facturas', true, 5);
             if(facRows.length > 0) {
                 if(startY > 250) { doc.addPage(); startY = 20; }
                 doc.setFont("helvetica", "bold");
@@ -1286,12 +1501,13 @@
                         2: { cellWidth: 30, halign: 'center' },
                         3: { cellWidth: 25, halign: 'right' },
                         4: { cellWidth: 25, halign: 'right', fontStyle: 'bold' }
-                    }
+                    },
+                    didDrawCell: makeDocFieldHook(facMeta)
                 });
                 startY = doc.lastAutoTable.finalY + 6;
             }
 
-            let { rows: ingRows } = getTableDataByDoc('col-ingresos');
+            let { rows: ingRows, headerMeta: ingMeta } = getTableDataByDoc('col-ingresos');
             if(ingRows.length > 0) {
                 if(startY > 250) { doc.addPage(); startY = 20; }
                 doc.setFont("helvetica", "bold");
@@ -1300,7 +1516,8 @@
                     startY: startY + 2,
                     head: [['Concepto / Artículo', 'Cantidad (Kg)', 'Costo Unit. Asig.', 'Costo Total Asig.']],
                     body: ingRows, theme: 'plain', styles: tableStyles, headStyles: headStyles,
-                    columnStyles: { 0: { cellWidth: 90, overflow: 'linebreak' }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } }
+                    columnStyles: { 0: { cellWidth: 90, overflow: 'linebreak' }, 1: { halign: 'right' }, 2: { halign: 'right' }, 3: { halign: 'right', fontStyle: 'bold' } },
+                    didDrawCell: makeDocFieldHook(ingMeta)
                 });
                 startY = doc.lastAutoTable.finalY + 6;
             }
@@ -1399,22 +1616,34 @@
             
             doc.setPage(currentPage); 
 
-            html2canvas(document.getElementById('capture-area'), { 
-                scale: 2.0, 
+            // windowWidth/windowHeight fuerzan a html2canvas a renderizar su clon usando el
+            // tamaño NATURAL del diagrama (capture-area) en vez del ancho de la ventana actual
+            // del navegador. Sin esto, si la ventana es más angosta que el diagrama (grid de 2
+            // columnas + 130px de separación), html2canvas recorta el lado derecho (Ingresos/
+            // Devoluciones) en vez de capturarlo completo — esa era la causa del anexo cortado.
+            // El margen de +80 evita un recorte residual de unos pocos px en el borde (verificado
+            // empíricamente: sin margen faltan ~40px de ancho real).
+            const captureAreaEl = document.getElementById('capture-area');
+            const capturarDiagrama = () => html2canvas(captureAreaEl, {
+                scale: 2.0,
                 useCORS: true,
-                backgroundColor: '#F5F6F7' 
-            }).then(canvas => {
-                doc.addPage('a4', 'l'); 
+                backgroundColor: '#F5F6F7',
+                windowWidth: captureAreaEl.scrollWidth + 80,
+                windowHeight: captureAreaEl.scrollHeight + 80
+            });
+
+            const agregarPaginaDiagrama = (canvas, tituloPagina) => {
+                doc.addPage('a4', 'l');
                 doc.setFontSize(14);
                 doc.setFont("helvetica", "bold");
-                doc.text("ANEXO: DIAGRAMA DE ASIGNACIÓN (VISTA GENERAL)", 15, 15);
-                
-                const imgData = canvas.toDataURL('image/jpeg', 0.95); 
+                doc.text(tituloPagina, 15, 15);
+
+                const imgData = canvas.toDataURL('image/jpeg', 0.95);
                 const imgProps = doc.getImageProperties(imgData);
-                
-                const pdfMaxWidth = 277; 
-                const pdfMaxHeight = 180; 
-                
+
+                const pdfMaxWidth = 277;
+                const pdfMaxHeight = 180;
+
                 let finalWidth = pdfMaxWidth;
                 let finalHeight = (imgProps.height * pdfMaxWidth) / imgProps.width;
 
@@ -1427,9 +1656,62 @@
                 const yOffset = 20 + (pdfMaxHeight - finalHeight) / 2;
 
                 doc.addImage(imgData, 'JPEG', xOffset, yOffset, finalWidth, finalHeight);
+            };
+
+            (async () => {
+                const svg = document.getElementById('svg-canvas');
+                // dibujarLineasSVG() (llamado por el último recalcularTodo()) deja linkGroups
+                // ordenado por Y y agrega los <g class="conn-group"> al SVG en ese mismo orden,
+                // así que el índice i corresponde 1:1 entre ambos arreglos.
+                const groups = Array.from(svg.querySelectorAll('.conn-group'));
+
+                if (groups.length === 0) {
+                    // Sin relaciones vinculadas todavía: no hay nodos que separar, se omite el anexo.
+                } else {
+                    // Un nodo (relación) por hoja — aísla esa relación y resalta sus filas de origen/
+                    // destino, para que cada hoja se entienda sola sin descifrar el diagrama cruzado.
+                    //
+                    // IMPORTANTE: los demás <g class="conn-group"> se DESMONTAN del DOM (no solo se
+                    // atenúan con opacity) antes de capturar. Probado empíricamente: si en vez de
+                    // remover se les baja la opacidad (por clase CSS o por style inline), html2canvas
+                    // arrastra el contenido de la captura ANTERIOR en la segunda captura en adelante
+                    // (el nodo 2 terminaba mostrando el nodo 1) — removerlos del DOM elimina cualquier
+                    // ambigüedad y sí se refleja correctamente en cada captura.
+                    for (let i = 0; i < groups.length; i++) {
+                        const g = groups[i];
+                        const meta = linkGroups[i];
+                        const relatedRows = [...meta.origins, ...meta.dests]
+                            .map(id => document.getElementById(id)).filter(Boolean);
+                        const relatedCells = relatedRows.flatMap(row => Array.from(row.querySelectorAll('td')));
+
+                        const removidos = [];
+                        groups.forEach(gr => {
+                            if (gr !== g) {
+                                removidos.push({ el: gr, next: gr.nextSibling, parent: gr.parentNode });
+                                gr.remove();
+                            }
+                        });
+                        relatedCells.forEach(td => { td.style.background = '#FFF6C4'; td.style.boxShadow = 'inset 0 0 0 2px #E9A400'; });
+
+                        const canvas = await capturarDiagrama();
+
+                        removidos.forEach(({ el, next, parent }) => parent.insertBefore(el, next));
+                        relatedCells.forEach(td => { td.style.background = ''; td.style.boxShadow = ''; });
+
+                        const tipoLabel = meta.type === 'parcial' ? 'ENTREGA PARCIAL (PRORRATEO)' : 'ENTREGA TOTAL';
+                        agregarPaginaDiagrama(canvas, `ANEXO: NODO N° ${meta.number} — ${tipoLabel}`);
+                    }
+                }
+
+                // jsPDF-AcroForm calcula la posición Y de los campos de formulario usando el
+                // alto de la página "actual" en el momento de guardar, no el de la página a la
+                // que pertenece cada campo. Como los anexos del diagrama son A4 horizontal (más
+                // bajos que las páginas verticales del informe), sin este setPage(1) todos los
+                // campos editables de las páginas 1+ se desplazan hacia abajo incorrectamente.
+                doc.setPage(1);
                 doc.save(`Costeo_${ticket}.pdf`);
                 btn.innerText = "📄 Generar PDF";
-            });
+            })();
         }
     </script>
 </body>
