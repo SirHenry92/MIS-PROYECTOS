@@ -823,7 +823,7 @@ async function styleDataSheet(ws, columns, rows, opts){
   return ws;
 }
 
-async function addResumenSheet(wb, rows, name){
+async function addResumenArticulosSheet(wb, rows, name){
   const columns = [
     {header:'Origen', key:'origen', width:12},
     {header:'Código', key:'codigo', width:16},
@@ -831,18 +831,28 @@ async function addResumenSheet(wb, rows, name){
     {header:'Almacén', key:'almacen', width:20},
     {header:'Archivo', key:'archivo', width:24},
     {header:'Movimientos', key:'movimientos', width:12, align:'center'},
-    {header:'Total Errores', key:'errores', width:12, align:'center'},
+    {header:'Líneas con Error', key:'lineasConError', width:14, align:'center'},
+    {header:'Líneas sin Error', key:'lineasSinError', width:14, align:'center'},
+    {header:'Total Incidencias', key:'errores', width:14, align:'center'},
     {header:'Críticos', key:'criticos', width:10, align:'center'},
     {header:'Altos', key:'altos', width:10, align:'center'},
     {header:'Medios', key:'medios', width:10, align:'center'},
     {header:'Bajos', key:'bajos', width:10, align:'center'},
     {header:'Saldo Final Cant.', key:'saldoFinalCant', width:16, numFmt:'#,##0.00', align:'right'},
-    {header:'Saldo Final Valor. (S/.)', key:'saldoFinalValor', width:18, numFmt:'#,##0.00', align:'right'},
+    {header:'Saldo Valor. Kardex (S/.)', key:'saldoFinalValor', width:20, numFmt:'#,##0.00', align:'right'},
+    {header:'Saldo Valor. Correcto (S/.)', key:'saldoFinalValorCorrecto', width:22, numFmt:'#,##0.00', align:'right'},
+    {header:'Diferencia (S/.)', key:'diferenciaFinal', width:15, numFmt:'#,##0.00', align:'right'},
+    {header:'Estado', key:'estado', width:13, align:'center'},
   ];
   const allData = rows.map(r=>({
     origen:r.origen, codigo:r.codigo, descripcion:r.descripcion, almacen:r.almacen, archivo:r.archivo,
-    movimientos:r.movimientos, errores:r.errores, criticos:r.criticos||0, altos:r.altos||0, medios:r.medios||0, bajos:r.bajos||0,
-    saldoFinalCant:r.saldoFinalCant, saldoFinalValor:r.saldoFinalValor
+    movimientos:r.movimientos, lineasConError:r.lineasConError||0,
+    lineasSinError: r.lineasSinError!=null ? r.lineasSinError : (r.movimientos-(r.lineasConError||0)),
+    errores:r.errores, criticos:r.criticos||0, altos:r.altos||0, medios:r.medios||0, bajos:r.bajos||0,
+    saldoFinalCant:r.saldoFinalCant, saldoFinalValor:r.saldoFinalValor,
+    saldoFinalValorCorrecto: r.saldoFinalValorCorrecto!=null ? r.saldoFinalValorCorrecto : r.saldoFinalValor,
+    diferenciaFinal: r.diferenciaFinal||0,
+    estado: r.estado || (r.errores>0 ? 'CON ERRORES' : 'SIN ERRORES')
   }));
   const chunks = chunkArray(allData, EXPORT_CHUNK_SIZE);
   for(let ci=0; ci<chunks.length; ci++){
@@ -850,168 +860,47 @@ async function addResumenSheet(wb, rows, name){
     const sheetName = (chunks.length>1 ? `${name} (${ci+1} de ${chunks.length})` : name).substring(0,31);
     const ws = wb.addWorksheet(sheetName);
     await styleDataSheet(ws, columns, data);
-    // resaltar filas con críticos > 0
     for(let i=0;i<data.length;i++){
+      const row = ws.getRow(i+2);
       if(data[i].criticos>0){
-        const row = ws.getRow(i+2);
-        const cell = row.getCell(8); // Críticos
-        cell.font = {bold:true, color:{argb:XC.critFg}};
+        row.getCell(10).font = {bold:true, color:{argb:XC.critFg}}; // Críticos
+      }
+      const estadoCell = row.getCell(18);
+      if(data[i].estado === 'SIN ERRORES'){
+        estadoCell.font = {bold:true, color:{argb:XC.okFg}};
+        estadoCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.ok}};
+      } else {
+        estadoCell.font = {bold:true, color:{argb:XC.critFg}};
       }
       if(i % 5000 === 4999) await tick();
     }
-    // fila de totales — en la última pestaña, el total es del conjunto completo
     if(ci === chunks.length-1 && allData.length){
       const totals = allData.reduce((acc,d)=>{
-        acc.movimientos+=d.movimientos; acc.errores+=d.errores; acc.criticos+=d.criticos; acc.altos+=d.altos;
-        acc.medios+=d.medios; acc.bajos+=d.bajos; acc.saldoFinalCant+=d.saldoFinalCant; acc.saldoFinalValor+=d.saldoFinalValor;
+        acc.movimientos+=d.movimientos; acc.lineasConError+=d.lineasConError; acc.lineasSinError+=d.lineasSinError;
+        acc.errores+=d.errores; acc.criticos+=d.criticos; acc.altos+=d.altos; acc.medios+=d.medios; acc.bajos+=d.bajos;
+        acc.saldoFinalCant+=d.saldoFinalCant; acc.saldoFinalValor+=d.saldoFinalValor;
+        acc.saldoFinalValorCorrecto+=d.saldoFinalValorCorrecto; acc.diferenciaFinal+=d.diferenciaFinal;
         return acc;
-      }, {movimientos:0, errores:0, criticos:0, altos:0, medios:0, bajos:0, saldoFinalCant:0, saldoFinalValor:0});
+      }, {movimientos:0, lineasConError:0, lineasSinError:0, errores:0, criticos:0, altos:0, medios:0, bajos:0, saldoFinalCant:0, saldoFinalValor:0, saldoFinalValorCorrecto:0, diferenciaFinal:0});
       const totalRow = ws.addRow({
         origen:'', codigo:'TOTAL GENERAL', descripcion:`(${allData.length.toLocaleString('es-PE')} artículo(s), todas las pestañas)`, almacen:'', archivo:'',
-        movimientos: totals.movimientos, errores: totals.errores, criticos: totals.criticos, altos: totals.altos,
-        medios: totals.medios, bajos: totals.bajos, saldoFinalCant: totals.saldoFinalCant, saldoFinalValor: totals.saldoFinalValor
+        movimientos: totals.movimientos, lineasConError: totals.lineasConError, lineasSinError: totals.lineasSinError,
+        errores: totals.errores, criticos: totals.criticos, altos: totals.altos, medios: totals.medios, bajos: totals.bajos,
+        saldoFinalCant: totals.saldoFinalCant, saldoFinalValor: totals.saldoFinalValor,
+        saldoFinalValorCorrecto: totals.saldoFinalValorCorrecto, diferenciaFinal: totals.diferenciaFinal, estado:''
       });
       totalRow.eachCell(c=>{ c.font = {bold:true}; c.border = {top:{style:'medium', color:{argb:XC.headerBg}}}; c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFE8EDF3'}}; });
-      totalRow.getCell(12).numFmt = '#,##0.00'; totalRow.getCell(12).alignment = {horizontal:'right'};
-      totalRow.getCell(13).numFmt = '#,##0.00'; totalRow.getCell(13).alignment = {horizontal:'right'};
+      [14,15,16,17].forEach(cn=>{ totalRow.getCell(cn).numFmt = '#,##0.00'; totalRow.getCell(cn).alignment = {horizontal:'right'}; });
     }
     await tick();
   }
 }
 
-async function addDetalleSinErroresSheet(wb, resumenCompleto){
-  const okRows = resumenCompleto.filter(r=>(r.errores||0) === 0);
-  const columns = [
-    {header:'Origen', key:'origen', width:12},
-    {header:'Código', key:'codigo', width:16},
-    {header:'Descripción', key:'descripcion', width:36},
-    {header:'Almacén', key:'almacen', width:20},
-    {header:'Archivo', key:'archivo', width:24},
-    {header:'Movimientos', key:'movimientos', width:12, align:'center'},
-    {header:'Saldo Final Cant.', key:'saldoFinalCant', width:16, numFmt:'#,##0.00', align:'right'},
-    {header:'Saldo Final Valor. (S/.)', key:'saldoFinalValor', width:18, numFmt:'#,##0.00', align:'right'},
-    {header:'Observación', key:'observacion', width:34},
-  ];
-  const chunks = chunkArray(okRows, EXPORT_CHUNK_SIZE);
-  for(let ci=0; ci<chunks.length; ci++){
-    const rowsChunk = chunks[ci];
-    const baseName = 'Detalle Art. sin Errores';
-    const sheetName = (chunks.length>1 ? `${baseName} (${ci+1} de ${chunks.length})` : baseName).substring(0,31);
-    const ws = wb.addWorksheet(sheetName);
-    ws.mergeCells('A1:I1');
-    const banner = ws.getCell('A1');
-    banner.value = '✓ ' + okRows.length.toLocaleString('es-PE') + ' artículo(s) revisados sin ninguna observación — cumplen correctamente con la normativa validada.' + (chunks.length>1 ? ` (pestaña ${ci+1} de ${chunks.length})` : '');
-    banner.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.bandaBg}};
-    banner.font = {bold:true, color:{argb:'FFFFFFFF'}, size:12};
-    banner.alignment = {vertical:'middle', horizontal:'left', indent:1};
-    ws.getRow(1).height = 26;
-
-    columns.forEach((c,i)=>{
-      const col = ws.getColumn(i+1);
-      col.key = c.key;
-      col.width = c.width;
-      if(c.numFmt) col.numFmt = c.numFmt;
-      if(c.align) col.alignment = {horizontal:c.align, vertical:'middle'};
-    });
-    const headerRow = ws.getRow(2);
-    columns.forEach((c,i)=>{ headerRow.getCell(i+1).value = c.header; });
-    headerRow.eachCell(c=>{
-      c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.headerBg}};
-      c.font = {bold:true, color:{argb:XC.headerFg}, size:11};
-      c.alignment = {vertical:'middle', horizontal:'center', wrapText:true};
-    });
-    headerRow.height = 24;
-    ws.views = [{state:'frozen', ySplit:2}];
-
-    const useZebraOk = rowsChunk.length <= ZEBRA_ROW_LIMIT;
-    for(let i=0;i<rowsChunk.length;i++){
-      const r = rowsChunk[i];
-      const row = ws.addRow({
-        origen:r.origen, codigo:r.codigo, descripcion:r.descripcion, almacen:r.almacen, archivo:r.archivo,
-        movimientos:r.movimientos, saldoFinalCant:r.saldoFinalCant, saldoFinalValor:r.saldoFinalValor,
-        observacion: 'Cumple — Sin errores detectados'
-      });
-      if(useZebraOk && i % 2 === 1){
-        row.eachCell(c=> c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.ok}});
-      }
-      row.getCell(9).font = {italic:true, color:{argb:XC.okFg}};
-      if(i % 3000 === 2999) await tick();
-    }
-    if(!rowsChunk.length){
-      ws.mergeCells('A3:I3');
-      ws.getCell('A3').value = 'No hay artículos sin observaciones en el conjunto analizado.';
-      ws.getCell('A3').font = {italic:true, color:{argb:XC.subtleFg}};
-    }
-    ws.autoFilter = {from:{row:2,column:1}, to:{row:2, column:columns.length}};
-    await tick();
-  }
-}
-
-async function addResumenSinErroresSheet(wb, resumenCompleto){
-  const okRows = resumenCompleto.filter(r=>(r.errores||0) === 0);
-  const groups = new Map();
-  okRows.forEach(r=>{
-    const key = [r.origen, r.archivo, r.almacen||'(General)'].join('||');
-    let g = groups.get(key);
-    if(!g){ g = {origen:r.origen, archivo:r.archivo, almacen:r.almacen||'(General)', articulos:0, movimientos:0, saldoCant:0, saldoValor:0}; groups.set(key,g); }
-    g.articulos++; g.movimientos += r.movimientos; g.saldoCant += r.saldoFinalCant; g.saldoValor += r.saldoFinalValor;
-  });
-  const columns = [
-    {header:'Origen', key:'origen', width:14},
-    {header:'Archivo', key:'archivo', width:26},
-    {header:'Almacén', key:'almacen', width:20},
-    {header:'Artículos sin errores', key:'articulos', width:18, align:'center'},
-    {header:'Movimientos totales', key:'movimientos', width:16, align:'center'},
-    {header:'Saldo Cant. Total', key:'saldoCant', width:16, numFmt:'#,##0.00', align:'right'},
-    {header:'Saldo Valorizado Total (S/.)', key:'saldoValor', width:22, numFmt:'#,##0.00', align:'right'},
-  ];
-  const ws = wb.addWorksheet('Resumen Art. sin Errores');
-  ws.mergeCells('A1:G1');
-  const banner = ws.getCell('A1');
-  banner.value = '✓ Resumen agregado — ' + okRows.length.toLocaleString('es-PE') + ' artículo(s) cumplen sin ninguna observación.';
-  banner.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.bandaBg}};
-  banner.font = {bold:true, color:{argb:'FFFFFFFF'}, size:12};
-  banner.alignment = {vertical:'middle', horizontal:'left', indent:1};
-  ws.getRow(1).height = 26;
-
-  columns.forEach((c,i)=>{ const col = ws.getColumn(i+1); col.key = c.key; col.width = c.width; });
-  const headerRow = ws.getRow(2);
-  columns.forEach((c,i)=>{ headerRow.getCell(i+1).value = c.header; });
-  headerRow.eachCell(c=>{
-    c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.headerBg}};
-    c.font = {bold:true, color:{argb:XC.headerFg}, size:11};
-    c.alignment = {vertical:'middle', horizontal:'center', wrapText:true};
-  });
-  headerRow.height = 24;
-  ws.views = [{state:'frozen', ySplit:2}];
-
-  const arr = Array.from(groups.values()).sort((a,b)=> b.articulos - a.articulos);
-  arr.forEach((g,i)=>{
-    const row = ws.addRow(g);
-    if(i % 2 === 1) row.eachCell(c=> c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.ok}});
-    row.getCell(4).alignment = {horizontal:'center'};
-    row.getCell(5).alignment = {horizontal:'center'};
-    row.getCell(6).numFmt = '#,##0.00'; row.getCell(6).alignment = {horizontal:'right'};
-    row.getCell(7).numFmt = '#,##0.00'; row.getCell(7).alignment = {horizontal:'right'};
-  });
-  if(arr.length){
-    const totals = arr.reduce((acc,g)=>{ acc.articulos+=g.articulos; acc.movimientos+=g.movimientos; acc.saldoCant+=g.saldoCant; acc.saldoValor+=g.saldoValor; return acc; }, {articulos:0, movimientos:0, saldoCant:0, saldoValor:0});
-    const totalRow = ws.addRow({origen:'', archivo:'TOTAL', almacen:'', articulos:totals.articulos, movimientos:totals.movimientos, saldoCant:totals.saldoCant, saldoValor:totals.saldoValor});
-    totalRow.eachCell(c=>{ c.font = {bold:true}; c.border = {top:{style:'medium', color:{argb:XC.headerBg}}}; c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:'FFE8EDF3'}}; });
-    totalRow.getCell(4).alignment = {horizontal:'center'};
-    totalRow.getCell(5).alignment = {horizontal:'center'};
-    totalRow.getCell(6).numFmt = '#,##0.00'; totalRow.getCell(6).alignment = {horizontal:'right'};
-    totalRow.getCell(7).numFmt = '#,##0.00'; totalRow.getCell(7).alignment = {horizontal:'right'};
-  } else {
-    ws.mergeCells('A3:G3');
-    ws.getCell('A3').value = 'No hay artículos sin observaciones en el conjunto analizado.';
-    ws.getCell('A3').font = {italic:true, color:{argb:XC.subtleFg}};
-  }
-  ws.autoFilter = {from:{row:2,column:1}, to:{row:2, column:columns.length}};
-  return ws;
-}
-
-async function addErroresSheet(wb, rows, name){
+// Hoja única con TODAS las líneas analizadas (con y sin error, juntas) — reemplaza
+// la separación anterior en hojas de "con errores" / "sin errores". Incluye el
+// costo promedio correcto y el valor del movimiento tal como está en el kardex
+// vs. como debió ser (ingresos en positivo, salidas en negativo), y su diferencia.
+async function addLineasSheet(wb, rows, name){
   const columns = [
     {header:'Origen', key:'origen', width:12},
     {header:'Código', key:'codigo', width:16},
@@ -1033,6 +922,10 @@ async function addErroresSheet(wb, rows, name){
     {header:'Saldo.C.U.', key:'saldoCU', width:12, numFmt:'#,##0.0000', align:'right'},
     {header:'Saldo.C.T.', key:'saldoCT', width:12, numFmt:'#,##0.00', align:'right'},
     {header:'C.U. Correcto', key:'costoPromCorrecto', width:13, numFmt:'#,##0.0000', align:'right'},
+    {header:'Valor Kardex (S/.)', key:'valorKardex', width:16, numFmt:'#,##0.00', align:'right'},
+    {header:'Valor Correcto (S/.)', key:'valorCorrecto', width:16, numFmt:'#,##0.00', align:'right'},
+    {header:'Diferencia (S/.)', key:'diferenciaValor', width:14, numFmt:'#,##0.00', align:'right'},
+    {header:'Estado', key:'estadoLinea', width:12, align:'center'},
     {header:'Severidad', key:'severidad', width:11, align:'center'},
     {header:'Errores detectados', key:'erroresTxt', width:70},
   ];
@@ -1041,18 +934,25 @@ async function addErroresSheet(wb, rows, name){
     fecha: r.fecha ? new Date(r.fecha) : null, tipoDoc:r.tipoDoc, serie:r.serie, numero:r.numero, tipoOperacion:r.tipoOperacion,
     entCant:r.entCant, entCU:r.entCU, entCT:r.entCT, salCant:r.salCant, salCU:r.salCU, salCT:r.salCT,
     saldoCant:r.saldoCant, saldoCU:r.saldoCU, saldoCT:r.saldoCT, costoPromCorrecto:r.costoPromCorrecto,
-    severidad: SEV_LABEL[r.sevMax]||'', erroresTxt: r.errores.map(e=>'• '+e.msg).join('\n')
+    valorKardex:r.valorKardex||0, valorCorrecto:r.valorCorrecto||0, diferenciaValor:r.diferenciaValor||0,
+    estadoLinea: (r.errores && r.errores.length) ? 'CON ERROR' : 'SIN ERROR',
+    severidad: SEV_LABEL[r.sevMax]||'', erroresTxt: (r.errores||[]).map(e=>'• '+e.msg).join('\n')
   }));
   const chunks = chunkArray(allData, EXPORT_CHUNK_SIZE);
   for(let ci=0; ci<chunks.length; ci++){
     const data = chunks[ci];
     const sheetName = (chunks.length>1 ? `${name} (${ci+1} de ${chunks.length})` : name).substring(0,31);
     const ws = wb.addWorksheet(sheetName);
-    await styleDataSheet(ws, columns, data, {sevKey:'severidad', sevCol:21});
+    await styleDataSheet(ws, columns, data, {sevKey:'severidad', sevCol:25});
     for(let i=0;i<data.length;i++){
       const d = data[i];
       if(d.fecha){ ws.getRow(i+2).getCell(6).numFmt = 'dd/mm/yyyy hh:mm'; }
-      ws.getRow(i+2).getCell(22).alignment = {wrapText:true, vertical:'top'};
+      ws.getRow(i+2).getCell(26).alignment = {wrapText:true, vertical:'top'};
+      const estadoCell = ws.getRow(i+2).getCell(24);
+      if(d.estadoLinea === 'SIN ERROR'){
+        estadoCell.font = {bold:true, color:{argb:XC.okFg}};
+        estadoCell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.ok}};
+      }
       if(i % 3000 === 2999) await tick();
     }
     await tick();
@@ -1073,7 +973,11 @@ async function downloadStyledWorkbook(filename, buildFn){
   setTimeout(()=>URL.revokeObjectURL(url), 4000);
 }
 
-function kpisPara(rows, universo){
+function kpisPara(rows, universo, kpisGlobal){
+  const k = kpisGlobal || {};
+  const totalLineas = k.totalMovimientos || 0;
+  const lineasConError = k.lineasConError || 0;
+  const lineasSinError = k.lineasSinError!=null ? k.lineasSinError : Math.max(0, totalLineas-lineasConError);
   const conErrores = rows.filter(r=>r.errores>0);
   const sinErrores = universo.filter(r=>r.errores===0);
   const crit = rows.reduce((s,r)=>s+(r.criticos||0),0);
@@ -1081,6 +985,9 @@ function kpisPara(rows, universo){
   const media = rows.reduce((s,r)=>s+(r.medios||0),0);
   const baja = rows.reduce((s,r)=>s+(r.bajos||0),0);
   return [
+    {label:'Total de líneas analizadas', value: totalLineas},
+    {label:'Líneas con incidencias', value: lineasConError, color: lineasConError? XC.critFg : XC.okFg},
+    {label:'Líneas sin incidencias', value: lineasSinError, color: XC.okFg},
     {label:'Total de artículos revisados', value: universo.length},
     {label:'Artículos con errores', value: conErrores.length, color: conErrores.length? XC.critFg : XC.okFg},
     {label:'Incidencias críticas', value: crit, color: crit? XC.critFg: XC.okFg, indent:1},
@@ -1095,14 +1002,12 @@ document.getElementById('exportResumenBtn').addEventListener('click', async ()=>
   await downloadStyledWorkbook('Kardex_Resumen_por_articulo.xlsx', async (wb)=>{
     addPortada(wb, {
       titulo:'Detector de Errores de Kardex',
-      subtitulo:'Resumen por Artículo — Validación SUNAT (Registro 13.1)',
-      kpis: kpisPara(state.resumenFiltered, state.data.resumen),
-      nota:'Este reporte resume, por cada artículo y almacén, la cantidad de movimientos e incidencias detectadas al validar el kardex contra los criterios de costo promedio ponderado, saldos negativos y requisitos de SUNAT. Ver "Detalle de Errores" para el kardex movimiento por movimiento (con el tipo de error y la severidad de cada incidencia), "Resumen Art. con Errores" para el detalle agregado por artículo, y "Detalle / Resumen Art. sin Errores" para los que cumplen correctamente.'
+      subtitulo:'Reporte de Validación — SUNAT (Registro 13.1)',
+      kpis: kpisPara(state.resumenFiltered, state.data.resumen, state.data.kpis),
+      nota:'"Detalle de Líneas" incluye el kardex completo, movimiento por movimiento, con y sin observaciones: el costo promedio correcto, el valor del movimiento tal como está en el kardex (ingresos en positivo, salidas en negativo), el valor correcto y la diferencia entre ambos. "Resumen por Artículo" agrupa esa información por artículo/almacén, clasificando líneas con y sin error, severidad y el efecto total sobre el saldo valorizado.'
     });
-    await addErroresSheet(wb, state.data.errorRows, 'Detalle de Errores');
-    await addResumenSheet(wb, state.resumenFiltered, 'Resumen Art. con Errores');
-    await addDetalleSinErroresSheet(wb, state.data.resumen);
-    await addResumenSinErroresSheet(wb, state.data.resumen);
+    await addLineasSheet(wb, state.data.allRows, 'Detalle de Líneas');
+    await addResumenArticulosSheet(wb, state.resumenFiltered, 'Resumen por Artículo');
   });
 });
 document.getElementById('exportErrBtn').addEventListener('click', async ()=>{
@@ -1110,13 +1015,11 @@ document.getElementById('exportErrBtn').addEventListener('click', async ()=>{
     addPortada(wb, {
       titulo:'Detector de Errores de Kardex',
       subtitulo:'Detalle de Errores (filtrados) — Validación SUNAT (Registro 13.1)',
-      kpis: kpisPara(state.resumenFiltered, state.data.resumen),
-      nota:'Incluye únicamente las incidencias que cumplen con los filtros aplicados en el momento de exportar. Ver "Resumen Art. con Errores" para el detalle agregado por artículo, y "Detalle / Resumen Art. sin Errores" para los artículos que no presentaron observaciones.'
+      kpis: kpisPara(state.resumenFiltered, state.data.resumen, state.data.kpis),
+      nota:'Incluye únicamente las incidencias que cumplen con los filtros aplicados en el momento de exportar. Ver "Resumen por Artículo" para el detalle agregado por artículo.'
     });
-    await addErroresSheet(wb, state.errFiltered, 'Detalle de Errores (Filtro)');
-    await addResumenSheet(wb, state.resumenFiltered, 'Resumen Art. con Errores');
-    await addDetalleSinErroresSheet(wb, state.data.resumen);
-    await addResumenSinErroresSheet(wb, state.data.resumen);
+    await addLineasSheet(wb, state.errFiltered, 'Detalle de Errores (Filtro)');
+    await addResumenArticulosSheet(wb, state.resumenFiltered, 'Resumen por Artículo');
   });
 });
 document.getElementById('exportAllErrBtn').addEventListener('click', async ()=>{
@@ -1124,13 +1027,11 @@ document.getElementById('exportAllErrBtn').addEventListener('click', async ()=>{
     addPortada(wb, {
       titulo:'Detector de Errores de Kardex',
       subtitulo:'Reporte Completo de Validación — SUNAT (Registro 13.1)',
-      kpis: kpisPara(state.data.resumen, state.data.resumen),
-      nota:'Reporte completo, sin filtros: todas las incidencias detectadas, el resumen por artículo con errores, y el detalle/resumen de los artículos que no presentaron ninguna observación.'
+      kpis: kpisPara(state.data.resumen, state.data.resumen, state.data.kpis),
+      nota:'Reporte completo, sin filtros: todas las líneas analizadas (con y sin observaciones) en "Detalle de Líneas", y el resumen agregado por artículo en "Resumen por Artículo".'
     });
-    await addErroresSheet(wb, state.data.errorRows, 'Detalle de Errores');
-    await addResumenSheet(wb, state.data.resumen, 'Resumen Art. con Errores');
-    await addDetalleSinErroresSheet(wb, state.data.resumen);
-    await addResumenSinErroresSheet(wb, state.data.resumen);
+    await addLineasSheet(wb, state.data.allRows, 'Detalle de Líneas');
+    await addResumenArticulosSheet(wb, state.data.resumen, 'Resumen por Artículo');
   });
 });
 document.getElementById('exportDetBtn').addEventListener('click', async ()=>{
@@ -1148,51 +1049,10 @@ document.getElementById('exportDetBtn').addEventListener('click', async ()=>{
         {label:'Movimientos sin observaciones', value: okCount, color:XC.okFg},
         {label:'Movimientos con observaciones', value: state.currentDetalleRecords.length-okCount, color: (state.currentDetalleRecords.length-okCount)?XC.critFg:XC.okFg},
       ],
-      nota: (state.currentDetalleRecords.length-okCount)===0 ? 'Este artículo no presenta ninguna observación: todos sus movimientos son consistentes con los criterios validados.' : 'Las filas marcadas indican el motivo de cada observación detectada en la columna "Errores detectados".'
+      nota: (state.currentDetalleRecords.length-okCount)===0 ? 'Este artículo no presenta ninguna observación: todos sus movimientos son consistentes con los criterios validados.' : 'Todas las líneas del kardex de este artículo, con y sin observaciones, junto con el costo promedio correcto y el efecto en valorizado de cada movimiento.'
     });
-    const rowsForSheet = state.currentDetalleRecords.map(r=>Object.assign({groupKey:state.currentDetalleKey}, r));
-    await addErroresSheet(wb, rowsForSheet.filter(r=>r.errores&&r.errores.length), 'Movimientos con errores');
-    // hoja con TODO el kardex del articulo (con y sin error)
-    const columns = [
-      {header:'Fecha', key:'fecha', width:16},
-      {header:'Tipo Doc', key:'tipoDoc', width:9, align:'center'},
-      {header:'Serie', key:'serie', width:9, align:'center'},
-      {header:'Número', key:'numero', width:13, align:'center'},
-      {header:'Tipo Operación', key:'tipoOperacion', width:14, align:'center'},
-      {header:'Ent.Cant', key:'entCant', width:11, numFmt:'#,##0.00', align:'right'},
-      {header:'Ent.C.U.', key:'entCU', width:11, numFmt:'#,##0.0000', align:'right'},
-      {header:'Ent.C.T.', key:'entCT', width:11, numFmt:'#,##0.00', align:'right'},
-      {header:'Sal.Cant', key:'salCant', width:11, numFmt:'#,##0.00', align:'right'},
-      {header:'Sal.C.U.', key:'salCU', width:11, numFmt:'#,##0.0000', align:'right'},
-      {header:'Sal.C.T.', key:'salCT', width:11, numFmt:'#,##0.00', align:'right'},
-      {header:'Saldo.Cant', key:'saldoCant', width:12, numFmt:'#,##0.00', align:'right'},
-      {header:'Saldo.C.U.', key:'saldoCU', width:12, numFmt:'#,##0.0000', align:'right'},
-      {header:'Saldo.C.T.', key:'saldoCT', width:12, numFmt:'#,##0.00', align:'right'},
-      {header:'C.U. Correcto', key:'costoPromCorrecto', width:13, numFmt:'#,##0.0000', align:'right'},
-      {header:'Severidad', key:'severidad', width:11, align:'center'},
-      {header:'Errores detectados', key:'erroresTxt', width:70},
-    ];
-    const ws2 = wb.addWorksheet('Kardex completo');
-    const data2 = state.currentDetalleRecords.map(r=>({
-      fecha: r.fecha? new Date(r.fecha): null, tipoDoc:r.tipoDoc, serie:r.serie, numero:r.numero, tipoOperacion:r.tipoOperacion,
-      entCant:r.entCant, entCU:r.entCU, entCT:r.entCT, salCant:r.salCant, salCU:r.salCU, salCT:r.salCT,
-      saldoCant:r.saldoCant, saldoCU:r.saldoCU, saldoCT:r.saldoCT, costoPromCorrecto:r.costoPromCorrecto,
-      severidad: r.errores&&r.errores.length? (SEV_LABEL[r.sevMax]||'') : 'OK',
-      erroresTxt: (r.errores||[]).map(e=>'• '+e.msg).join('\n')
-    }));
-    await styleDataSheet(ws2, columns, data2, {sevKey:'severidad', sevCol:16});
-    for(let i=0;i<data2.length;i++){
-      const d = data2[i];
-      if(d.fecha) ws2.getRow(i+2).getCell(1).numFmt = 'dd/mm/yyyy hh:mm';
-      ws2.getRow(i+2).getCell(17).alignment = {wrapText:true, vertical:'top'};
-      if(d.severidad==='OK'){
-        const c = ws2.getRow(i+2).getCell(16);
-        c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.ok}};
-        c.font = {bold:true, color:{argb:XC.okFg}};
-        c.alignment = {horizontal:'center'};
-      }
-      if(i % 3000 === 2999) await tick();
-    }
+    // hoja única con TODO el kardex del artículo (con y sin error, juntas)
+    await addLineasSheet(wb, state.currentDetalleRecords, 'Detalle de Líneas');
   });
 });
 
@@ -1599,19 +1459,31 @@ function analyzeGroup(recs, tolAbs, tolRel){
     const entCant=r.entCant, entCU=r.entCU, entCT=r.entCT, salCant=r.salCant, salCU=r.salCU, salCT=r.salCT,
           saldoCant=r.saldoCant, saldoCU=r.saldoCU, saldoCT=r.saldoCT;
 
+    // Valor del movimiento tal como está en el kardex: ingreso en positivo,
+    // salida en negativo (así se ve directamente el efecto sobre el valorizado).
+    r.valorKardex = round(entCT - salCT);
     if(idx === 0){
       corr.cant = saldoCant;
       corr.ct = saldoCT;
+      r.valorCorrecto = r.valorKardex; // primera línea: se toma el saldo inicial como punto de partida
     } else {
       corr.cant += entCant;
       corr.ct += entCT;
+      let salidaCorrecta = 0;
       if(salCant > 0){
         const cuCorrecto = corr.cant > 0.0000001 ? corr.ct / corr.cant : 0;
-        corr.ct -= cuCorrecto * salCant;
+        salidaCorrecta = cuCorrecto * salCant;
+        corr.ct -= salidaCorrecta;
         corr.cant -= salCant;
       }
+      // Mismo criterio de signos que valorKardex, pero con la salida valorizada
+      // al costo promedio correcto en vez del costo (posiblemente erróneo) registrado.
+      r.valorCorrecto = round(entCT - salidaCorrecta);
     }
     r.costoPromCorrecto = round(corr.cant > 0.0000001 ? corr.ct / corr.cant : 0);
+    r.saldoCantCorrecto = round(corr.cant);
+    r.saldoCTCorrecto = round(corr.ct);
+    r.diferenciaValor = round(r.valorCorrecto - r.valorKardex);
 
     if(entCant < 0) errs.push(E('CANT_NEG_ENT','CRITICA','Cantidad de ingreso negativa'));
     if(salCant < 0) errs.push(E('CANT_NEG_SAL','CRITICA','Cantidad de salida negativa'));
@@ -1663,20 +1535,29 @@ function analyzeGroup(recs, tolAbs, tolRel){
 function buildOutputs(allGroups){
   const resumen = [];
   const errorRows = [];
+  // Todas las líneas analizadas (con y sin error) en un único listado, para el
+  // reporte consolidado — ya no se separan en hojas distintas.
+  const allRows = [];
   const tipoStats = new Map();
-  let totalMov = 0, totalErrOcc = 0;
+  let totalMov = 0, totalErrOcc = 0, totalLineasConError = 0;
   const sevCounts = {CRITICA:0, ALTA:0, MEDIA:0, BAJA:0};
 
   for(const [key, g] of allGroups){
-    let errCount=0, crit=0, alta=0, media=0, baja=0;
+    let errCount=0, crit=0, alta=0, media=0, baja=0, lineasConError=0;
+    const origen = g.meta.origen, codigo = g.meta.codigo, descripcion = g.meta.descripcion || '',
+          almacen = g.meta.establecimiento || g.meta.almacen || '', archivo = g.records[0] ? g.records[0].archivo : '';
+    let itemTieneErrorMeta = false;
     if(g.metaErrs && g.metaErrs.length){
+      itemTieneErrorMeta = true;
       const sevMax = g.metaErrs.reduce((m,e)=> SEV_RANK[e.sev] > SEV_RANK[m] ? e.sev : m, g.metaErrs[0].sev);
-      errorRows.push({
-        origen: g.meta.origen, codigo: g.meta.codigo, descripcion: g.meta.descripcion || '', almacen: g.meta.establecimiento || g.meta.almacen || '',
-        archivo: g.records[0] ? g.records[0].archivo : '', fecha: null, tipoDoc:'', serie:'', numero:'', tipoOperacion:'[DATOS DEL ÍTEM]',
+      const metaRow = {
+        origen, codigo, descripcion, almacen, archivo, fecha: null, tipoDoc:'', serie:'', numero:'', tipoOperacion:'[DATOS DEL ÍTEM]',
         entCant:0, entCU:0, entCT:0, salCant:0, salCU:0, salCT:0, saldoCant:0, saldoCU:0, saldoCT:0,
+        costoPromCorrecto:0, valorKardex:0, valorCorrecto:0, diferenciaValor:0,
         errores: g.metaErrs, sevMax, groupKey: key
-      });
+      };
+      errorRows.push(metaRow);
+      allRows.push(metaRow);
       g.metaErrs.forEach(e=>{
         errCount++; totalErrOcc++; sevCounts[e.sev]++; bump(tipoStats, e);
         if(e.sev==='CRITICA') crit++; else if(e.sev==='ALTA') alta++; else if(e.sev==='MEDIA') media++; else baja++;
@@ -1684,9 +1565,12 @@ function buildOutputs(allGroups){
     }
     g.records.forEach(r=>{
       totalMov++;
-      if(r.errores && r.errores.length){
-        const copy = Object.assign({}, r, {groupKey:key});
-        errorRows.push(copy);
+      const hasErr = r.errores && r.errores.length;
+      const row = Object.assign({}, r, {origen, codigo, descripcion, almacen, archivo, groupKey:key});
+      allRows.push(row);
+      if(hasErr){
+        lineasConError++; totalLineasConError++;
+        errorRows.push(row);
         r.errores.forEach(e=>{
           errCount++; totalErrOcc++; sevCounts[e.sev]++; bump(tipoStats, e);
           if(e.sev==='CRITICA') crit++; else if(e.sev==='ALTA') alta++; else if(e.sev==='MEDIA') media++; else baja++;
@@ -1694,19 +1578,24 @@ function buildOutputs(allGroups){
       }
     });
     const last = g.records.length ? g.records[g.records.length-1] : null;
+    const saldoFinalValor = last ? last.saldoCT : 0;
+    const saldoFinalValorCorrecto = last ? last.saldoCTCorrecto : 0;
     resumen.push({
-      key, origen: g.meta.origen, codigo: g.meta.codigo, descripcion: g.meta.descripcion || '',
-      almacen: g.meta.establecimiento || g.meta.almacen || '', archivo: g.records[0] ? g.records[0].archivo : '',
-      movimientos: g.records.length, errores: errCount, criticos: crit, altos: alta, medios: media, bajos: baja,
-      saldoFinalCant: last ? last.saldoCant : 0, saldoFinalValor: last ? last.saldoCT : 0
+      key, origen, codigo, descripcion, almacen, archivo,
+      movimientos: g.records.length, lineasConError, lineasSinError: g.records.length - lineasConError,
+      errores: errCount, criticos: crit, altos: alta, medios: media, bajos: baja,
+      saldoFinalCant: last ? last.saldoCant : 0, saldoFinalValor,
+      saldoFinalValorCorrecto, diferenciaFinal: round(saldoFinalValorCorrecto - saldoFinalValor),
+      estado: (lineasConError > 0 || itemTieneErrorMeta) ? 'CON ERRORES' : 'SIN ERRORES'
     });
   }
   const errorTipos = Array.from(tipoStats.values()).sort((a,b)=>b.count-a.count);
   return {
-    resumen, errorRows,
+    resumen, errorRows, allRows,
     kpis: {
       totalGrupos: allGroups.size, totalMovimientos: totalMov, totalErrores: totalErrOcc,
-      lineasConError: errorRows.length, sevCounts, gruposConError: resumen.filter(r=>r.errores>0).length
+      lineasConError: totalLineasConError, lineasSinError: totalMov - totalLineasConError,
+      sevCounts, gruposConError: resumen.filter(r=>r.errores>0).length
     },
     errorTipos
   };
