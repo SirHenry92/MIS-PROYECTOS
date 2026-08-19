@@ -1180,13 +1180,13 @@
         // reutiliza en las siguientes: crearlo descarga el modelo de OCR (unos MB), así que
         // hacerlo de nuevo en cada captura sería lento e innecesario.
         //
-        // Se usa el modelo "letsgodigital", entrenado específicamente para leer pantallas
-        // digitales de 7 segmentos (LCD/LED de básculas, multímetros, relojes, etc.) -- el
-        // modelo genérico "eng" está entrenado con tipografías impresas normales y le cuesta
-        // mucho leer ese estilo de número, que es justo el motivo por el que antes casi nunca
-        // detectaba nada en la pantalla de la báscula. Si por algún motivo no se puede
-        // descargar (sin internet, el mirror caído), se cae de vuelta al modelo estándar en
-        // vez de dejar el escáner sin funcionar.
+        // Se usa el modelo estándar "eng" (el que Tesseract.js sirve desde su propia CDN
+        // oficial, la misma de donde ya se cargó la librería). Se probó un modelo especial
+        // para pantallas digitales de 7 segmentos hospedado en un mirror externo de GitHub,
+        // pero ese mirror resultó poco confiable (se quedaba colgado sin cargar ni fallar) --
+        // mejor un modelo genérico que sí funciona siempre, apoyado en el preprocesamiento de
+        // imagen (blanco/negro + agrandado) de abajo, que es la mejora que más ayuda a leer
+        // ese tipo de números sin depender de un servicio externo poco fiable.
         //
         // OJO: a propósito NO se restringe el reconocimiento con tessedit_char_whitelist a
         // solo dígitos. Forzar el whitelist hace que Tesseract "encaje" cada trazo que ve en
@@ -1198,18 +1198,20 @@
         let workerBalanzaOcrPromesa = null;
         function obtenerWorkerBalanzaOcr() {
             if (!workerBalanzaOcrPromesa) {
-                workerBalanzaOcrPromesa = (async () => {
-                    try {
-                        return await Tesseract.createWorker('letsgodigital', 1, {
-                            langPath: 'https://cdn.jsdelivr.net/gh/Shreeshrii/tessdata_ssd@master'
-                        });
-                    } catch (err) {
-                        console.warn('No se pudo cargar el modelo OCR para pantallas digitales, se usa el modelo estándar:', err);
-                        return await Tesseract.createWorker('eng');
-                    }
-                })();
+                workerBalanzaOcrPromesa = Tesseract.createWorker('eng');
             }
             return workerBalanzaOcrPromesa;
+        }
+
+        // Evita que una promesa se quede esperando para siempre (por ejemplo si el modelo de
+        // OCR tarda en cargar por mala conexión): si no termina dentro de `ms`, se corta con un
+        // error en vez de dejar la pantalla de "Verificando..." pegada por minutos.
+        function conLimiteDeTiempo(promesa, ms, mensaje) {
+            let idTimeout;
+            const timeout = new Promise((_, reject) => {
+                idTimeout = setTimeout(() => reject(new Error(mensaje)), ms);
+            });
+            return Promise.race([promesa, timeout]).finally(() => clearTimeout(idTimeout));
         }
 
         // Analiza el texto reconocido y decide si "parece" la pantalla de la báscula: exige al
@@ -1311,15 +1313,19 @@
             let ocrFallo = false;
             let textoReconocido = '';
             try {
-                const worker = await obtenerWorkerBalanzaOcr();
+                // 20s para crear/descargar el worker (solo tarda la primera vez de la sesión)
+                // y 12s para reconocer -- si se pasa de cualquiera de los dos, se corta acá en
+                // vez de dejar "Verificando..." pegado por minutos.
+                const worker = await conLimiteDeTiempo(obtenerWorkerBalanzaOcr(), 20000, 'El modelo de OCR tardó demasiado en cargar');
                 const canvasOcr = prepararCanvasParaOcr(canvasRecorte);
-                const { data } = await worker.recognize(canvasOcr);
+                const { data } = await conLimiteDeTiempo(worker.recognize(canvasOcr), 12000, 'El OCR tardó demasiado en responder');
                 textoReconocido = (data && data.text) || '';
                 huboDigito = pareceNumeroDeBalanza(textoReconocido);
                 console.log('OCR báscula:', JSON.stringify(textoReconocido));
             } catch (err) {
                 console.warn('OCR de la báscula falló:', err);
                 ocrFallo = true;
+                workerBalanzaOcrPromesa = null; // por si el worker quedó en mal estado, se recrea en el próximo intento
             }
 
             btn.disabled = false;
