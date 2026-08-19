@@ -776,6 +776,16 @@ function chunkArray(arr, size){
 async function styleDataSheet(ws, columns, rows, opts){
   opts = opts || {};
   ws.columns = columns;
+  // El formato numérico y la alineación se fijan una sola vez por columna (no por
+  // celda): con kardex de cientos de miles de filas, repetir esa asignación en
+  // cada celda multiplicaba el costo por el número de columnas y era la principal
+  // causa de que el navegador se quedara sin memoria al exportar el reporte
+  // consolidado (que ahora incluye TODAS las líneas, no solo las de error).
+  columns.forEach((c, i)=>{
+    const col = ws.getColumn(i+1);
+    if(c.numFmt) col.numFmt = c.numFmt;
+    if(c.align) col.alignment = {horizontal:c.align, vertical:'middle'};
+  });
   const headerRow = ws.getRow(1);
   headerRow.eachCell(c=>{
     c.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.headerBg}};
@@ -790,13 +800,9 @@ async function styleDataSheet(ws, columns, rows, opts){
   for(let i=0;i<rows.length;i++){
     const rowData = rows[i];
     const excelRow = ws.addRow(rowData);
-    const isAlt = useZebra && i % 2 === 1;
-    excelRow.eachCell((cell, colNum)=>{
-      const colDef = columns[colNum-1];
-      if(isAlt) cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.altRow}};
-      if(colDef && colDef.numFmt) cell.numFmt = colDef.numFmt;
-      if(colDef && colDef.align) cell.alignment = {horizontal:colDef.align, vertical:'middle'};
-    });
+    if(useZebra && i % 2 === 1){
+      excelRow.eachCell(cell=>{ cell.fill = {type:'pattern', pattern:'solid', fgColor:{argb:XC.altRow}}; });
+    }
     if(opts.sevKey){
       const sevCell = excelRow.getCell(opts.sevCol);
       const [fg, fontColor] = severidadFillFg(rowData[opts.sevKey]);
@@ -920,19 +926,23 @@ async function addLineasSheet(wb, rows, name){
     {header:'Severidad', key:'severidad', width:11, align:'center'},
     {header:'Errores detectados', key:'erroresTxt', width:70},
   ];
-  const allData = rows.map(r=>({
-    origen:r.origen, codigo:r.codigo, descripcion:r.descripcion, almacen:r.almacen, archivo:r.archivo,
-    fecha: r.fecha ? new Date(r.fecha) : null, tipoDoc:r.tipoDoc, serie:r.serie, numero:r.numero, tipoOperacion:r.tipoOperacion,
-    entCant:r.entCant, entCU:r.entCU, entCT:r.entCT, salCant:r.salCant, salCU:r.salCU, salCT:r.salCT,
-    saldoCant:r.saldoCant, saldoCU:r.saldoCU, saldoCT:r.saldoCT, costoPromCorrecto:r.costoPromCorrecto,
-    valorKardex:r.valorKardex||0, valorCorrecto:r.valorCorrecto||0, diferenciaValor:r.diferenciaValor||0,
-    estadoLinea: (r.errores && r.errores.length) ? 'CON ERROR' : 'SIN ERROR',
-    severidad: SEV_LABEL[r.sevMax]||'', erroresTxt: (r.errores||[]).map(e=>'• '+e.msg).join('\n')
-  }));
-  const chunks = chunkArray(allData, EXPORT_CHUNK_SIZE);
-  for(let ci=0; ci<chunks.length; ci++){
-    const data = chunks[ci];
-    const sheetName = (chunks.length>1 ? `${name} (${ci+1} de ${chunks.length})` : name).substring(0,31);
+  // Se arma cada chunk de datos "planos" para Excel a partir de "rows" en el
+  // momento de escribirlo (no de una copia previa del dataset completo): con
+  // kardex de cientos de miles de líneas, mapear todo por adelantado duplicaba
+  // en memoria el dataset entero antes siquiera de empezar a escribir la hoja.
+  const totalChunks = Math.max(1, Math.ceil(rows.length / EXPORT_CHUNK_SIZE));
+  for(let ci=0; ci<totalChunks; ci++){
+    const slice = rows.slice(ci*EXPORT_CHUNK_SIZE, (ci+1)*EXPORT_CHUNK_SIZE);
+    const data = slice.map(r=>({
+      origen:r.origen, codigo:r.codigo, descripcion:r.descripcion, almacen:r.almacen, archivo:r.archivo,
+      fecha: r.fecha ? new Date(r.fecha) : null, tipoDoc:r.tipoDoc, serie:r.serie, numero:r.numero, tipoOperacion:r.tipoOperacion,
+      entCant:r.entCant, entCU:r.entCU, entCT:r.entCT, salCant:r.salCant, salCU:r.salCU, salCT:r.salCT,
+      saldoCant:r.saldoCant, saldoCU:r.saldoCU, saldoCT:r.saldoCT, costoPromCorrecto:r.costoPromCorrecto,
+      valorKardex:r.valorKardex||0, valorCorrecto:r.valorCorrecto||0, diferenciaValor:r.diferenciaValor||0,
+      estadoLinea: (r.errores && r.errores.length) ? 'CON ERROR' : 'SIN ERROR',
+      severidad: SEV_LABEL[r.sevMax]||'', erroresTxt: (r.errores||[]).map(e=>'• '+e.msg).join('\n')
+    }));
+    const sheetName = (totalChunks>1 ? `${name} (${ci+1} de ${totalChunks})` : name).substring(0,31);
     const ws = wb.addWorksheet(sheetName);
     await styleDataSheet(ws, columns, data, {sevKey:'severidad', sevCol:25});
     for(let i=0;i<data.length;i++){
@@ -1515,11 +1525,14 @@ function buildOutputs(allGroups){
     g.records.forEach(r=>{
       totalMov++;
       const hasErr = r.errores && r.errores.length;
-      const row = Object.assign({}, r, {origen, codigo, descripcion, almacen, archivo, groupKey:key});
-      allRows.push(row);
+      // Los registros ya traen origen/código/almacén/archivo desde el parseo — se
+      // reutiliza el mismo objeto (solo se le agrega groupKey) en vez de clonarlo,
+      // para no duplicar en memoria el kardex completo (crítico en archivos grandes).
+      r.groupKey = key;
+      allRows.push(r);
       if(hasErr){
         lineasConError++; totalLineasConError++;
-        errorRows.push(row);
+        errorRows.push(r);
         r.errores.forEach(e=>{
           errCount++; totalErrOcc++; sevCounts[e.sev]++; bump(tipoStats, e);
           if(e.sev==='CRITICA') crit++; else if(e.sev==='ALTA') alta++; else if(e.sev==='MEDIA') media++; else baja++;
