@@ -305,6 +305,17 @@
         </div>
     </div>
 
+    <!-- PANTALLA DE BLOQUEO: candado manual u horario, administrado desde el Panel Admin -->
+    <div id="view-bloqueado" class="hidden-view flex-grow flex items-center justify-center p-4">
+        <div class="bg-white p-8 rounded-2xl shadow-xl w-full max-w-sm border border-gray-100 text-center">
+            <div class="inline-block p-4 bg-red-50 rounded-full mb-3 text-red-500">
+                <i class="fa-solid fa-lock text-3xl"></i>
+            </div>
+            <h2 class="text-2xl font-bold text-gray-800">Registro Cerrado</h2>
+            <p class="text-sm text-gray-500 mt-2" id="bloqueado-mensaje">El administrador cerró el registro en este momento.</p>
+        </div>
+    </div>
+
     <!-- VISTA PRINCIPAL: OPERADOR -->
     <div id="view-operador" class="hidden-view flex-grow flex flex-col items-center bg-gray-50 p-4 sm:p-8 overflow-y-auto">
         <div class="w-full max-w-3xl mt-2 sm:mt-6">
@@ -675,6 +686,8 @@
             obtenerPersonalBaseDatos();
             setupSearchListener();
             cargarConfiguracion();
+            cargarHorarioApp();
+            setInterval(cargarHorarioApp, 60000); // se refresca solo por si el admin bloquea/desbloquea mientras la app está abierta
 
             // Prevenir Enter submiteo del form
             window.addEventListener('keydown', function(e) {
@@ -691,6 +704,71 @@
             // su propio evento de gesto que a veces igual dispara el zoom -- se bloquea acá.
             document.addEventListener('gesturestart', (e) => e.preventDefault());
         });
+
+        // --- 3B. CANDADO / HORARIO DE REGISTRO (administrado desde el Panel Admin) ---
+        // Además de mostrar esta pantalla, el bloqueo se aplica también en las políticas RLS
+        // de Supabase (función operador_puede_registrar): aunque alguien manipule esta página
+        // desde la consola del navegador para saltarse la pantalla, el servidor igual rechaza
+        // el guardado si está fuera de horario o con el candado manual activado.
+        let horarioAppCfg = null;
+
+        async function cargarHorarioApp() {
+            try {
+                const { data, error } = await _supabase.from('horario_operadores').select('*').eq('app', NOMBRE_TABLA).single();
+                if (error) throw error;
+                horarioAppCfg = data;
+            } catch (e) {
+                horarioAppCfg = null; // si falla la consulta, no se bloquea (mejor no dejar a todos sin trabajar por un error de red)
+            }
+            return aplicarEstadoBloqueo();
+        }
+
+        function estaBloqueadoAhora() {
+            if (!horarioAppCfg) return false;
+            if (horarioAppCfg.bloqueo_manual) return true;
+            if (!horarioAppCfg.habilitar_horario) return false;
+
+            const ahora = new Date();
+            const dias = ['dom', 'lun', 'mar', 'mie', 'jue', 'vie', 'sab'];
+            const diaCodigo = dias[ahora.getDay()];
+            if (!(horarioAppCfg.dias_habilitados || []).includes(diaCodigo)) return true;
+
+            const hhmm = String(ahora.getHours()).padStart(2, '0') + ':' + String(ahora.getMinutes()).padStart(2, '0');
+            const apertura = (horarioAppCfg.hora_apertura || '00:00').slice(0, 5);
+            const cierre = (horarioAppCfg.hora_cierre || '23:59').slice(0, 5);
+            return hhmm < apertura || hhmm > cierre;
+        }
+
+        function mensajeHorarioApp() {
+            if (!horarioAppCfg) return '';
+            if (horarioAppCfg.bloqueo_manual) return 'El administrador cerró el registro manualmente.';
+            if (horarioAppCfg.habilitar_horario) {
+                const nombres = { lun: 'Lun', mar: 'Mar', mie: 'Mié', jue: 'Jue', vie: 'Vie', sab: 'Sáb', dom: 'Dom' };
+                const diasTxt = (horarioAppCfg.dias_habilitados || []).map(d => nombres[d] || d).join(', ');
+                const apertura = (horarioAppCfg.hora_apertura || '').slice(0, 5);
+                const cierre = (horarioAppCfg.hora_cierre || '').slice(0, 5);
+                return `Fuera del horario habilitado (${diasTxt}, de ${apertura} a ${cierre}).`;
+            }
+            return '';
+        }
+
+        // Muestra/oculta la pantalla de bloqueo según corresponda y devuelve si está bloqueado
+        // (para que quien llame -- ej. antes de guardar un conteo -- pueda cortar el flujo).
+        function aplicarEstadoBloqueo() {
+            const bloqueado = estaBloqueadoAhora();
+            const viewBloqueado = document.getElementById('view-bloqueado');
+            if (bloqueado) {
+                document.getElementById('bloqueado-mensaje').textContent = mensajeHorarioApp();
+                viewBloqueado.classList.remove('hidden-view');
+                document.getElementById('view-login').classList.add('hidden-view');
+                document.getElementById('view-operador').classList.add('hidden-view');
+                cerrarModal();
+            } else {
+                viewBloqueado.classList.add('hidden-view');
+                if (!currentUser) document.getElementById('view-login').classList.remove('hidden-view');
+            }
+            return bloqueado;
+        }
 
         // --- UTILIDADES DE SEGURIDAD ---
 
@@ -809,6 +887,7 @@
         // Administrador centralizado, AA-Panel-Administrador.html) ---
         function loginOperador(e) {
             e.preventDefault();
+            if (aplicarEstadoBloqueo()) return; // por si se cerró el registro justo antes de entrar
             const val = document.getElementById('login-op-user').value;
             if (!val) {
                 Swal.fire('Atención', 'Seleccione su nombre de la lista.', 'warning');
@@ -1811,6 +1890,12 @@
             const registroId = document.getElementById('registro_id').value;
             if (!registroId) return;
 
+            // Chequeo fresco justo antes de guardar (no solo el de al abrir la app), por si el
+            // horario se cerró o el admin activó el candado mientras el operador tenía el
+            // formulario abierto.
+            await cargarHorarioApp();
+            if (estaBloqueadoAhora()) return;
+
             if (calcTargetInput && !calcTargetInput.readOnly) calcAction('=');
             calcularModal();
 
@@ -1932,11 +2017,17 @@
                 if (error) throw error;
 
                 if (!modoEdicionAutorizada && (!data || data.length === 0)) {
-                    Swal.fire({
-                        icon: 'warning',
-                        title: 'Este artículo ya fue contado',
-                        text: 'Otro operador registró este conteo mientras tenías el formulario abierto. Tu registro no se guardó para no sobrescribirlo.'
-                    });
+                    // Sin filas afectadas: o alguien más ya lo contó, o el registro se cerró
+                    // justo en este instante (candado/horario) -- se revisa cuál fue para no
+                    // mostrar un mensaje engañoso.
+                    await cargarHorarioApp();
+                    if (!estaBloqueadoAhora()) {
+                        Swal.fire({
+                            icon: 'warning',
+                            title: 'Este artículo ya fue contado',
+                            text: 'Otro operador registró este conteo mientras tenías el formulario abierto. Tu registro no se guardó para no sobrescribirlo.'
+                        });
+                    }
                     cerrarModal();
                     actualizarAvanceOperador();
                     document.getElementById('buscador-articulos').dispatchEvent(new Event('input'));

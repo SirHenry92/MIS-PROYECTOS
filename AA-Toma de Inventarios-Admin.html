@@ -155,6 +155,9 @@
                 <div id="lbl-username" class="font-bold text-sm text-gray-800 leading-none">Usuario</div>
                 <div class="text-[11px] text-teal-600 font-bold uppercase mt-1">Administrador</div>
             </div>
+            <button onclick="abrirModalHorarios()" class="text-gray-400 hover:text-amber-600 transition-colors bg-gray-50 hover:bg-amber-50 w-9 h-9 rounded-full flex items-center justify-center border border-gray-200" title="Horarios y Bloqueo de Registro">
+                <i class="fa-solid fa-lock"></i>
+            </button>
             <button onclick="abrirModalBackup()" class="text-gray-400 hover:text-teal-600 transition-colors bg-gray-50 hover:bg-teal-50 w-9 h-9 rounded-full flex items-center justify-center border border-gray-200" title="Respaldo y Restauración">
                 <i class="fa-solid fa-database"></i>
             </button>
@@ -478,6 +481,42 @@
                         <i class="fa-solid fa-file-import mr-2"></i> Elegir Archivo de Backup
                     </button>
                     <div id="backup-restaurar-detalle" class="hidden-view mt-3 space-y-2"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL WIDGET: HORARIOS Y BLOQUEO DE REGISTRO (matriz centralizada, las 4 apps) -->
+    <div id="modal-horarios" class="fixed inset-0 modal-backdrop z-50 hidden-view flex items-center justify-center p-4 opacity-0 transition-opacity duration-300">
+        <div class="bg-white w-full max-w-3xl rounded-2xl shadow-2xl flex flex-col max-h-[92vh]" id="modal-horarios-content">
+            <div class="px-5 py-3 border-b border-gray-100 flex justify-between items-center bg-gray-50 rounded-t-2xl flex-shrink-0">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-lock text-gray-700"></i>
+                    <h3 class="text-sm font-bold text-gray-700 uppercase tracking-wide">Horarios y Bloqueo de Registro</h3>
+                </div>
+                <button onclick="cerrarModalHorarios()" class="text-gray-400 hover:text-gray-700"><i class="fa-solid fa-xmark text-xl"></i></button>
+            </div>
+            <div class="p-5 overflow-y-auto bg-white flex-grow">
+                <p class="text-xs text-gray-500 mb-4">
+                    <b>Candado manual</b>: cierra el registro de esa app de inmediato, sin importar el horario (úsalo para un cierre imprevisto). <b>Horario automático</b>: si lo activas, la app solo deja registrar conteos dentro del rango y los días marcados; fuera de eso, el operador ve una pantalla de "cerrado". Esto se aplica también del lado del servidor (no es solo visual): un operador no puede guardar un conteo fuera de lo permitido aunque intente forzarlo.
+                </p>
+                <div class="overflow-x-auto border border-gray-200 rounded-xl">
+                    <table class="w-full text-sm">
+                        <thead class="bg-gray-800 text-white text-[11px] uppercase">
+                            <tr>
+                                <th class="px-3 py-2 text-left">App</th>
+                                <th class="px-3 py-2 text-center">Candado<br>Manual</th>
+                                <th class="px-3 py-2 text-center">Horario<br>Automático</th>
+                                <th class="px-3 py-2 text-center">Apertura</th>
+                                <th class="px-3 py-2 text-center">Cierre</th>
+                                <th class="px-3 py-2 text-center">Días Habilitados</th>
+                                <th class="px-3 py-2"></th>
+                            </tr>
+                        </thead>
+                        <tbody id="horarios-tbody" class="divide-y divide-gray-100">
+                            <tr><td colspan="7" class="text-center py-8 text-gray-400"><i class="fa-solid fa-circle-notch fa-spin mr-2"></i>Cargando...</td></tr>
+                        </tbody>
+                    </table>
                 </div>
             </div>
         </div>
@@ -1259,6 +1298,127 @@
                 cargarReportesAdmin();
             } catch (err) {
                 Swal.fire('Error al restaurar', err.message, 'error');
+            }
+        }
+
+        // --- 6C. HORARIOS Y BLOQUEO DE REGISTRO (matriz centralizada, las 4 apps) ---
+        // Una sola tabla (horario_operadores, una fila por app) controla si los operadores
+        // pueden registrar conteos en este momento: candado manual (bloqueo inmediato, sin
+        // importar el horario) y/o horario automático (rango de horas + días de la semana).
+        // Se aplica también en las políticas RLS del lado del servidor (función
+        // operador_puede_registrar), no solo como una pantalla bonita en el navegador -- así
+        // un operador no puede guardar un conteo fuera de lo permitido aunque manipule la app.
+        let horariosCargados = {};
+        const DIAS_SEMANA = [['lun', 'L'], ['mar', 'M'], ['mie', 'M'], ['jue', 'J'], ['vie', 'V'], ['sab', 'S'], ['dom', 'D']];
+
+        function abrirModalHorarios() {
+            const modal = document.getElementById('modal-horarios');
+            modal.classList.remove('hidden-view');
+            void modal.offsetWidth;
+            modal.classList.remove('opacity-0');
+            cargarHorariosOperadores();
+        }
+
+        function cerrarModalHorarios() {
+            const modal = document.getElementById('modal-horarios');
+            modal.classList.add('opacity-0');
+            setTimeout(() => modal.classList.add('hidden-view'), 200);
+        }
+
+        async function cargarHorariosOperadores() {
+            const tbody = document.getElementById('horarios-tbody');
+            try {
+                const { data, error } = await _supabase.from('horario_operadores').select('*');
+                if (error) throw error;
+                horariosCargados = {};
+                (data || []).forEach(r => { horariosCargados[r.app] = r; });
+                renderizarMatrizHorarios();
+            } catch (err) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center py-8 text-red-400">Error cargando: ${esc(err.message)}</td></tr>`;
+            }
+        }
+
+        function renderizarMatrizHorarios() {
+            const tbody = document.getElementById('horarios-tbody');
+            tbody.innerHTML = Object.keys(APPS).map(key => {
+                const app = APPS[key];
+                const cfg = horariosCargados[key] || {};
+                const diasSet = new Set(cfg.dias_habilitados || []);
+                const horaApertura = (cfg.hora_apertura || '07:00:00').slice(0, 5);
+                const horaCierre = (cfg.hora_cierre || '17:45:00').slice(0, 5);
+
+                const diasHtml = DIAS_SEMANA.map(([codigo, letra]) => `
+                    <label class="inline-block cursor-pointer" title="${esc(codigo)}">
+                        <input type="checkbox" class="chk-dia peer hidden" data-dia="${codigo}" ${diasSet.has(codigo) ? 'checked' : ''}>
+                        <span class="w-6 h-6 flex items-center justify-center rounded-full border border-gray-300 text-[10px] font-bold text-gray-500 select-none peer-checked:bg-teal-600 peer-checked:text-white peer-checked:border-teal-600">${letra}</span>
+                    </label>
+                `).join('');
+
+                return `
+                    <tr data-app="${key}">
+                        <td class="px-3 py-3 font-semibold text-gray-700 whitespace-nowrap"><i class="${app.icon} mr-1.5 text-gray-400"></i>${esc(app.label)}</td>
+                        <td class="px-3 py-3 text-center">
+                            <input type="checkbox" class="chk-bloqueo-manual w-4 h-4 accent-red-600" ${cfg.bloqueo_manual ? 'checked' : ''}>
+                        </td>
+                        <td class="px-3 py-3 text-center">
+                            <input type="checkbox" class="chk-habilitar-horario w-4 h-4 accent-teal-600" ${cfg.habilitar_horario ? 'checked' : ''}>
+                        </td>
+                        <td class="px-3 py-3"><input type="time" class="inp-hora-apertura smart-input py-1.5 text-xs" value="${esc(horaApertura)}"></td>
+                        <td class="px-3 py-3"><input type="time" class="inp-hora-cierre smart-input py-1.5 text-xs" value="${esc(horaCierre)}"></td>
+                        <td class="px-3 py-3"><div class="flex gap-1 justify-center flex-wrap">${diasHtml}</div></td>
+                        <td class="px-3 py-3 text-right whitespace-nowrap">
+                            <button onclick="guardarHorarioApp('${key}')" class="btn-secondary text-xs py-1.5 px-3 bg-teal-600 hover:bg-teal-700 text-white">
+                                <i class="fa-solid fa-floppy-disk mr-1"></i> Guardar
+                            </button>
+                        </td>
+                    </tr>
+                `;
+            }).join('');
+        }
+
+        async function guardarHorarioApp(key) {
+            const app = APPS[key];
+            const fila = document.querySelector(`#horarios-tbody tr[data-app="${key}"]`);
+            if (!fila) return;
+
+            const bloqueoManual = fila.querySelector('.chk-bloqueo-manual').checked;
+            const habilitarHorario = fila.querySelector('.chk-habilitar-horario').checked;
+            const horaApertura = fila.querySelector('.inp-hora-apertura').value || '07:00';
+            const horaCierre = fila.querySelector('.inp-hora-cierre').value || '17:45';
+            const dias = [...fila.querySelectorAll('.chk-dia:checked')].map(c => c.dataset.dia);
+
+            if (habilitarHorario && dias.length === 0) {
+                Swal.fire('Falta seleccionar días', 'Elige al menos un día en el que el registro esté habilitado, o desactiva el horario automático.', 'warning');
+                return;
+            }
+            if (habilitarHorario && horaApertura >= horaCierre) {
+                Swal.fire('Horario inválido', 'La hora de apertura debe ser antes que la hora de cierre.', 'warning');
+                return;
+            }
+
+            const btn = fila.querySelector('button');
+            const htmlOriginal = btn.innerHTML;
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i>';
+
+            try {
+                const payload = {
+                    app: key,
+                    bloqueo_manual: bloqueoManual,
+                    habilitar_horario: habilitarHorario,
+                    hora_apertura: horaApertura,
+                    hora_cierre: horaCierre,
+                    dias_habilitados: dias
+                };
+                const { error } = await _supabase.from('horario_operadores').upsert(payload, { onConflict: 'app' });
+                if (error) throw error;
+                horariosCargados[key] = payload;
+                Swal.fire({ toast: true, position: 'top', icon: 'success', title: `Horario de ${app.label} actualizado`, showConfirmButton: false, timer: 1800 });
+            } catch (err) {
+                Swal.fire('Error', 'No se pudo guardar: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = htmlOriginal;
             }
         }
 
