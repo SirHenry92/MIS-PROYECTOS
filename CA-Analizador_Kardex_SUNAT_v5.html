@@ -812,6 +812,23 @@ function periodoToDate(periodoStr){
   }
   return null;
 }
+// La columna NUMERO de una fila de CIERRE trae el período que cierra en
+// formato "YYYYMM" (p.ej. "202601" = enero 2026) — es la señal más
+// confiable de qué mes cierra esa fila, MÁS que su propia fecha: en la
+// práctica esa fecha suele ser sólo el timestamp de cuándo corrió el
+// proceso de cierre (a veces el día 1 del mes que cierra, otras veces el
+// día 1 del mes SIGUIENTE con hora de madrugada), no el mes que realmente
+// se está cerrando. Sin esto, dos filas de CIERRE con el mismo NUMERO
+// "202601" podían terminar normalizadas a meses distintos según qué hora
+// trajera cada una.
+function numeroToPeriodo(numeroStr){
+  const s = String(numeroStr==null?'':numeroStr).trim();
+  const m = /^(\d{4})(\d{2})$/.exec(s);
+  if(!m) return null;
+  const y = parseInt(m[1],10), mo = parseInt(m[2],10);
+  if(mo < 1 || mo > 12 || y < 2000 || y > 2099) return null;
+  return {y, m: mo - 1};
+}
 function E(code,sev,msg){ return {code,sev,msg}; }
 function round(x){ return Math.round(x*10000)/10000; }
 function round2(x){ return Math.round(x*100)/100; }
@@ -1146,7 +1163,9 @@ function parseConsolidado(rows, fileName){
 
         if(fechaObj && (esCierre || tipoOpRaw === '16')){
           if(esCierre){
-            const y = fechaObj.getFullYear(), m = fechaObj.getMonth();
+            const per = numeroToPeriodo(r[3]);
+            const y = per ? per.y : fechaObj.getFullYear();
+            const m = per ? per.m : fechaObj.getMonth();
             fechaObj = new Date(y, m + 1, 0, 23, 59, 59, 999);
             isCierreArrastre = true;
             if(saldoCant === 0 && entCant !== 0){ saldoCant = entCant; saldoCU = entCU; saldoCT = entCT; }
