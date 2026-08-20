@@ -1438,6 +1438,11 @@ function computeKpis(allGroups){
       monthKeys.add(monthKeyOf(r.fecha));
     });
   }
+  // Los meses del filtro incluyen TODO el rango de datos, no sólo los que
+  // tienen movimiento real — un mes sin movimiento igual tiene una fila de
+  // saldo arrastrado que mostrar (ver buildAllLinesWithCarryForward), así
+  // que también debe poder seleccionarse en el filtro "Mes".
+  for(const mk of fullMonthRange()) monthKeys.add(mk);
   const meses = Array.from(monthKeys).sort((a,b)=>{
     if(a===SIN_FECHA_KEY) return 1;
     if(b===SIN_FECHA_KEY) return -1;
@@ -1485,6 +1490,31 @@ function* iterateAllLines(allGroups){
       yield r;
     }
   }
+}
+// Igual que buildAndSendExcelParts, pero para la tabla EN PANTALLA ("Detalle
+// Kardex") en vez del export: arma la lista completa de líneas insertando,
+// para cada mes del rango completo de datos (incluidos los meses sin
+// ningún movimiento real), la fila sintética de "SALDO INICIAL (arrastrado
+// del mes anterior)" de cada artículo. Sin esto, la tabla en pantalla sólo
+// mostraba movimientos reales — un artículo con cierre en diciembre y sin
+// movimiento en enero simplemente "desaparecía" de enero (no había fila
+// alguna que mostrar) y su saldo sólo volvía a verse en febrero, como si el
+// saldo de diciembre nunca hubiese existido en enero.
+function buildAllLinesWithCarryForward(){
+  const raw = Array.from(iterateAllLines(workerState.allGroups));
+  const monthGroups = groupLinesByMonth(raw);
+  const monthKeysToProcess = new Set(fullMonthRange());
+  for(const k of monthGroups.keys()) if(k !== SIN_FECHA_KEY) monthKeysToProcess.add(k);
+  const sortedMonthKeys = Array.from(monthKeysToProcess).sort((a,b)=>a.localeCompare(b));
+  const out = [];
+  for(const monthKey of sortedMonthKeys){
+    const monthLinesRaw = monthGroups.get(monthKey) || [];
+    const monthLines = monthLinesRaw.length ? withSaldoInicialRows(monthLinesRaw, monthKey) : buildEmptyMonthLines(monthKey);
+    out.push(...monthLines);
+  }
+  const sinFecha = monthGroups.get(SIN_FECHA_KEY);
+  if(sinFecha) out.push(...sinFecha);
+  return out;
 }
 
 /* ---------------- exportación a Excel (se construye aquí mismo, en el worker,
@@ -2130,7 +2160,7 @@ self.onmessage = async function(e){
       const startIdx = (page-1)*pageSize;
       let total = 0;
       const pageRows = [];
-      for(const line of iterateAllLines(workerState.allGroups)){
+      for(const line of buildAllLinesWithCarryForward()){
         if(!matchesFilters(line, filters)) continue;
         if(total >= startIdx && pageRows.length < pageSize) pageRows.push(line);
         total++;
