@@ -1018,10 +1018,7 @@ function parseConsolidado(rows, fileName){
       if(!meta.ruc || !/^\d{11}$/.test(meta.ruc)) metaErrs.push(E('RUC_INVALIDO','ALTA','RUC vacío o con formato inválido'));
       if(!meta.razonSocial) metaErrs.push(E('FALTA_RAZON_SOCIAL','BAJA','Falta razón social'));
 
-      // Primera pasada: sólo junta las filas del bloque del ítem (sin
-      // decidir fechas todavía) — hace falta poder mirar hacia adelante
-      // antes de fijar la fecha de una fila de CIERRE (ver más abajo).
-      const blockRows = [];
+      const recs = [];
       while(i < n){
         const r = rows[i];
         const c0cRaw = r && r[0]!=null ? r[0] : '';
@@ -1030,81 +1027,42 @@ function parseConsolidado(rows, fileName){
         if(c0c.indexOf('ITEM:') === 0) break;
         if(!r || r.every(c=>c==null||c==='')){ i++; continue; }
 
+        // Detección y normalización de filas de CIERRE/arrastre de saldo —
+        // igual que "CA-Generador de Kardex.html". TIPO=CIERRE / SERIE=CI son
+        // las señales que definen si una fila es un cierre de período: el
+        // texto de TIPO OPERACIÓN ("SALDO INICIAL") es sólo la etiqueta
+        // genérica que SUNAT usa para el código de operación 16 y NO indica
+        // por sí sola si la fila abre o cierra el período — de hecho es
+        // habitual que una fila con TIPO=CIERRE / SERIE=CI diga "SALDO
+        // INICIAL" en TIPO OPERACIÓN. Por eso TIPO/SERIE tienen prioridad: si
+        // están presentes, la fila SIEMPRE se trata como cierre del mes de su
+        // propia fecha (que pasa a ser el saldo inicial del mes siguiente),
+        // sin importar qué diga el texto de TIPO OPERACIÓN.
         const t10Val = str(r[1]).toUpperCase();
         const serieVal = str(r[2]).toUpperCase();
         const tipoOpStr = str(r[4]).toUpperCase();
         const tipoOpRaw = /^\d+$/.test(tipoOpStr) ? tipoOpStr.padStart(2,'0') : tipoOpStr;
-        const esSaldoInicial = (tipoOpStr.indexOf('SALDO INI') !== -1 || tipoOpStr === 'SALDO INICIAL');
-        const esCierre = !esSaldoInicial && (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.indexOf('CIERRE') !== -1);
+        const esCierre = (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.indexOf('CIERRE') !== -1 || tipoOpStr.indexOf('SALDO INI') !== -1 || tipoOpStr === 'SALDO INICIAL');
 
         let fechaObj = r[0] instanceof Date ? r[0] : parseMaybeDate(r[0]);
-        const entCant = num(r[5]), entCU = num(r[6]), entCT = num(r[7]);
-        const salCant = num(r[8]), salCU = num(r[9]), salCT = num(r[10]);
-        const saldoCant = num(r[11]), saldoCU = num(r[12]), saldoCT = num(r[13]);
+        let entCant = num(r[5]), entCU = num(r[6]), entCT = num(r[7]);
+        let salCant = num(r[8]), salCU = num(r[9]), salCT = num(r[10]);
+        let saldoCant = num(r[11]), saldoCU = num(r[12]), saldoCT = num(r[13]);
+        let isCierreArrastre = false;
 
-        // Muchas filas de SALDO INICIAL no traen fecha propia en el Excel: el
-        // saldo final de diciembre 2025 se registra como el saldo inicial de
-        // enero 2026, pero sin una fecha explícita que lo ubique en enero. Sin
-        // esto caía al archivo "Sin fecha" del export en vez de aparecer como
-        // apertura del mes que realmente le corresponde (el del "Período" del
-        // encabezado del ítem).
-        if(!fechaObj && esSaldoInicial){
+        // Algunas filas de cierre/arrastre no traen fecha propia en el
+        // Excel: se infiere del "Período" del encabezado del ítem para que
+        // al menos quede ubicada en el mes correcto antes de normalizarla
+        // más abajo (si no, caía al archivo "Sin fecha" del export).
+        if(!fechaObj && esCierre){
           const per = periodoToDate(meta.periodo);
           if(per) fechaObj = new Date(per.y, per.m, 1, 0, 0, 0, 0);
         }
 
-        blockRows.push({ r, fechaObj, entCant, entCU, entCT, salCant, salCU, salCT, saldoCant, saldoCU, saldoCT, esSaldoInicial, esCierre, tipoOpRaw });
-        i++;
-      }
-
-      // Segunda pasada: a cada fila de CIERRE se le fija la fecha mirando a
-      // la SIGUIENTE fila con movimiento real (no otra fila de cierre/saldo
-      // inicial), no sólo su propia fecha cruda. Esto corrige el caso donde
-      // el Excel marca una fila como CIERRE de un período (p.ej. NUMERO
-      // "202601", fecha 01-01-2026) pero en realidad es el saldo final del
-      // período ANTERIOR (diciembre 2025) arrastrado como saldo inicial de
-      // enero — se lo reconoce porque aparece ANTES de los movimientos de
-      // enero, no después de los de diciembre. Si la fecha propia de la fila
-      // ya es coherente con esa posición (su mes es anterior al de la
-      // siguiente transacción real), se respeta la normalización de
-      // "fin de su propio mes" de siempre.
-      for(let bi=0; bi<blockRows.length; bi++){
-        const br = blockRows[bi];
-        if(!br.esCierre || !br.fechaObj) continue;
-        let nextReal = null;
-        for(let bj=bi+1; bj<blockRows.length; bj++){
-          const cand = blockRows[bj];
-          if(cand.esCierre || cand.esSaldoInicial) continue;
-          if(cand.fechaObj){ nextReal = cand; break; }
-        }
-        if(nextReal){
-          const ownMonthKey = monthKeyOf(br.fechaObj);
-          const nextMonthKey = monthKeyOf(nextReal.fechaObj);
-          if(ownMonthKey >= nextMonthKey){
-            const [ny, nm] = nextMonthKey.split('-').map(Number);
-            br.fechaObj = new Date(ny, nm - 1, 0, 23, 59, 59, 999);
-            continue;
-          }
-        }
-        const y = br.fechaObj.getFullYear(), m = br.fechaObj.getMonth();
-        br.fechaObj = new Date(y, m + 1, 0, 23, 59, 59, 999);
-      }
-
-      const recs = [];
-      for(const br of blockRows){
-        const r = br.r;
-        let fechaObj = br.fechaObj;
-        let entCant = br.entCant, entCU = br.entCU, entCT = br.entCT;
-        let salCant = br.salCant, salCU = br.salCU, salCT = br.salCT;
-        let saldoCant = br.saldoCant, saldoCU = br.saldoCU, saldoCT = br.saldoCT;
-        let isCierreArrastre = false, isSaldoInicialFlag = false;
-
-        if(fechaObj && (br.esSaldoInicial || br.esCierre || br.tipoOpRaw === '16')){
-          if(br.esSaldoInicial){
-            fechaObj.setHours(0,0,0,0);
-            isSaldoInicialFlag = true;
-            if(saldoCant === 0 && entCant !== 0){ saldoCant = entCant; saldoCU = entCU; saldoCT = entCT; }
-          } else if(br.esCierre){
+        if(fechaObj && (esCierre || tipoOpRaw === '16')){
+          if(esCierre){
+            const y = fechaObj.getFullYear(), m = fechaObj.getMonth();
+            fechaObj = new Date(y, m + 1, 0, 23, 59, 59, 999);
             isCierreArrastre = true;
             if(saldoCant === 0 && entCant !== 0){ saldoCant = entCant; saldoCU = entCU; saldoCT = entCT; }
           } else if(entCant === 0 && saldoCant !== 0){
@@ -1120,10 +1078,26 @@ function parseConsolidado(rows, fileName){
           entCant, entCU, entCT,
           salCant, salCU, salCT,
           saldoCant, saldoCU, saldoCT,
-          isCierreArrastre, isSaldoInicialFlag,
+          isCierreArrastre,
           errores: [], sevMax: ''
         });
+        i++;
       }
+      // Las filas de CIERRE cambian de fecha arriba (se normalizan al cierre
+      // de su propio mes), así que ya no queda garantizado que el orden en
+      // que aparecían en el Excel siga siendo el orden cronológico real —
+      // p.ej. un CIERRE que aparece PRIMERO en el archivo (antes que los
+      // movimientos del mes que cierra) puede terminar con una fecha
+      // normalizada POSTERIOR a esos movimientos. Sin reordenar, tanto la
+      // cascada de analyzeGroup como la búsqueda del último movimiento antes
+      // de un mes (findAperturaDeMes / buildSaldoFinalSummaryForMonth)
+      // tomarían la fila equivocada como "la más reciente". Se ordena por
+      // fecha, igual que "CA-Generador de Kardex.html" / V2 (item.transacciones.sort).
+      recs.sort((a,b) => {
+        const ta = a.fecha ? a.fecha.getTime() : Infinity;
+        const tb = b.fecha ? b.fecha.getTime() : Infinity;
+        return ta - tb;
+      });
       const key = 'CONSOLIDADO||' + fileName + '||' + meta.codigo + '||' + meta.establecimiento;
       groups.set(key, {meta, metaErrs, records: recs});
     } else {
@@ -1238,18 +1212,18 @@ function analyzeGroup(recs, tolAbs, tolRel){
       if(salCant > prev.cant + Math.max(tolAbs, 0.0001)) errs.push(E('SALIDA_MAYOR_SALDO','CRITICA','Salida ('+round(salCant)+') mayor al saldo disponible ('+round(prev.cant)+') — posible quiebre de stock'));
       if(prevFecha && r.fecha && r.fecha.getTime() < prevFecha.getTime()) errs.push(E('FECHA_DESORDEN','MEDIA','Fecha fuera de secuencia cronológica respecto al movimiento anterior'));
 
-      // Si esta fila ES el saldo inicial de un período (arrastra el saldo
-      // final del movimiento anterior), y ese movimiento anterior quedó con
-      // un saldo mal calculado, el saldo inicial que arrastra también está
+      // Si esta fila es un cierre/arrastre de saldo (se convierte en el
+      // saldo inicial del período siguiente), y el movimiento anterior del
+      // que arrastra el saldo quedó mal calculado, este cierre también está
       // mal — aunque, visto en aislado, cuadre perfectamente consigo mismo.
       // Sin este chequeo, un error en el saldo final de un mes "desaparecía"
       // al pasar al saldo inicial del siguiente.
-      if(r.isSaldoInicialFlag){
+      if(r.isCierreArrastre){
         const prevRec = recs[idx-1];
         if(prevRec && Math.abs(prevRec.diferenciaSaldo||0) > 0.009){
-          errs.push(E('SALDO_INICIAL_ARRASTRA_ERROR','ALTA','El saldo inicial de este período arrastra el saldo final mal calculado del movimiento anterior (diferencia: S/. '+round2(prevRec.diferenciaSaldo)+')'));
+          errs.push(E('SALDO_INICIAL_ARRASTRA_ERROR','ALTA','El saldo que este cierre arrastra al período siguiente viene de un saldo final mal calculado en el movimiento anterior (diferencia: S/. '+round2(prevRec.diferenciaSaldo)+')'));
         } else if(prevRec && prevRec.errores && prevRec.errores.length>0){
-          errs.push(E('SALDO_INICIAL_ARRASTRA_ERROR_PREVIO','MEDIA','El movimiento anterior, cuyo saldo final se arrastra como saldo inicial de este período, tiene observaciones sin resolver'));
+          errs.push(E('SALDO_INICIAL_ARRASTRA_ERROR_PREVIO','MEDIA','El movimiento anterior, cuyo saldo se arrastra a través de este cierre, tiene observaciones sin resolver'));
         }
       }
     }
@@ -1628,9 +1602,10 @@ function buildSaldoInicialLine(g, groupKey, opening, monthKey){
 // en esos archivos). Sin esto, el saldo final de un mes no quedaba reflejado
 // como saldo inicial del siguiente en el Excel exportado — sólo se podía
 // inferir cruzando archivos distintos.
-// Si el artículo YA trae su propia fila de SALDO INICIAL real para este mes
-// (isSaldoInicialFlag, ver parseConsolidado) no se sintetiza una segunda: la
-// fila real ya cumple ese rol y evita duplicar el mismo saldo dos veces.
+// Una fila de CIERRE real (isCierreArrastre) siempre queda fechada al cierre
+// de SU PROPIO mes (ver parseConsolidado), nunca al inicio del mes
+// siguiente — así que nunca puede coincidir con la fila sintética que se
+// arma acá para el mes siguiente y no hay riesgo de duplicar el mismo saldo.
 function withSaldoInicialRows(monthLines, monthKey){
   const seen = new Set();
   const out = [];
@@ -1638,12 +1613,10 @@ function withSaldoInicialRows(monthLines, monthKey){
     const gk = line.groupKey;
     if(gk && !seen.has(gk)){
       seen.add(gk);
-      if(!line.isSaldoInicialFlag){
-        const g = workerState.allGroups.get(gk);
-        if(g){
-          const opening = findAperturaDeMes(g, monthKey);
-          if(opening) out.push(buildSaldoInicialLine(g, gk, opening, monthKey));
-        }
+      const g = workerState.allGroups.get(gk);
+      if(g){
+        const opening = findAperturaDeMes(g, monthKey);
+        if(opening) out.push(buildSaldoInicialLine(g, gk, opening, monthKey));
       }
     }
     out.push(line);
@@ -1680,11 +1653,11 @@ function buildSaldoFinalSummaryForMonth(monthKey){
     }
     let hasErr, sevLabel, sevCode, saldoComoEsta, saldoCorregido, diferenciaSaldo, movimientos = 0;
     if(last){
-      // Las filas de CIERRE/SALDO INICIAL son marcas de arrastre de saldo, no
-      // movimientos reales — se excluyen del conteo (igual que en el
-      // Generador de Kardex, que tampoco las cuenta como transacciones).
-      movimientos = monthKey===null ? g.records.reduce((n,r)=> n + (r.isCierreArrastre||r.isSaldoInicialFlag ? 0 : 1), 0)
-        : g.records.reduce((n,r)=> n + (monthKeyOf(r.fecha)===monthKey && !r.isCierreArrastre && !r.isSaldoInicialFlag ? 1 : 0), 0);
+      // Las filas de CIERRE son marcas de arrastre de saldo, no movimientos
+      // reales — se excluyen del conteo (igual que en el Generador de
+      // Kardex, que tampoco las cuenta como transacciones).
+      movimientos = monthKey===null ? g.records.reduce((n,r)=> n + (r.isCierreArrastre ? 0 : 1), 0)
+        : g.records.reduce((n,r)=> n + (monthKeyOf(r.fecha)===monthKey && !r.isCierreArrastre ? 1 : 0), 0);
       hasErr = last.errores && last.errores.length>0;
       sevCode = hasErr ? last.sevMax : '';
       sevLabel = hasErr ? (SEV_LABEL_W[last.sevMax]||'') : '';
