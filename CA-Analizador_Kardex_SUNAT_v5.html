@@ -782,9 +782,27 @@ function dateFromSerial(serial){
     return new Date(dc.y, dc.m-1, dc.d, dc.H||0, dc.M||0, Math.round(dc.S||0));
   }catch(e){ return null; }
 }
+// SheetJS (con cellDates:true) entrega objetos Date cuyos componentes UTC
+// (getUTCFullYear/getUTCMonth/... ) son los que realmente representan la
+// fecha/hora escrita en la celda de Excel — NO sus componentes locales. El
+// resto de este script (monthKeyOf, fmtFecha, la escritura de celdas de
+// fecha vía ExcelJS, etc.) lee/escribe fechas usando getters LOCALES,
+// asumiendo que esos componentes locales son el "wall clock" real. Si el
+// navegador no corre en UTC (p.ej. Perú, UTC-5), un Date de SheetJS pasado
+// tal cual queda desfasado por el offset de la zona horaria del navegador
+// (se observó un salto de +5h, incluso cruzando de día, ej. 31/07 22:25:48
+// -> 01/08 03:25:48). Se re-ancla aquí, una sola vez, tomando los
+// componentes UTC (los reales) y reconstruyéndolos como un Date LOCAL con
+// esos mismos valores, de modo que el resto del código —que ya asume
+// semántica local/"wall clock"— quede correcto sin importar la zona
+// horaria del navegador.
+function reanchorLocalDate(d){
+  if(!(d instanceof Date) || isNaN(d.getTime())) return d;
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds());
+}
 function parseMaybeDate(v){
   if(v==null||v==='') return null;
-  if(v instanceof Date) return v;
+  if(v instanceof Date) return reanchorLocalDate(v);
   if(typeof v === 'number') return dateFromSerial(v);
   const s = v.toString().trim();
   if(!s) return null;
@@ -1164,7 +1182,7 @@ function parseConsolidado(rows, fileName){
         const tipoOpRaw = /^\d+$/.test(tipoOpStr) ? tipoOpStr.padStart(2,'0') : tipoOpStr;
         const esCierre = (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.indexOf('CIERRE') !== -1 || tipoOpStr.indexOf('SALDO INI') !== -1 || tipoOpStr === 'SALDO INICIAL');
 
-        let fechaObj = r[0] instanceof Date ? r[0] : parseMaybeDate(r[0]);
+        let fechaObj = r[0] instanceof Date ? reanchorLocalDate(r[0]) : parseMaybeDate(r[0]);
         let entCant = num(r[5]), entCU = num(r[6]), entCT = num(r[7]);
         let salCant = num(r[8]), salCU = num(r[9]), salCT = num(r[10]);
         let saldoCant = num(r[11]), saldoCU = num(r[12]), saldoCT = num(r[13]);
@@ -1265,7 +1283,7 @@ function parseDetalle(rows, fileName){
     g.records.push({
       origen:'DETALLE', archivo:fileName,
       codigo:itemCode, descripcion:'', almacen: g.meta.almacen,
-      fecha: (idx.fecha>=0 && r[idx.fecha] instanceof Date) ? r[idx.fecha] : parseMaybeDate(idx.fecha>=0? r[idx.fecha]: null),
+      fecha: (idx.fecha>=0 && r[idx.fecha] instanceof Date) ? reanchorLocalDate(r[idx.fecha]) : parseMaybeDate(idx.fecha>=0? r[idx.fecha]: null),
       tipoDoc: idx.tipo>=0?str(r[idx.tipo]):'', serie: idx.serie>=0?str(r[idx.serie]):'', numero: idx.numero>=0?str(r[idx.numero]):'',
       tipoOperacion: idx.tipoOp>=0?str(r[idx.tipoOp]):'',
       entCant: idx.entCant>=0?num(r[idx.entCant]):0, entCU: idx.entCU>=0?num(r[idx.entCU]):0, entCT: idx.entCT>=0?num(r[idx.entCT]):0,
@@ -1605,7 +1623,7 @@ function addKardexRow(ws, r){
   }
   row.getCell(22).alignment = ST_WRAP;
 
-  const difCell = row.getCell(24);
+  const difCell = row.getCell(25);
   if(Math.abs(r.diferencia) > 0.01){
     difCell.font = r.diferencia<0 ? ST_FONT_NEG : ST_FONT_POS;
   }
@@ -1715,7 +1733,13 @@ function buildSaldoInicialLine(g, groupKey, opening, monthKey){
     entCant: 0, entCU: 0, entCT: 0, salCant: 0, salCU: 0, salCT: 0,
     saldoCant: opening.saldoCant, saldoCU: opening.saldoCU, saldoCT: opening.saldoCT,
     errores: errs, sevMax: errs.length ? errs.reduce((mx,e)=> SEV_RANK[e.sev]>SEV_RANK[mx]?e.sev:mx, errs[0].sev) : '',
-    valorOriginal: 0, valorCorregido: 0, diferencia: 0
+    // No es un movimiento (no hay entrada/salida propia), así que "Valor
+    // Original/Correcto" no puede ser entCT-salCT como en una fila normal.
+    // Se usa el saldo valorizado que arrastra — como quedó registrado vs.
+    // como debería estar — para que estas columnas nunca queden vacías y
+    // reflejen, igual que el resto del Kardex, si ese saldo arrastrado tiene
+    // o no un error.
+    valorOriginal: round2(opening.saldoCT), valorCorregido: round2(opening.saldoCorregido), diferencia: round2(opening.diferenciaSaldo||0)
   };
 }
 // Inserta, para cada artículo, una fila sintética de "SALDO INICIAL" al
@@ -1729,8 +1753,61 @@ function buildSaldoInicialLine(g, groupKey, opening, monthKey){
 // de SU PROPIO mes (ver parseConsolidado), nunca al inicio del mes
 // siguiente — así que nunca puede coincidir con la fila sintética que se
 // arma acá para el mes siguiente y no hay riesgo de duplicar el mismo saldo.
+// Recorre TODOS los artículos conocidos y arma, para un mes SIN movimiento
+// real alguno, una línea de "SALDO INICIAL (arrastrado del mes anterior)"
+// por cada artículo que ya existía (tenía movimiento previo). Sin esto, un
+// mes sin movimientos no generaba archivo/fila alguna y el saldo quedaba
+// "perdido" hasta el siguiente mes CON movimiento — el usuario pidió
+// explícitamente que el saldo se arrastre mes a mes hasta el final del
+// rango de fechas disponible, aunque varios meses intermedios no tengan
+// ningún movimiento real.
+function buildEmptyMonthLines(monthKey){
+  const out = [];
+  for(const [gk, g] of workerState.allGroups){
+    const opening = findAperturaDeMes(g, monthKey);
+    if(opening) out.push(buildSaldoInicialLine(g, gk, opening, monthKey));
+  }
+  return out;
+}
+// Determina el rango COMPLETO de meses cubierto por los datos (del primer
+// al último mes con algún movimiento fechado, entre TODOS los artículos),
+// para poder generar un archivo por cada mes del rango — incluidos los
+// meses sin ningún movimiento real — y así arrastrar el saldo hasta el
+// final, tal como se pidió.
+function fullMonthRange(){
+  let minKey = null, maxKey = null;
+  for(const [, g] of workerState.allGroups){
+    for(const r of g.records){
+      const mk = monthKeyOf(r.fecha);
+      if(mk === SIN_FECHA_KEY) continue;
+      if(minKey===null || mk<minKey) minKey = mk;
+      if(maxKey===null || mk>maxKey) maxKey = mk;
+    }
+  }
+  if(minKey===null) return [];
+  const keys = [];
+  let [y, m] = minKey.split('-').map(Number);
+  const [ey, em] = maxKey.split('-').map(Number);
+  while(y<ey || (y===ey && m<=em)){
+    keys.push(y+'-'+String(m).padStart(2,'0'));
+    m++; if(m>12){ m=1; y++; }
+  }
+  return keys;
+}
+// Para cada artículo, la PRIMERA línea real que le corresponde a este mes
+// (si la hay) — se usa para detectar si esa primera línea YA es, en la
+// práctica, un cierre/arrastre con el mismo saldo que se armaría como fila
+// sintética, y así no duplicarla.
+function firstLineByGroup(monthLines){
+  const map = new Map();
+  for(const line of monthLines){
+    if(line.groupKey && !map.has(line.groupKey)) map.set(line.groupKey, line);
+  }
+  return map;
+}
 function withSaldoInicialRows(monthLines, monthKey){
   const seen = new Set();
+  const firstByGroup = firstLineByGroup(monthLines);
   const out = [];
   for(const line of monthLines){
     const gk = line.groupKey;
@@ -1739,7 +1816,18 @@ function withSaldoInicialRows(monthLines, monthKey){
       const g = workerState.allGroups.get(gk);
       if(g){
         const opening = findAperturaDeMes(g, monthKey);
-        if(opening) out.push(buildSaldoInicialLine(g, gk, opening, monthKey));
+        // Algunas filas de CIERRE reales, pese a la normalización de fecha
+        // en parseConsolidado, terminan cayendo dentro del mismo mes que
+        // están abriendo (p.ej. cuando su NUMERO no viene en formato
+        // YYYYMM y hay que recurrir a su fecha cruda, que a veces es sólo
+        // un timestamp de proceso batch). Si la PRIMERA línea real del
+        // artículo en este mes ya es un cierre/arrastre con el mismo saldo
+        // que arma la fila sintética, se omite la sintética para no
+        // duplicar el mismo saldo inicial dos veces en el mismo archivo.
+        const first = firstByGroup.get(gk);
+        const yaTieneAperturaPropia = !!(first && first.isCierreArrastre && opening &&
+          Math.abs((first.saldoCT||0) - opening.saldoCT) < 0.01);
+        if(opening && !yaTieneAperturaPropia) out.push(buildSaldoInicialLine(g, gk, opening, monthKey));
       }
     }
     out.push(line);
@@ -1907,17 +1995,40 @@ async function buildAndSendExcelParts(lines){
   await tick();
   const monthGroups = groupLinesByMonth(lines);
 
+  // El rango de meses a exportar es la UNIÓN entre los meses que ya tienen
+  // línea propia y el rango completo (primer a último mes con datos, entre
+  // todos los artículos) — así un mes intermedio sin ningún movimiento real
+  // también recibe su archivo, con el saldo arrastrado del último mes que sí
+  // tuvo movimiento, hasta el final del rango disponible.
+  const monthKeysToProcess = new Set(fullMonthRange());
+  for(const k of monthGroups.keys()) if(k !== SIN_FECHA_KEY) monthKeysToProcess.add(k);
+  const sortedMonthKeys = Array.from(monthKeysToProcess).sort((a,b)=>a.localeCompare(b));
+
   const fileJobs = [];
-  for(const [monthKey, monthLinesRaw] of monthGroups){
-    // El bucket "Sin fecha" no representa un mes real, así que no se le
-    // arrastra saldo inicial de ningún mes anterior.
-    const monthLines = monthKey===SIN_FECHA_KEY ? monthLinesRaw : withSaldoInicialRows(monthLinesRaw, monthKey);
+  for(const monthKey of sortedMonthKeys){
+    const monthLinesRaw = monthGroups.get(monthKey) || [];
+    const monthLines = monthLinesRaw.length ? withSaldoInicialRows(monthLinesRaw, monthKey) : buildEmptyMonthLines(monthKey);
     const numSub = Math.max(1, Math.ceil(monthLines.length / SAFE_SINGLE_FILE_LINES));
     for(let si=0; si<numSub; si++){
       fileJobs.push({
         monthKey, subIndex: si, subTotal: numSub,
         lines: numSub>1 ? monthLines.slice(si*SAFE_SINGLE_FILE_LINES, (si+1)*SAFE_SINGLE_FILE_LINES) : monthLines,
         label: monthLabel(monthKey) + (numSub>1 ? ` (${si+1} de ${numSub})` : '')
+      });
+    }
+  }
+
+  // El bucket "Sin fecha" no representa un mes real, así que no se le
+  // arrastra saldo inicial de ningún mes anterior, y no forma parte del
+  // rango de meses recorrido arriba — se agrega aparte si existe.
+  const sinFechaLines = monthGroups.get(SIN_FECHA_KEY);
+  if(sinFechaLines && sinFechaLines.length){
+    const numSub = Math.max(1, Math.ceil(sinFechaLines.length / SAFE_SINGLE_FILE_LINES));
+    for(let si=0; si<numSub; si++){
+      fileJobs.push({
+        monthKey: SIN_FECHA_KEY, subIndex: si, subTotal: numSub,
+        lines: numSub>1 ? sinFechaLines.slice(si*SAFE_SINGLE_FILE_LINES, (si+1)*SAFE_SINGLE_FILE_LINES) : sinFechaLines,
+        label: monthLabel(SIN_FECHA_KEY) + (numSub>1 ? ` (${si+1} de ${numSub})` : '')
       });
     }
   }
