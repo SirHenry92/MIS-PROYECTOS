@@ -706,6 +706,27 @@ function parseMaybeDate(v){
   const d = new Date(s);
   return isNaN(d.getTime()) ? null : d;
 }
+const MESES_MAP_ES = {ENERO:0,FEBRERO:1,MARZO:2,ABRIL:3,MAYO:4,JUNIO:5,JULIO:6,AGOSTO:7,SEPTIEMBRE:8,SETIEMBRE:8,OCTUBRE:9,NOVIEMBRE:10,DICIEMBRE:11};
+// El campo "Período" del encabezado de cada ítem (p.ej. "01/2026", "2026-01"
+// o "Enero 2026") identifica el mes que ese bloque está reportando. Se usa
+// como último recurso para fechar una fila de SALDO INICIAL que no trae
+// fecha propia (ver más abajo) — sin esto, esas filas quedaban en el
+// archivo "Sin fecha" del export, en vez de aparecer como saldo de arranque
+// del mes que realmente les corresponde.
+function periodoToDate(periodoStr){
+  if(!periodoStr) return null;
+  const s = periodoStr.trim();
+  let m = /^(\d{1,2})[\/\-](\d{4})$/.exec(s);
+  if(m) return {y: parseInt(m[2],10), m: parseInt(m[1],10)-1};
+  m = /^(\d{4})[\/\-](\d{1,2})$/.exec(s);
+  if(m) return {y: parseInt(m[1],10), m: parseInt(m[2],10)-1};
+  m = /([A-ZÁÉÍÓÚÑ]+)\D+(\d{4})/i.exec(s);
+  if(m){
+    const mm = MESES_MAP_ES[m[1].toUpperCase().normalize('NFD').replace(/[̀-ͯ]/g,'')];
+    if(mm !== undefined) return {y: parseInt(m[2],10), m: mm};
+  }
+  return null;
+}
 function E(code,sev,msg){ return {code,sev,msg}; }
 function round(x){ return Math.round(x*10000)/10000; }
 function round2(x){ return Math.round(x*100)/100; }
@@ -1017,6 +1038,17 @@ function parseConsolidado(rows, fileName){
         let salCant = num(r[8]), salCU = num(r[9]), salCT = num(r[10]);
         let saldoCant = num(r[11]), saldoCU = num(r[12]), saldoCT = num(r[13]);
         let isCierreArrastre = false, isSaldoInicialFlag = false;
+
+        // Muchas filas de SALDO INICIAL no traen fecha propia en el Excel: el
+        // saldo final de diciembre 2025 se registra como el saldo inicial de
+        // enero 2026, pero sin una fecha explícita que lo ubique en enero. Sin
+        // esto caía al archivo "Sin fecha" del export en vez de aparecer como
+        // apertura del mes que realmente le corresponde (el del "Período" del
+        // encabezado del ítem).
+        if(!fechaObj && esSaldoInicial){
+          const per = periodoToDate(meta.periodo);
+          if(per) fechaObj = new Date(per.y, per.m, 1, 0, 0, 0, 0);
+        }
 
         if(fechaObj && (esSaldoInicial || esCierre || tipoOpRaw === '16')){
           if(esSaldoInicial){
@@ -1641,110 +1673,14 @@ function monthFileName(monthKey, subIndex, subTotal){
   return `Kardex_Detalle ${name}.xlsx`;
 }
 
-// ---- Builder de un .zip mínimo (método STORE, sin comprimir de nuevo) ----
-// Los .xlsx que empaqueta ya están comprimidos internamente (son .zip), así
-// que recomprimirlos de nuevo con DEFLATE gastaría CPU por una reducción de
-// tamaño marginal — STORE (guardar tal cual) es la elección correcta acá.
-// No se usa una librería de zip aparte porque JSZip viene embebido DENTRO
-// del bundle de ExcelJS como módulo interno (vía browserify) y no queda
-// expuesto como variable global utilizable — de ahí este builder liviano y
-// autocontenido.
-const CRC_TABLE = (() => {
-  const t = new Uint32Array(256);
-  for(let n=0;n<256;n++){
-    let c = n;
-    for(let k=0;k<8;k++) c = (c & 1) ? (0xEDB88320 ^ (c >>> 1)) : (c >>> 1);
-    t[n] = c >>> 0;
-  }
-  return t;
-})();
-function crc32(bytes){
-  let crc = 0xFFFFFFFF;
-  for(let i=0;i<bytes.length;i++) crc = CRC_TABLE[(crc ^ bytes[i]) & 0xFF] ^ (crc >>> 8);
-  return (crc ^ 0xFFFFFFFF) >>> 0;
-}
-function buildStoreZip(entries){
-  const encoder = new TextEncoder();
-  const now = new Date();
-  const dosTime = ((now.getHours()&0x1F)<<11) | ((now.getMinutes()&0x3F)<<5) | ((now.getSeconds()>>1)&0x1F);
-  const dosDate = (((now.getFullYear()-1980)&0x7F)<<9) | (((now.getMonth()+1)&0xF)<<5) | (now.getDate()&0x1F);
-  const parts = [];
-  const centralParts = [];
-  let offset = 0;
-
-  for(const entry of entries){
-    const nameBytes = encoder.encode(entry.name);
-    const data = entry.data;
-    const crc = crc32(data);
-    const localOffset = offset;
-
-    const local = new Uint8Array(30 + nameBytes.length);
-    const lv = new DataView(local.buffer);
-    lv.setUint32(0, 0x04034b50, true);
-    lv.setUint16(4, 20, true);
-    lv.setUint16(6, 0, true);
-    lv.setUint16(8, 0, true);
-    lv.setUint16(10, dosTime, true);
-    lv.setUint16(12, dosDate, true);
-    lv.setUint32(14, crc, true);
-    lv.setUint32(18, data.length, true);
-    lv.setUint32(22, data.length, true);
-    lv.setUint16(26, nameBytes.length, true);
-    lv.setUint16(28, 0, true);
-    local.set(nameBytes, 30);
-    parts.push(local); offset += local.length;
-    parts.push(data); offset += data.length;
-
-    const central = new Uint8Array(46 + nameBytes.length);
-    const cv = new DataView(central.buffer);
-    cv.setUint32(0, 0x02014b50, true);
-    cv.setUint16(4, 20, true);
-    cv.setUint16(6, 20, true);
-    cv.setUint16(8, 0, true);
-    cv.setUint16(10, 0, true);
-    cv.setUint16(12, dosTime, true);
-    cv.setUint16(14, dosDate, true);
-    cv.setUint32(16, crc, true);
-    cv.setUint32(20, data.length, true);
-    cv.setUint32(24, data.length, true);
-    cv.setUint16(28, nameBytes.length, true);
-    cv.setUint16(30, 0, true);
-    cv.setUint16(32, 0, true);
-    cv.setUint16(34, 0, true);
-    cv.setUint16(36, 0, true);
-    cv.setUint32(38, 0, true);
-    cv.setUint32(42, localOffset, true);
-    central.set(nameBytes, 46);
-    centralParts.push(central);
-  }
-
-  const centralStart = offset;
-  let centralSize = 0;
-  for(const c of centralParts){ parts.push(c); offset += c.length; centralSize += c.length; }
-
-  const eocd = new Uint8Array(22);
-  const ev = new DataView(eocd.buffer);
-  ev.setUint32(0, 0x06054b50, true);
-  ev.setUint16(4, 0, true);
-  ev.setUint16(6, 0, true);
-  ev.setUint16(8, entries.length, true);
-  ev.setUint16(10, entries.length, true);
-  ev.setUint32(12, centralSize, true);
-  ev.setUint32(16, centralStart, true);
-  ev.setUint16(20, 0, true);
-  parts.push(eocd); offset += eocd.length;
-
-  const result = new Uint8Array(offset);
-  let pos = 0;
-  for(const p of parts){ result.set(p, pos); pos += p.length; }
-  return result;
-}
-
-// El export SIEMPRE entrega UN ÚNICO archivo descargable: un .zip con un
-// .xlsx por mes adentro. Antes se disparaban varias descargas individuales
-// (una por parte/mes), y el navegador podía bloquear o perder algunas de
-// las descargas automáticas seguidas — empaquetar todo en un .zip garantiza
-// una sola descarga confiable, además de mantener junto todo el análisis.
+// El export entrega UN .xlsx POR MES, cada uno como descarga independiente
+// apenas queda listo (en vez de acumular todos los .xlsx en memoria para
+// empaquetarlos juntos en un .zip al final). Con archivos grandes, sumar
+// todos los buffers antes de comprimir hace que el pico de memoria crezca
+// con el TOTAL de meses en vez de con el tamaño de un solo mes, con riesgo
+// real de colapsar la pestaña. Descargando y soltando la referencia de cada
+// mes antes de generar el siguiente, el pico depende sólo del mes más
+// pesado, sin importar cuántos meses haya en total.
 async function buildAndSendExcelParts(lines){
   postMessage({type:'exportProgress', detail:'Agrupando movimientos por mes...'});
   await tick();
@@ -1763,7 +1699,6 @@ async function buildAndSendExcelParts(lines){
   }
 
   const totalFiles = fileJobs.length;
-  const zipEntries = [];
   for(let fi=0; fi<totalFiles; fi++){
     const job = fileJobs[fi];
     postMessage({type:'exportProgress', detail:`Generando ${fi+1}/${totalFiles} — ${job.label}...`});
@@ -1771,16 +1706,13 @@ async function buildAndSendExcelParts(lines){
     const saldoSummary = buildSaldoFinalSummaryForMonth(job.monthKey);
     await tick();
     const buf = await buildOneWorkbookFile(job.lines, saldoSummary, job.label);
-    zipEntries.push({name: monthFileName(job.monthKey, job.subIndex, job.subTotal), data: buf});
+    job.lines = null; // soltar las líneas de este mes antes de seguir al siguiente
+    const filename = monthFileName(job.monthKey, job.subIndex, job.subTotal);
+    postMessage({type:'exportPart', buffer: buf, filename, part: fi+1, total: totalFiles}, [buf.buffer]);
     await tick();
   }
 
-  postMessage({type:'exportProgress', detail:'Empaquetando en .zip...'});
-  await tick();
-  const zipBuf = buildStoreZip(zipEntries);
-  postMessage({type:'exportPart', buffer: zipBuf, filename:'Kardex_Detalle_Mensual.zip', part:1, total:1}, [zipBuf.buffer]);
-  await tick();
-  postMessage({type:'exportDone', totalParts: 1});
+  postMessage({type:'exportDone', totalParts: totalFiles});
 }
 
 const workerState = { allGroups: new Map() };
