@@ -782,27 +782,24 @@ function dateFromSerial(serial){
     return new Date(dc.y, dc.m-1, dc.d, dc.H||0, dc.M||0, Math.round(dc.S||0));
   }catch(e){ return null; }
 }
-// SheetJS (con cellDates:true) entrega objetos Date cuyos componentes UTC
-// (getUTCFullYear/getUTCMonth/... ) son los que realmente representan la
-// fecha/hora escrita en la celda de Excel — NO sus componentes locales. El
-// resto de este script (monthKeyOf, fmtFecha, la escritura de celdas de
-// fecha vía ExcelJS, etc.) lee/escribe fechas usando getters LOCALES,
-// asumiendo que esos componentes locales son el "wall clock" real. Si el
-// navegador no corre en UTC (p.ej. Perú, UTC-5), un Date de SheetJS pasado
-// tal cual queda desfasado por el offset de la zona horaria del navegador
-// (se observó un salto de +5h, incluso cruzando de día, ej. 31/07 22:25:48
-// -> 01/08 03:25:48). Se re-ancla aquí, una sola vez, tomando los
-// componentes UTC (los reales) y reconstruyéndolos como un Date LOCAL con
-// esos mismos valores, de modo que el resto del código —que ya asume
-// semántica local/"wall clock"— quede correcto sin importar la zona
-// horaria del navegador.
-function reanchorLocalDate(d){
-  if(!(d instanceof Date) || isNaN(d.getTime())) return d;
-  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate(), d.getUTCHours(), d.getUTCMinutes(), d.getUTCSeconds(), d.getUTCMilliseconds());
-}
+// IMPORTANTE — de dónde viene el desfase de horas visto en producción:
+// SheetJS (con cellDates:true) SÍ entrega objetos Date correctos: sus
+// componentes LOCALES (getFullYear/getMonth/getDate/getHours/...) ya
+// coinciden con el "wall clock" real de la celda de Excel, sin importar la
+// zona horaria del navegador (verificado leyendo un .xlsx real con Node
+// bajo TZ=America/Lima). El problema NO está en la lectura, sino en la
+// ESCRITURA: ExcelJS, al convertir un Date a la celda .xlsx (con numFmt de
+// fecha), usa sus componentes UTC como si fueran el "wall clock" a
+// escribir — es decir, hace exactamente lo contrario de SheetJS. Si se le
+// pasa un Date local tal cual, el archivo exportado queda desfasado por el
+// offset de la zona horaria del navegador (+5h en Perú, UTC-5; se
+// comprobó con Node+ExcelJS real que 31/07/2026 22:25:48 se exportaba como
+// 01/08/2026 ~03:26). La corrección se aplica UNA sola vez, justo antes de
+// escribir en ExcelJS (ver addKardexRow / toExcelJSDate más abajo) — NO en
+// la lectura, que ya es correcta.
 function parseMaybeDate(v){
   if(v==null||v==='') return null;
-  if(v instanceof Date) return reanchorLocalDate(v);
+  if(v instanceof Date) return v;
   if(typeof v === 'number') return dateFromSerial(v);
   const s = v.toString().trim();
   if(!s) return null;
@@ -1182,7 +1179,7 @@ function parseConsolidado(rows, fileName){
         const tipoOpRaw = /^\d+$/.test(tipoOpStr) ? tipoOpStr.padStart(2,'0') : tipoOpStr;
         const esCierre = (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.indexOf('CIERRE') !== -1 || tipoOpStr.indexOf('SALDO INI') !== -1 || tipoOpStr === 'SALDO INICIAL');
 
-        let fechaObj = r[0] instanceof Date ? reanchorLocalDate(r[0]) : parseMaybeDate(r[0]);
+        let fechaObj = r[0] instanceof Date ? r[0] : parseMaybeDate(r[0]);
         let entCant = num(r[5]), entCU = num(r[6]), entCT = num(r[7]);
         let salCant = num(r[8]), salCU = num(r[9]), salCT = num(r[10]);
         let saldoCant = num(r[11]), saldoCU = num(r[12]), saldoCT = num(r[13]);
@@ -1283,7 +1280,7 @@ function parseDetalle(rows, fileName){
     g.records.push({
       origen:'DETALLE', archivo:fileName,
       codigo:itemCode, descripcion:'', almacen: g.meta.almacen,
-      fecha: (idx.fecha>=0 && r[idx.fecha] instanceof Date) ? reanchorLocalDate(r[idx.fecha]) : parseMaybeDate(idx.fecha>=0? r[idx.fecha]: null),
+      fecha: (idx.fecha>=0 && r[idx.fecha] instanceof Date) ? r[idx.fecha] : parseMaybeDate(idx.fecha>=0? r[idx.fecha]: null),
       tipoDoc: idx.tipo>=0?str(r[idx.tipo]):'', serie: idx.serie>=0?str(r[idx.serie]):'', numero: idx.numero>=0?str(r[idx.numero]):'',
       tipoOperacion: idx.tipoOp>=0?str(r[idx.tipoOp]):'',
       entCant: idx.entCant>=0?num(r[idx.entCant]):0, entCU: idx.entCU>=0?num(r[idx.entCU]):0, entCT: idx.entCT>=0?num(r[idx.entCT]):0,
@@ -1592,12 +1589,23 @@ const SALDO_COLUMNS = [
   {header:'Saldo Final: Diferencia (S/.)', key:'diferenciaSaldo', width:18, numFmt:'#,##0.00'},
 ];
 
+// ExcelJS serializa un Date a la celda .xlsx leyendo sus componentes UTC
+// como si fueran el "wall clock" a escribir (al revés de cómo SheetJS lee:
+// ver la nota junto a parseMaybeDate). Sin esto, el archivo exportado queda
+// desfasado por el offset de la zona horaria del navegador. Se compensa acá
+// — justo antes de entregarle la fecha a ExcelJS — construyendo un Date
+// cuyos componentes UTC sean los componentes LOCALES (correctos) del
+// original, para que ExcelJS termine escribiendo el valor real.
+function toExcelJSDate(d){
+  if(!(d instanceof Date) || isNaN(d.getTime())) return d;
+  return new Date(Date.UTC(d.getFullYear(), d.getMonth(), d.getDate(), d.getHours(), d.getMinutes(), d.getSeconds(), d.getMilliseconds()));
+}
 function addKardexRow(ws, r){
   const hasErr = r.errores && r.errores.length>0;
   const sevLabel = hasErr ? (SEV_LABEL_W[r.sevMax]||'') : '';
   const row = ws.addRow({
     origen:r.origen, codigo:r.codigo, descripcion:r.descripcion, almacen:r.almacen, archivo:r.archivo,
-    fecha: r.fecha ? new Date(r.fecha) : null, tipoDoc:r.tipoDoc, serie:r.serie, numero:r.numero, tipoOperacion:r.tipoOperacion,
+    fecha: r.fecha ? toExcelJSDate(new Date(r.fecha)) : null, tipoDoc:r.tipoDoc, serie:r.serie, numero:r.numero, tipoOperacion:r.tipoOperacion,
     entCant:r.entCant, entCU:r.entCU, entCT:r.entCT, salCant:r.salCant, salCU:r.salCU, salCT:r.salCT,
     saldoCant:r.saldoCant, saldoCU:r.saldoCU, saldoCT:r.saldoCT,
     estado: hasErr ? 'MAL' : 'BIEN', severidad: sevLabel,
