@@ -284,7 +284,7 @@ https://github.com/nodeca/pako/blob/main/LICENSE
 /* ---------------- helpers compartidos ---------------- */
 const SEV_LABEL = {CRITICA:'Crítica', ALTA:'Alta', MEDIA:'Media', BAJA:'Baja'};
 function fmtNum(v, dec){ if(v==null||isNaN(v)) return ''; dec = dec==null?2:dec; return Number(v).toLocaleString('es-PE',{minimumFractionDigits:dec, maximumFractionDigits:dec}); }
-function fmtFecha(v){ if(!v) return ''; const d = new Date(v); if(isNaN(d.getTime())) return ''; const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getUTCMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
+function fmtFecha(v){ if(!v) return ''; const d = new Date(v); if(isNaN(d.getTime())) return ''; const p=n=>String(n).padStart(2,'0'); return `${p(d.getDate())}/${p(d.getMonth()+1)}/${d.getFullYear()} ${p(d.getHours())}:${p(d.getMinutes())}`; }
 function esc(s){ return (s==null?'':String(s)).replace(/[&<>"']/g, c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
 function fmtSigned(v){
   const n = Number(v)||0;
@@ -1201,7 +1201,7 @@ function parseConsolidado(rows, fileName){
           if(esCierre){
             const per = numeroToPeriodo(r[3]);
             const y = per ? per.y : fechaObj.getFullYear();
-            const m = per ? per.m : fechaObj.getUTCMonth();
+            const m = per ? per.m : fechaObj.getMonth();
             fechaObj = new Date(y, m + 1, 0, 23, 59, 59, 999);
             isCierreArrastre = true;
             if(saldoCant === 0 && entCant !== 0){ saldoCant = entCant; saldoCU = entCU; saldoCT = entCT; }
@@ -1674,7 +1674,7 @@ function monthKeyOf(fecha){
   if(!fecha) return SIN_FECHA_KEY;
   const d = fecha instanceof Date ? fecha : new Date(fecha);
   if(isNaN(d.getTime())) return SIN_FECHA_KEY;
-  return d.getFullYear()+'-'+String(d.getUTCMonth()+1).padStart(2,'0');
+  return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
 }
 function monthLabel(monthKey){
   if(monthKey === SIN_FECHA_KEY) return 'Sin fecha';
