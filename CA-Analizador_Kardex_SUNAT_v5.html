@@ -155,6 +155,7 @@
         <div class="field"><label>Severidad</label><select id="sevFilter"><option value="">Todas</option><option value="CRITICA">Crítica</option><option value="ALTA">Alta</option><option value="MEDIA">Media</option><option value="BAJA">Baja</option></select></div>
         <div class="field"><label>Origen</label><select id="origenFilter"><option value="">Todos</option></select></div>
         <div class="field"><label>Archivo</label><select id="archivoFilter"><option value="">Todos</option></select></div>
+        <div class="field"><label>Mes</label><select id="mesFilter"><option value="ALL">Todos los meses</option></select></div>
         <div class="field"><button id="exportBtn">Exportar Excel</button></div>
       </div>
       <div class="tablewrap"><table id="linesTable"><thead></thead><tbody></tbody></table></div>
@@ -440,12 +441,21 @@ function onAnalysisDone(){
 }
 
 function populateMesesSelect(meses){
-  const el = document.getElementById('saldoMesFilter');
-  const current = el.value || 'ALL';
-  el.innerHTML = '<option value="ALL">Más reciente (global)</option>'
+  const elSaldo = document.getElementById('saldoMesFilter');
+  const currentSaldo = elSaldo.value || 'ALL';
+  elSaldo.innerHTML = '<option value="ALL">Más reciente (global)</option>'
     + meses.map(m=>`<option value="${esc(m.key)}">${esc(m.label)}</option>`).join('');
   const values = ['ALL', ...meses.map(m=>m.key)];
-  el.value = values.includes(current) ? current : 'ALL';
+  elSaldo.value = values.includes(currentSaldo) ? currentSaldo : 'ALL';
+
+  // Mismo listado de meses para el filtro de la pestaña Detalle Kardex —
+  // permite ver y EXPORTAR un solo mes en vez de traer todo junto (ver
+  // matchesFilters/exportBtn: filtrar acá filtra también lo que se exporta).
+  const elKardex = document.getElementById('mesFilter');
+  const currentKardex = elKardex.value || 'ALL';
+  elKardex.innerHTML = '<option value="ALL">Todos los meses</option>'
+    + meses.map(m=>`<option value="${esc(m.key)}">${esc(m.label)}</option>`).join('');
+  elKardex.value = values.includes(currentKardex) ? currentKardex : 'ALL';
 }
 
 function populateSelect(id, values){
@@ -463,6 +473,7 @@ function currentFilters(){
     severidad: document.getElementById('sevFilter').value,
     origen: document.getElementById('origenFilter').value,
     archivo: document.getElementById('archivoFilter').value,
+    mes: document.getElementById('mesFilter').value,
   };
 }
 
@@ -479,7 +490,7 @@ function scheduleQuery(){
 }
 
 ['qInput'].forEach(id=> document.getElementById(id).addEventListener('input', scheduleQuery));
-['estadoFilter','sevFilter','origenFilter','archivoFilter'].forEach(id=> document.getElementById(id).addEventListener('change', scheduleQuery));
+['estadoFilter','sevFilter','origenFilter','archivoFilter','mesFilter'].forEach(id=> document.getElementById(id).addEventListener('change', scheduleQuery));
 
 function handleLinesPage(msg){
   if(msg.reqId !== state.reqId) return; // respuesta obsoleta, ignorar
@@ -1333,6 +1344,7 @@ function matchesFilters(line, filters){
   if(filters.severidad && line.sevMax !== filters.severidad) return false;
   if(filters.origen && line.origen !== filters.origen) return false;
   if(filters.archivo && line.archivo !== filters.archivo) return false;
+  if(filters.mes && filters.mes !== 'ALL' && monthKeyOf(line.fecha) !== filters.mes) return false;
   if(filters.q){
     const hay = (String(line.codigo)+' '+String(line.descripcion)+' '+String(line.almacen)+' '+String(line.serie||'')+' '+String(line.numero||'')+' '+String(line.tipoOperacion||'')).toLowerCase();
     if(!hay.includes(filters.q)) return false;
