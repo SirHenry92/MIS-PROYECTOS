@@ -421,7 +421,20 @@ analyzeBtn.addEventListener('click', async () => {
       analyzeBtn.disabled = false;
       setTimeout(()=>{ progressWrap.style.display='none'; }, 1200);
     } else if(msg.type === 'fatal'){
+      // El contenedor de progreso se oculta ~1.2s después de terminar el
+      // análisis (ver 'done' más arriba) — si un error ocurre DESPUÉS de eso
+      // (p.ej. al consultar/filtrar líneas ya con la tabla en pantalla), el
+      // mensaje de error quedaba escrito en un elemento invisible y el
+      // usuario sólo veía la tabla vacía, sin ninguna pista de que algo
+      // había fallado. Se fuerza a quedar visible y además se agrega a los
+      // avisos (que sí son siempre visibles).
+      progressWrap.style.display = '';
       progressText.textContent = 'Error: ' + msg.message;
+      const errDiv = document.createElement('div');
+      errDiv.textContent = '⚠ Error interno: ' + msg.message;
+      errDiv.style.color = '#9c0006';
+      warningsEl.appendChild(errDiv);
+      console.error('[worker fatal]', msg.message);
       analyzeBtn.disabled = false;
     } else if(msg.type === 'linesPage'){
       handleLinesPage(msg);
@@ -1825,6 +1838,12 @@ function buildEmptyMonthLines(monthKey, allowedGroupKeys){
 // para poder generar un archivo por cada mes del rango — incluidos los
 // meses sin ningún movimiento real — y así arrastrar el saldo hasta el
 // final, tal como se pidió.
+// Tope de seguridad: si por una fecha corrupta (p.ej. una celda mal leída
+// como año 1900 o 9999) el rango calculado terminara abarcando cientos de
+// años, generar+sintetizar un archivo/fila por cada uno de esos miles de
+// meses (para CADA artículo) puede colgar la pestaña o agotar la memoria.
+// 40 años (480 meses) es muchísimo más que cualquier rango real de Kardex.
+const MAX_MESES_RANGO = 480;
 function fullMonthRange(){
   let minKey = null, maxKey = null;
   for(const [, g] of workerState.allGroups){
@@ -1842,6 +1861,10 @@ function fullMonthRange(){
   while(y<ey || (y===ey && m<=em)){
     keys.push(y+'-'+String(m).padStart(2,'0'));
     m++; if(m>12){ m=1; y++; }
+    if(keys.length > MAX_MESES_RANGO){
+      postMessage({type:'warning', msg:'El rango de fechas detectado (desde '+minKey+' hasta '+maxKey+') es sospechosamente amplio — probablemente hay una fecha mal leída en los datos. No se generó el arrastre de saldo para todo ese rango; revisá si algún archivo trae una fecha fuera de lugar.'});
+      return keys;
+    }
   }
   return keys;
 }
@@ -2179,6 +2202,15 @@ self.onmessage = async function(e){
       postMessage({type:'progress', stage:'Calculando totales', pct:97});
       await tick();
       const kpis = computeKpis(allGroups);
+      // Se arma acá (mientras el panel de progreso sigue visible) en vez de
+      // esperar a la primera consulta de la tabla: si el arrastre de saldo
+      // por mes tarda o falla por algún dato corrupto, se ve reflejado en
+      // esta etapa — antes, el error o la demora ocurrían recién al abrir
+      // "Detalle Kardex", con el panel de progreso ya oculto, y la tabla
+      // simplemente se veía vacía sin ninguna pista de qué había pasado.
+      postMessage({type:'progress', stage:'Arrastrando saldos entre meses', pct:99});
+      await tick();
+      buildAllLinesWithCarryForward();
       postMessage({type:'done', payload: kpis});
     } else if(msg.type === 'queryLines'){
       const filters = msg.filters || {};
@@ -2224,7 +2256,7 @@ self.onmessage = async function(e){
       }
     }
   }catch(err){
-    postMessage({type:'fatal', message: err.message});
+    postMessage({type:'fatal', message: err.message + (err.stack ? ' — ' + err.stack.split('\n').slice(0,3).join(' | ') : '')});
   }
 };
 </script>
