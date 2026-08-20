@@ -1530,10 +1530,14 @@ function buildAllLinesWithCarryForward(){
   for(const monthKey of sortedMonthKeys){
     const monthLinesRaw = monthGroups.get(monthKey) || [];
     const monthLines = monthLinesRaw.length ? withSaldoInicialRows(monthLinesRaw, monthKey) : buildEmptyMonthLines(monthKey);
-    out.push(...monthLines);
+    // NO usar out.push(...monthLines): con un mes de muchas líneas (el caso
+    // normal en datasets reales), pasarlas como argumentos individuales de
+    // push() revienta el límite de la pila de llamadas del motor JS
+    // ("Maximum call stack size exceeded"). Un for normal no tiene ese límite.
+    for(const l of monthLines) out.push(l);
   }
   const sinFecha = monthGroups.get(SIN_FECHA_KEY);
-  if(sinFecha) out.push(...sinFecha);
+  if(sinFecha) for(const l of sinFecha) out.push(l);
   workerState.cachedLinesWithCarryForward = out;
   return out;
 }
