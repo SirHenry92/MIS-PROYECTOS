@@ -1500,7 +1500,14 @@ function* iterateAllLines(allGroups){
 // movimiento en enero simplemente "desaparecía" de enero (no había fila
 // alguna que mostrar) y su saldo sólo volvía a verse en febrero, como si el
 // saldo de diciembre nunca hubiese existido en enero.
+// Armar esta lista recorre TODOS los artículos y TODOS los meses del rango
+// (para localizar el saldo que arrastra cada mes vacío), así que es cara —
+// no se puede recalcular en cada 'queryLines' (cada página, cada tecleo en
+// el buscador, cada cambio de filtro dispara una consulta nueva). Se cachea
+// una sola vez por carga de datos y se invalida cuando cambia
+// workerState.allGroups (ver el manejador de 'analyze').
 function buildAllLinesWithCarryForward(){
+  if(workerState.cachedLinesWithCarryForward) return workerState.cachedLinesWithCarryForward;
   const raw = Array.from(iterateAllLines(workerState.allGroups));
   const monthGroups = groupLinesByMonth(raw);
   const monthKeysToProcess = new Set(fullMonthRange());
@@ -1514,6 +1521,7 @@ function buildAllLinesWithCarryForward(){
   }
   const sinFecha = monthGroups.get(SIN_FECHA_KEY);
   if(sinFecha) out.push(...sinFecha);
+  workerState.cachedLinesWithCarryForward = out;
   return out;
 }
 
@@ -1799,9 +1807,14 @@ function buildSaldoInicialLine(g, groupKey, opening, monthKey){
 // explícitamente que el saldo se arrastre mes a mes hasta el final del
 // rango de fechas disponible, aunque varios meses intermedios no tengan
 // ningún movimiento real.
-function buildEmptyMonthLines(monthKey){
+// allowedGroupKeys (opcional): si se pasa, sólo se sintetizan filas para
+// esos artículos — así, cuando el usuario filtra el export a un artículo
+// puntual, un mes sin movimiento de ese artículo no termina arrastrando
+// también el saldo de TODOS los demás artículos del archivo.
+function buildEmptyMonthLines(monthKey, allowedGroupKeys){
   const out = [];
   for(const [gk, g] of workerState.allGroups){
+    if(allowedGroupKeys && !allowedGroupKeys.has(gk)) continue;
     const opening = findAperturaDeMes(g, monthKey);
     if(opening) out.push(buildSaldoInicialLine(g, gk, opening, monthKey));
   }
@@ -1889,9 +1902,14 @@ function withSaldoInicialRows(monthLines, monthKey){
 // monthKey === null significa "sin corte" — el saldo MÁS RECIENTE de cada
 // artículo, considerando su último movimiento real sin importar el mes (el
 // mismo criterio que usaba la versión original de un solo archivo).
-function buildSaldoFinalSummaryForMonth(monthKey){
+// allowedGroupKeys (opcional): igual que en buildEmptyMonthLines, restringe
+// el resumen a los artículos que sobrevivieron el filtro actual — si no, la
+// pestaña "Saldo Final" del export siempre traía TODOS los artículos del
+// archivo aunque el usuario hubiera filtrado a uno solo.
+function buildSaldoFinalSummaryForMonth(monthKey, allowedGroupKeys){
   const summary = [];
   for(const [gk, g] of workerState.allGroups){
+    if(allowedGroupKeys && !allowedGroupKeys.has(gk)) continue;
     let last = null;
     for(let i=g.records.length-1;i>=0;i--){
       const rk = monthKeyOf(g.records[i].fecha);
@@ -2033,6 +2051,14 @@ async function buildAndSendExcelParts(lines){
   await tick();
   const monthGroups = groupLinesByMonth(lines);
 
+  // Sólo los artículos que sobrevivieron el filtro actual (p.ej. un código
+  // puntual) deben recibir fila sintética en los meses sin movimiento — si
+  // no se restringe esto, filtrar a un solo artículo y exportar terminaba
+  // trayendo también el saldo arrastrado de TODOS los demás artículos en
+  // cualquier mes vacío.
+  const allowedGroupKeys = new Set();
+  for(const line of lines) if(line.groupKey) allowedGroupKeys.add(line.groupKey);
+
   // El rango de meses a exportar es la UNIÓN entre los meses que ya tienen
   // línea propia y el rango completo (primer a último mes con datos, entre
   // todos los artículos) — así un mes intermedio sin ningún movimiento real
@@ -2045,7 +2071,7 @@ async function buildAndSendExcelParts(lines){
   const fileJobs = [];
   for(const monthKey of sortedMonthKeys){
     const monthLinesRaw = monthGroups.get(monthKey) || [];
-    const monthLines = monthLinesRaw.length ? withSaldoInicialRows(monthLinesRaw, monthKey) : buildEmptyMonthLines(monthKey);
+    const monthLines = monthLinesRaw.length ? withSaldoInicialRows(monthLinesRaw, monthKey) : buildEmptyMonthLines(monthKey, allowedGroupKeys);
     const numSub = Math.max(1, Math.ceil(monthLines.length / SAFE_SINGLE_FILE_LINES));
     for(let si=0; si<numSub; si++){
       fileJobs.push({
@@ -2076,7 +2102,7 @@ async function buildAndSendExcelParts(lines){
     const job = fileJobs[fi];
     postMessage({type:'exportProgress', detail:`Generando ${fi+1}/${totalFiles} — ${job.label}...`});
     await tick();
-    const saldoSummary = buildSaldoFinalSummaryForMonth(job.monthKey);
+    const saldoSummary = buildSaldoFinalSummaryForMonth(job.monthKey, allowedGroupKeys);
     await tick();
     const buf = await buildOneWorkbookFile(job.lines, saldoSummary, job.label);
     job.lines = null; // soltar las líneas de este mes antes de seguir al siguiente
@@ -2088,7 +2114,7 @@ async function buildAndSendExcelParts(lines){
   postMessage({type:'exportDone', totalParts: totalFiles});
 }
 
-const workerState = { allGroups: new Map() };
+const workerState = { allGroups: new Map(), cachedLinesWithCarryForward: null };
 
 // Cede el control al event loop un instante: le da a V8 la oportunidad de ejecutar
 // recolección de basura entre fases pesadas, en vez de acumular todo en una sola
@@ -2149,6 +2175,7 @@ self.onmessage = async function(e){
         await tick();
       }
       workerState.allGroups = allGroups;
+      workerState.cachedLinesWithCarryForward = null;
       postMessage({type:'progress', stage:'Calculando totales', pct:97});
       await tick();
       const kpis = computeKpis(allGroups);
