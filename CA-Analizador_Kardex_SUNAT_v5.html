@@ -999,14 +999,49 @@ function parseConsolidado(rows, fileName){
         if(c0c.indexOf('TOTALES DEL PERIODO') === 0){ i++; break; }
         if(c0c.indexOf('ITEM:') === 0) break;
         if(!r || r.every(c=>c==null||c==='')){ i++; continue; }
+
+        // Detección y normalización de filas de CIERRE / SALDO INICIAL —
+        // igual que en "CA-Generador de Kardex V2.html". Sin esto, una fila
+        // de cierre de mes (que a veces trae la fecha del día 1 del mes
+        // siguiente, o sin entrada/salida, sólo con el saldo arrastrado) se
+        // clasifica en el mes equivocado y arruina el "saldo final por mes".
+        const t10Val = str(r[1]).toUpperCase();
+        const serieVal = str(r[2]).toUpperCase();
+        const tipoOpStr = str(r[4]).toUpperCase();
+        const tipoOpRaw = /^\d+$/.test(tipoOpStr) ? tipoOpStr.padStart(2,'0') : tipoOpStr;
+        const esSaldoInicial = (tipoOpStr.indexOf('SALDO INI') !== -1 || tipoOpStr === 'SALDO INICIAL');
+        const esCierre = !esSaldoInicial && (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.indexOf('CIERRE') !== -1);
+
+        let fechaObj = r[0] instanceof Date ? r[0] : parseMaybeDate(r[0]);
+        let entCant = num(r[5]), entCU = num(r[6]), entCT = num(r[7]);
+        let salCant = num(r[8]), salCU = num(r[9]), salCT = num(r[10]);
+        let saldoCant = num(r[11]), saldoCU = num(r[12]), saldoCT = num(r[13]);
+        let isCierreArrastre = false, isSaldoInicialFlag = false;
+
+        if(fechaObj && (esSaldoInicial || esCierre || tipoOpRaw === '16')){
+          if(esSaldoInicial){
+            fechaObj.setHours(0,0,0,0);
+            isSaldoInicialFlag = true;
+            if(saldoCant === 0 && entCant !== 0){ saldoCant = entCant; saldoCU = entCU; saldoCT = entCT; }
+          } else if(esCierre){
+            const y = fechaObj.getFullYear(), m = fechaObj.getMonth();
+            fechaObj = new Date(y, m + 1, 0, 23, 59, 59, 999);
+            isCierreArrastre = true;
+            if(saldoCant === 0 && entCant !== 0){ saldoCant = entCant; saldoCU = entCU; saldoCT = entCT; }
+          } else if(entCant === 0 && saldoCant !== 0){
+            entCant = saldoCant; entCT = saldoCT; entCU = saldoCU;
+          }
+        }
+
         recs.push({
           origen:'CONSOLIDADO', archivo:fileName,
           codigo: meta.codigo, descripcion: meta.descripcion, almacen: meta.establecimiento || '',
-          fecha: r[0] instanceof Date ? r[0] : parseMaybeDate(r[0]),
+          fecha: fechaObj,
           tipoDoc: str(r[1]), serie: str(r[2]), numero: str(r[3]), tipoOperacion: str(r[4]),
-          entCant: num(r[5]), entCU: num(r[6]), entCT: num(r[7]),
-          salCant: num(r[8]), salCU: num(r[9]), salCT: num(r[10]),
-          saldoCant: num(r[11]), saldoCU: num(r[12]), saldoCT: num(r[13]),
+          entCant, entCU, entCT,
+          salCant, salCU, salCT,
+          saldoCant, saldoCU, saldoCT,
+          isCierreArrastre, isSaldoInicialFlag,
           errores: [], sevMax: ''
         });
         i++;
@@ -1488,8 +1523,11 @@ function buildSaldoFinalSummaryForMonth(monthKey){
     }
     let hasErr, sevLabel, sevCode, saldoComoEsta, saldoCorregido, diferenciaSaldo, movimientos = 0;
     if(last){
-      movimientos = monthKey===null ? g.records.length
-        : g.records.reduce((n,r)=> n + (monthKeyOf(r.fecha)===monthKey ? 1 : 0), 0);
+      // Las filas de CIERRE/SALDO INICIAL son marcas de arrastre de saldo, no
+      // movimientos reales — se excluyen del conteo (igual que en el
+      // Generador de Kardex, que tampoco las cuenta como transacciones).
+      movimientos = monthKey===null ? g.records.reduce((n,r)=> n + (r.isCierreArrastre||r.isSaldoInicialFlag ? 0 : 1), 0)
+        : g.records.reduce((n,r)=> n + (monthKeyOf(r.fecha)===monthKey && !r.isCierreArrastre && !r.isSaldoInicialFlag ? 1 : 0), 0);
       hasErr = last.errores && last.errores.length>0;
       sevCode = hasErr ? last.sevMax : '';
       sevLabel = hasErr ? (SEV_LABEL_W[last.sevMax]||'') : '';
