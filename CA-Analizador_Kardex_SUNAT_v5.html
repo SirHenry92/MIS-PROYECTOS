@@ -730,6 +730,12 @@ function periodoToDate(periodoStr){
 function E(code,sev,msg){ return {code,sev,msg}; }
 function round(x){ return Math.round(x*10000)/10000; }
 function round2(x){ return Math.round(x*100)/100; }
+// Los costos unitarios se muestran en el Excel/tabla con 6 decimales (ver
+// numFmt '#,##0.000000' de las columnas C.U.) — los mensajes de error que
+// citan un costo unitario deben usar la misma precisión, no los 4 decimales
+// de round(), o pueden mostrar dos valores como "iguales" cuando en
+// realidad difieren recién a partir del 5º/6º decimal.
+function round6(x){ return Math.round(x*1000000)/1000000; }
 function bump(map,e){ let s = map.get(e.code); if(!s){ s={code:e.code,msg:e.msg,sev:e.sev,count:0}; map.set(e.code,s); } s.count++; }
 
 /* ================================================================
@@ -1012,7 +1018,10 @@ function parseConsolidado(rows, fileName){
       if(!meta.ruc || !/^\d{11}$/.test(meta.ruc)) metaErrs.push(E('RUC_INVALIDO','ALTA','RUC vacío o con formato inválido'));
       if(!meta.razonSocial) metaErrs.push(E('FALTA_RAZON_SOCIAL','BAJA','Falta razón social'));
 
-      const recs = [];
+      // Primera pasada: sólo junta las filas del bloque del ítem (sin
+      // decidir fechas todavía) — hace falta poder mirar hacia adelante
+      // antes de fijar la fecha de una fila de CIERRE (ver más abajo).
+      const blockRows = [];
       while(i < n){
         const r = rows[i];
         const c0cRaw = r && r[0]!=null ? r[0] : '';
@@ -1021,11 +1030,6 @@ function parseConsolidado(rows, fileName){
         if(c0c.indexOf('ITEM:') === 0) break;
         if(!r || r.every(c=>c==null||c==='')){ i++; continue; }
 
-        // Detección y normalización de filas de CIERRE / SALDO INICIAL —
-        // igual que en "CA-Generador de Kardex V2.html". Sin esto, una fila
-        // de cierre de mes (que a veces trae la fecha del día 1 del mes
-        // siguiente, o sin entrada/salida, sólo con el saldo arrastrado) se
-        // clasifica en el mes equivocado y arruina el "saldo final por mes".
         const t10Val = str(r[1]).toUpperCase();
         const serieVal = str(r[2]).toUpperCase();
         const tipoOpStr = str(r[4]).toUpperCase();
@@ -1034,10 +1038,9 @@ function parseConsolidado(rows, fileName){
         const esCierre = !esSaldoInicial && (t10Val === 'CIERRE' || serieVal === 'CI' || tipoOpStr.indexOf('CIERRE') !== -1);
 
         let fechaObj = r[0] instanceof Date ? r[0] : parseMaybeDate(r[0]);
-        let entCant = num(r[5]), entCU = num(r[6]), entCT = num(r[7]);
-        let salCant = num(r[8]), salCU = num(r[9]), salCT = num(r[10]);
-        let saldoCant = num(r[11]), saldoCU = num(r[12]), saldoCT = num(r[13]);
-        let isCierreArrastre = false, isSaldoInicialFlag = false;
+        const entCant = num(r[5]), entCU = num(r[6]), entCT = num(r[7]);
+        const salCant = num(r[8]), salCU = num(r[9]), salCT = num(r[10]);
+        const saldoCant = num(r[11]), saldoCU = num(r[12]), saldoCT = num(r[13]);
 
         // Muchas filas de SALDO INICIAL no traen fecha propia en el Excel: el
         // saldo final de diciembre 2025 se registra como el saldo inicial de
@@ -1050,14 +1053,58 @@ function parseConsolidado(rows, fileName){
           if(per) fechaObj = new Date(per.y, per.m, 1, 0, 0, 0, 0);
         }
 
-        if(fechaObj && (esSaldoInicial || esCierre || tipoOpRaw === '16')){
-          if(esSaldoInicial){
+        blockRows.push({ r, fechaObj, entCant, entCU, entCT, salCant, salCU, salCT, saldoCant, saldoCU, saldoCT, esSaldoInicial, esCierre, tipoOpRaw });
+        i++;
+      }
+
+      // Segunda pasada: a cada fila de CIERRE se le fija la fecha mirando a
+      // la SIGUIENTE fila con movimiento real (no otra fila de cierre/saldo
+      // inicial), no sólo su propia fecha cruda. Esto corrige el caso donde
+      // el Excel marca una fila como CIERRE de un período (p.ej. NUMERO
+      // "202601", fecha 01-01-2026) pero en realidad es el saldo final del
+      // período ANTERIOR (diciembre 2025) arrastrado como saldo inicial de
+      // enero — se lo reconoce porque aparece ANTES de los movimientos de
+      // enero, no después de los de diciembre. Si la fecha propia de la fila
+      // ya es coherente con esa posición (su mes es anterior al de la
+      // siguiente transacción real), se respeta la normalización de
+      // "fin de su propio mes" de siempre.
+      for(let bi=0; bi<blockRows.length; bi++){
+        const br = blockRows[bi];
+        if(!br.esCierre || !br.fechaObj) continue;
+        let nextReal = null;
+        for(let bj=bi+1; bj<blockRows.length; bj++){
+          const cand = blockRows[bj];
+          if(cand.esCierre || cand.esSaldoInicial) continue;
+          if(cand.fechaObj){ nextReal = cand; break; }
+        }
+        if(nextReal){
+          const ownMonthKey = monthKeyOf(br.fechaObj);
+          const nextMonthKey = monthKeyOf(nextReal.fechaObj);
+          if(ownMonthKey >= nextMonthKey){
+            const [ny, nm] = nextMonthKey.split('-').map(Number);
+            br.fechaObj = new Date(ny, nm - 1, 0, 23, 59, 59, 999);
+            continue;
+          }
+        }
+        const y = br.fechaObj.getFullYear(), m = br.fechaObj.getMonth();
+        br.fechaObj = new Date(y, m + 1, 0, 23, 59, 59, 999);
+      }
+
+      const recs = [];
+      for(const br of blockRows){
+        const r = br.r;
+        let fechaObj = br.fechaObj;
+        let entCant = br.entCant, entCU = br.entCU, entCT = br.entCT;
+        let salCant = br.salCant, salCU = br.salCU, salCT = br.salCT;
+        let saldoCant = br.saldoCant, saldoCU = br.saldoCU, saldoCT = br.saldoCT;
+        let isCierreArrastre = false, isSaldoInicialFlag = false;
+
+        if(fechaObj && (br.esSaldoInicial || br.esCierre || br.tipoOpRaw === '16')){
+          if(br.esSaldoInicial){
             fechaObj.setHours(0,0,0,0);
             isSaldoInicialFlag = true;
             if(saldoCant === 0 && entCant !== 0){ saldoCant = entCant; saldoCU = entCU; saldoCT = entCT; }
-          } else if(esCierre){
-            const y = fechaObj.getFullYear(), m = fechaObj.getMonth();
-            fechaObj = new Date(y, m + 1, 0, 23, 59, 59, 999);
+          } else if(br.esCierre){
             isCierreArrastre = true;
             if(saldoCant === 0 && entCant !== 0){ saldoCant = entCant; saldoCU = entCU; saldoCT = entCT; }
           } else if(entCant === 0 && saldoCant !== 0){
@@ -1076,7 +1123,6 @@ function parseConsolidado(rows, fileName){
           isCierreArrastre, isSaldoInicialFlag,
           errores: [], sevMax: ''
         });
-        i++;
       }
       const key = 'CONSOLIDADO||' + fileName + '||' + meta.codigo + '||' + meta.establecimiento;
       groups.set(key, {meta, metaErrs, records: recs});
@@ -1183,14 +1229,29 @@ function analyzeGroup(recs, tolAbs, tolRel){
         const denom = prev.cant + entCant;
         if(denom > 0.0000001){
           const expectedCU = (prev.ct + entCT) / denom;
-          if(!isClose(saldoCU, expectedCU)) errs.push(E('PROMEDIO_MAL_CALC','ALTA','Costo promedio ponderado mal calculado tras el ingreso (esperado ≈ '+round(expectedCU)+', registrado '+round(saldoCU)+')'));
+          if(!isClose(saldoCU, expectedCU)) errs.push(E('PROMEDIO_MAL_CALC','ALTA','Costo promedio ponderado mal calculado tras el ingreso (esperado ≈ '+round6(expectedCU)+', registrado '+round6(saldoCU)+')'));
         }
       }
       if(salCant > 0 && prev.cant > 0.0000001){
-        if(!isClose(salCU, prev.cu)) errs.push(E('COSTO_SALIDA_DISTINTO_PROMEDIO','ALTA','Costo unitario de salida ('+round(salCU)+') distinto al costo promedio vigente ('+round(prev.cu)+') — incumple método Promedio Ponderado'));
+        if(!isClose(salCU, prev.cu)) errs.push(E('COSTO_SALIDA_DISTINTO_PROMEDIO','ALTA','Costo unitario de salida ('+round6(salCU)+') distinto al costo promedio vigente ('+round6(prev.cu)+') — incumple método Promedio Ponderado'));
       }
       if(salCant > prev.cant + Math.max(tolAbs, 0.0001)) errs.push(E('SALIDA_MAYOR_SALDO','CRITICA','Salida ('+round(salCant)+') mayor al saldo disponible ('+round(prev.cant)+') — posible quiebre de stock'));
       if(prevFecha && r.fecha && r.fecha.getTime() < prevFecha.getTime()) errs.push(E('FECHA_DESORDEN','MEDIA','Fecha fuera de secuencia cronológica respecto al movimiento anterior'));
+
+      // Si esta fila ES el saldo inicial de un período (arrastra el saldo
+      // final del movimiento anterior), y ese movimiento anterior quedó con
+      // un saldo mal calculado, el saldo inicial que arrastra también está
+      // mal — aunque, visto en aislado, cuadre perfectamente consigo mismo.
+      // Sin este chequeo, un error en el saldo final de un mes "desaparecía"
+      // al pasar al saldo inicial del siguiente.
+      if(r.isSaldoInicialFlag){
+        const prevRec = recs[idx-1];
+        if(prevRec && Math.abs(prevRec.diferenciaSaldo||0) > 0.009){
+          errs.push(E('SALDO_INICIAL_ARRASTRA_ERROR','ALTA','El saldo inicial de este período arrastra el saldo final mal calculado del movimiento anterior (diferencia: S/. '+round2(prevRec.diferenciaSaldo)+')'));
+        } else if(prevRec && prevRec.errores && prevRec.errores.length>0){
+          errs.push(E('SALDO_INICIAL_ARRASTRA_ERROR_PREVIO','MEDIA','El movimiento anterior, cuyo saldo final se arrastra como saldo inicial de este período, tiene observaciones sin resolver'));
+        }
+      }
     }
     if(entCant > 0 && entCU === 0 && entCT === 0) errs.push(E('INGRESO_SIN_COSTO','MEDIA','Ingreso registrado sin costo (costo unitario = 0)'));
     if(entCant > 0 && salCant > 0) errs.push(E('ENT_SAL_SIMULTANEO','BAJA','Ingreso y salida registrados en la misma línea de kardex'));
@@ -1539,6 +1600,16 @@ function findAperturaDeMes(g, monthKey){
 }
 function buildSaldoInicialLine(g, groupKey, opening, monthKey){
   const [y, m] = monthKey.split('-');
+  // El saldo inicial hereda el problema del movimiento del que lo arrastra:
+  // si el saldo final de ese movimiento quedó mal calculado (diferenciaSaldo)
+  // o ya tenía observaciones propias, esta fila de apertura debe mostrarlo
+  // también — de lo contrario un error real "desaparece" al pasar de mes.
+  const errs = [];
+  if(Math.abs(opening.diferenciaSaldo||0) > 0.009){
+    errs.push(E('SALDO_INICIAL_ARRASTRA_ERROR','ALTA','El saldo inicial de este período arrastra el saldo final mal calculado del mes anterior (diferencia: S/. '+round2(opening.diferenciaSaldo)+')'));
+  } else if(opening.errores && opening.errores.length>0){
+    errs.push(E('SALDO_INICIAL_ARRASTRA_ERROR_PREVIO','MEDIA','El movimiento del mes anterior, cuyo saldo final se arrastra como saldo inicial, tiene observaciones sin resolver'));
+  }
   return {
     groupKey, origen: g.meta.origen, codigo: g.meta.codigo, descripcion: g.meta.descripcion || '',
     almacen: g.meta.establecimiento || g.meta.almacen || '', archivo: opening.archivo,
@@ -1546,7 +1617,8 @@ function buildSaldoInicialLine(g, groupKey, opening, monthKey){
     tipoDoc: '', serie: '', numero: '', tipoOperacion: 'SALDO INICIAL (arrastrado del mes anterior)',
     entCant: 0, entCU: 0, entCT: 0, salCant: 0, salCU: 0, salCT: 0,
     saldoCant: opening.saldoCant, saldoCU: opening.saldoCU, saldoCT: opening.saldoCT,
-    errores: [], sevMax: '', valorOriginal: 0, valorCorregido: 0, diferencia: 0
+    errores: errs, sevMax: errs.length ? errs.reduce((mx,e)=> SEV_RANK[e.sev]>SEV_RANK[mx]?e.sev:mx, errs[0].sev) : '',
+    valorOriginal: 0, valorCorregido: 0, diferencia: 0
   };
 }
 // Inserta, para cada artículo, una fila sintética de "SALDO INICIAL" al
