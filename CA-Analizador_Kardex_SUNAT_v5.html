@@ -1495,11 +1495,25 @@ function matchesFilters(line, filters){
   }
   return true;
 }
+// Una fila real de CIERRE (T.Doc=CIERRE) es el cierre de UN mes puntual —
+// existen muchas por artículo, una por cada mes que se cerró. Mostrarlas
+// todas en el Kardex Detalle es ruido y además duplica lo que ya muestra la
+// fila sintética "SALDO INICIAL (arrastrado del mes anterior)" del mes
+// siguiente. Sólo la PRIMERA fila del historial del artículo tiene sentido
+// mostrarla si es un CIERRE — ésa sí es el saldo inicial real (el saldo con
+// el que el artículo arranca, previo a cualquier movimiento registrado). El
+// resto de los CIERRE se sigue usando puertas adentro (siguen en
+// g.records, los necesita el cálculo en cascada y findAperturaDeMes), sólo
+// se ocultan de lo que se ve/exporta.
+function esCierreVisible(g, r){
+  return !r.isCierreArrastre || g.records[0] === r;
+}
 function* iterateAllLines(allGroups){
   for(const [key, g] of allGroups){
     if(g.metaErrs && g.metaErrs.length) yield buildMetaErrLine(key, g);
     for(const r of g.records){
       if(!r.groupKey) r.groupKey = key;
+      if(!esCierreVisible(g, r)) continue;
       yield r;
     }
   }
@@ -1529,7 +1543,7 @@ function buildAllLinesWithCarryForward(){
   const out = [];
   for(const monthKey of sortedMonthKeys){
     const monthLinesRaw = monthGroups.get(monthKey) || [];
-    const monthLines = monthLinesRaw.length ? withSaldoInicialRows(monthLinesRaw, monthKey) : buildEmptyMonthLines(monthKey);
+    const monthLines = withSaldoInicialRows(monthLinesRaw, monthKey);
     // NO usar out.push(...monthLines): con un mes de muchas líneas (el caso
     // normal en datasets reales), pasarlas como argumentos individuales de
     // push() revienta el límite de la pila de llamadas del motor JS
@@ -1816,27 +1830,6 @@ function buildSaldoInicialLine(g, groupKey, opening, monthKey){
 // de SU PROPIO mes (ver parseConsolidado), nunca al inicio del mes
 // siguiente — así que nunca puede coincidir con la fila sintética que se
 // arma acá para el mes siguiente y no hay riesgo de duplicar el mismo saldo.
-// Recorre TODOS los artículos conocidos y arma, para un mes SIN movimiento
-// real alguno, una línea de "SALDO INICIAL (arrastrado del mes anterior)"
-// por cada artículo que ya existía (tenía movimiento previo). Sin esto, un
-// mes sin movimientos no generaba archivo/fila alguna y el saldo quedaba
-// "perdido" hasta el siguiente mes CON movimiento — el usuario pidió
-// explícitamente que el saldo se arrastre mes a mes hasta el final del
-// rango de fechas disponible, aunque varios meses intermedios no tengan
-// ningún movimiento real.
-// allowedGroupKeys (opcional): si se pasa, sólo se sintetizan filas para
-// esos artículos — así, cuando el usuario filtra el export a un artículo
-// puntual, un mes sin movimiento de ese artículo no termina arrastrando
-// también el saldo de TODOS los demás artículos del archivo.
-function buildEmptyMonthLines(monthKey, allowedGroupKeys){
-  const out = [];
-  for(const [gk, g] of workerState.allGroups){
-    if(allowedGroupKeys && !allowedGroupKeys.has(gk)) continue;
-    const opening = findAperturaDeMes(g, monthKey);
-    if(opening) out.push(buildSaldoInicialLine(g, gk, opening, monthKey));
-  }
-  return out;
-}
 // Determina el rango COMPLETO de meses cubierto por los datos (del primer
 // al último mes con algún movimiento fechado, entre TODOS los artículos),
 // para poder generar un archivo por cada mes del rango — incluidos los
@@ -1883,7 +1876,19 @@ function firstLineByGroup(monthLines){
   }
   return map;
 }
-function withSaldoInicialRows(monthLines, monthKey){
+// allowedGroupKeys (opcional): si se pasa, sólo se sintetizan/incluyen
+// filas de esos artículos — así, cuando el usuario filtra el export a un
+// artículo puntual, no se cuela el saldo arrastrado de TODOS los demás.
+//
+// IMPORTANTE: un mes puede tener movimiento real de ALGUNOS artículos y no
+// de otros. Antes, la fila de "SALDO INICIAL (arrastrado)" sólo se armaba
+// para los artículos que YA aparecían en monthLines — un artículo sin
+// movimiento ESE mes puntual (aunque el mes no estuviera vacío en general,
+// por tener movimiento de otros artículos) simplemente no tenía ninguna
+// fila ese mes y su saldo "desaparecía" hasta el próximo mes con
+// movimiento propio. Por eso ahora se recorren TODOS los artículos
+// conocidos (o los del filtro activo), no sólo los presentes en monthLines.
+function withSaldoInicialRows(monthLines, monthKey, allowedGroupKeys){
   const seen = new Set();
   const firstByGroup = firstLineByGroup(monthLines);
   const out = [];
@@ -1910,6 +1915,15 @@ function withSaldoInicialRows(monthLines, monthKey){
     }
     out.push(line);
   }
+  // Artículos que ya existían (tienen saldo previo) pero no tuvieron NINGÚN
+  // movimiento real este mes puntual — ni siquiera aparecieron en
+  // monthLines — igual necesitan su fila de saldo arrastrado.
+  for(const [gk, g] of workerState.allGroups){
+    if(seen.has(gk)) continue;
+    if(allowedGroupKeys && !allowedGroupKeys.has(gk)) continue;
+    const opening = findAperturaDeMes(g, monthKey);
+    if(opening) out.push(buildSaldoInicialLine(g, gk, opening, monthKey));
+  }
   return out;
 }
 
@@ -1929,10 +1943,10 @@ function withSaldoInicialRows(monthLines, monthKey){
 // monthKey === null significa "sin corte" — el saldo MÁS RECIENTE de cada
 // artículo, considerando su último movimiento real sin importar el mes (el
 // mismo criterio que usaba la versión original de un solo archivo).
-// allowedGroupKeys (opcional): igual que en buildEmptyMonthLines, restringe
-// el resumen a los artículos que sobrevivieron el filtro actual — si no, la
-// pestaña "Saldo Final" del export siempre traía TODOS los artículos del
-// archivo aunque el usuario hubiera filtrado a uno solo.
+// allowedGroupKeys (opcional): restringe el resumen a los artículos que
+// sobrevivieron el filtro actual — si no, la pestaña "Saldo Final" del
+// export siempre traía TODOS los artículos del archivo aunque el usuario
+// hubiera filtrado a uno solo.
 function buildSaldoFinalSummaryForMonth(monthKey, allowedGroupKeys){
   const summary = [];
   for(const [gk, g] of workerState.allGroups){
@@ -2098,7 +2112,7 @@ async function buildAndSendExcelParts(lines){
   const fileJobs = [];
   for(const monthKey of sortedMonthKeys){
     const monthLinesRaw = monthGroups.get(monthKey) || [];
-    const monthLines = monthLinesRaw.length ? withSaldoInicialRows(monthLinesRaw, monthKey) : buildEmptyMonthLines(monthKey, allowedGroupKeys);
+    const monthLines = withSaldoInicialRows(monthLinesRaw, monthKey, allowedGroupKeys);
     const numSub = Math.max(1, Math.ceil(monthLines.length / SAFE_SINGLE_FILE_LINES));
     for(let si=0; si<numSub; si++){
       fileJobs.push({
