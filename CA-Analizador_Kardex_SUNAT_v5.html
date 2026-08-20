@@ -1526,6 +1526,59 @@ function groupLinesByMonth(lines){
   return sorted;
 }
 
+// Busca, para un artículo, el último movimiento (real o de arrastre) con
+// fecha estrictamente anterior al mes indicado — ese es el saldo con el que
+// el artículo "entra" a este mes.
+function findAperturaDeMes(g, monthKey){
+  for(let i=g.records.length-1;i>=0;i--){
+    const r = g.records[i];
+    const rk = monthKeyOf(r.fecha);
+    if(rk !== SIN_FECHA_KEY && rk < monthKey) return r;
+  }
+  return null;
+}
+function buildSaldoInicialLine(g, groupKey, opening, monthKey){
+  const [y, m] = monthKey.split('-');
+  return {
+    groupKey, origen: g.meta.origen, codigo: g.meta.codigo, descripcion: g.meta.descripcion || '',
+    almacen: g.meta.establecimiento || g.meta.almacen || '', archivo: opening.archivo,
+    fecha: new Date(Number(y), Number(m) - 1, 1, 0, 0, 0, 0),
+    tipoDoc: '', serie: '', numero: '', tipoOperacion: 'SALDO INICIAL (arrastrado del mes anterior)',
+    entCant: 0, entCU: 0, entCT: 0, salCant: 0, salCU: 0, salCT: 0,
+    saldoCant: opening.saldoCant, saldoCU: opening.saldoCU, saldoCT: opening.saldoCT,
+    errores: [], sevMax: '', valorOriginal: 0, valorCorregido: 0, diferencia: 0
+  };
+}
+// Inserta, para cada artículo, una fila sintética de "SALDO INICIAL" al
+// comienzo de sus líneas del mes — igual que "CA-Generador de Kardex.html" /
+// "CA-Generador de Kardex V2.html", que arman esa fila arrastrando fC/fCU/fCT
+// del último movimiento anterior al mes (ver saldo_inicial / last_tx_before
+// en esos archivos). Sin esto, el saldo final de un mes no quedaba reflejado
+// como saldo inicial del siguiente en el Excel exportado — sólo se podía
+// inferir cruzando archivos distintos.
+// Si el artículo YA trae su propia fila de SALDO INICIAL real para este mes
+// (isSaldoInicialFlag, ver parseConsolidado) no se sintetiza una segunda: la
+// fila real ya cumple ese rol y evita duplicar el mismo saldo dos veces.
+function withSaldoInicialRows(monthLines, monthKey){
+  const seen = new Set();
+  const out = [];
+  for(const line of monthLines){
+    const gk = line.groupKey;
+    if(gk && !seen.has(gk)){
+      seen.add(gk);
+      if(!line.isSaldoInicialFlag){
+        const g = workerState.allGroups.get(gk);
+        if(g){
+          const opening = findAperturaDeMes(g, monthKey);
+          if(opening) out.push(buildSaldoInicialLine(g, gk, opening, monthKey));
+        }
+      }
+    }
+    out.push(line);
+  }
+  return out;
+}
+
 // Para CADA artículo conocido (todos los grupos, no sólo los que tuvieron
 // movimiento este mes puntual), arma su fila de "saldo final DEL MES" como
 // el saldo ACUMULADO desde el inicio hasta el cierre de ese mes: el último
@@ -1687,7 +1740,10 @@ async function buildAndSendExcelParts(lines){
   const monthGroups = groupLinesByMonth(lines);
 
   const fileJobs = [];
-  for(const [monthKey, monthLines] of monthGroups){
+  for(const [monthKey, monthLinesRaw] of monthGroups){
+    // El bucket "Sin fecha" no representa un mes real, así que no se le
+    // arrastra saldo inicial de ningún mes anterior.
+    const monthLines = monthKey===SIN_FECHA_KEY ? monthLinesRaw : withSaldoInicialRows(monthLinesRaw, monthKey);
     const numSub = Math.max(1, Math.ceil(monthLines.length / SAFE_SINGLE_FILE_LINES));
     for(let si=0; si<numSub; si++){
       fileJobs.push({
