@@ -1,0 +1,481 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Cronograma de exposición · Esquemas de alto riesgo fiscal y NIIF</title>
+<style>
+  :root{
+    --bg-page:#f4f4f2;
+    --bg-card:#ffffff;
+    --border:#e2e1dc;
+    --border-strong:#c9c8c1;
+    --text-primary:#1c1c1a;
+    --text-secondary:#6b6a63;
+    --text-muted:#9a998f;
+    --accent:#185fa5;
+    --green-bg:#eaf3de; --green-text:#27500a;
+    --red-bg:#fcebeb; --red-text:#791f1f;
+    --amber-bg:#faeeda; --amber-text:#633806;
+    --gray-bg:#f1efe8; --gray-text:#444441;
+    --radius:8px;
+    --shadow:0 1px 3px rgba(0,0,0,0.06), 0 1px 2px rgba(0,0,0,0.04);
+  }
+  *{box-sizing:border-box;}
+  body{
+    margin:0;
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    background:var(--bg-page);
+    color:var(--text-primary);
+    padding:32px 16px;
+  }
+  .wrap{max-width:1100px;margin:0 auto;}
+  .card{
+    background:var(--bg-card);
+    border:1px solid var(--border);
+    border-radius:12px;
+    box-shadow:var(--shadow);
+    overflow:hidden;
+  }
+  .header{
+    padding:20px 24px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    flex-wrap:wrap;
+  }
+  .header h1{font-size:19px;font-weight:600;margin:0;}
+  .header p{font-size:13px;color:var(--text-secondary);margin:2px 0 0;}
+  .stats{display:flex;gap:24px;}
+  .stat{text-align:right;}
+  .stat .num{font-size:20px;font-weight:600;}
+  .stat .label{font-size:11px;color:var(--text-muted);text-transform:uppercase;letter-spacing:.02em;}
+  .stat.green .num{color:var(--green-text);}
+  .stat.amber .num{color:var(--amber-text);}
+
+  .toolbar{
+    padding:14px 24px;
+    border-bottom:1px solid var(--border);
+    display:flex;
+    gap:8px;
+    flex-wrap:wrap;
+    align-items:center;
+    justify-content:space-between;
+    background:#fafaf8;
+  }
+  .filters{display:flex;gap:6px;flex-wrap:wrap;}
+  .filters button{
+    font-size:12.5px;
+    padding:6px 12px;
+    border-radius:6px;
+    border:1px solid var(--border);
+    background:#fff;
+    cursor:pointer;
+    color:var(--text-secondary);
+    transition:all .12s;
+  }
+  .filters button:hover{border-color:var(--border-strong);}
+  .filters button.active{
+    background:var(--text-primary);
+    color:#fff;
+    border-color:var(--text-primary);
+    font-weight:500;
+  }
+  .conn{font-size:12px;color:var(--text-muted);display:flex;align-items:center;gap:6px;}
+  .dot{width:7px;height:7px;border-radius:50%;background:#9a998f;}
+  .dot.ok{background:#3b6d11;}
+  .dot.off{background:#a32d2d;}
+
+  table{width:100%;border-collapse:collapse;font-size:13.5px;}
+  thead th{
+    text-align:left;
+    padding:10px 14px;
+    background:#fafaf8;
+    border-bottom:1px solid var(--border);
+    font-weight:600;
+    color:var(--text-secondary);
+    font-size:11.5px;
+    text-transform:uppercase;
+    letter-spacing:.03em;
+    white-space:nowrap;
+  }
+  tbody td{
+    padding:10px 14px;
+    border-bottom:1px solid var(--border);
+    vertical-align:top;
+  }
+  tbody tr:nth-child(even){background:#fbfbfa;}
+  tbody tr:hover{background:#f2f6fa;}
+  .fecha-old{font-size:11px;color:var(--text-muted);text-decoration:line-through;margin-top:2px;}
+  .fecha-new{color:var(--amber-text);font-weight:500;}
+  .expositor{font-weight:600;}
+  .tema{color:var(--text-primary);max-width:420px;}
+
+  select.estado{
+    height:30px;
+    font-size:12.5px;
+    border:none;
+    padding:0 10px;
+    border-radius:6px;
+    cursor:pointer;
+    font-weight:500;
+    -webkit-appearance:none;
+    appearance:none;
+    background-repeat:no-repeat;
+    background-position:right 8px center;
+  }
+  .st-pendiente{background:var(--gray-bg);color:var(--gray-text);}
+  .st-realizada{background:var(--green-bg);color:var(--green-text);}
+  .st-no_realizada{background:var(--red-bg);color:var(--red-text);}
+  .st-reprogramada{background:var(--amber-bg);color:var(--amber-text);}
+
+  .footer{
+    padding:12px 24px;
+    font-size:12px;
+    color:var(--text-muted);
+    border-top:1px solid var(--border);
+    background:#fafaf8;
+  }
+  .table-wrap{overflow-x:auto;}
+  @media (max-width:640px){
+    .header{flex-direction:column;align-items:flex-start;}
+    body{padding:16px 8px;}
+  }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="card">
+    <div class="header">
+      <div>
+        <h1>Cronograma de exposición</h1>
+        <p>Esquemas de alto riesgo fiscal y NIIF</p>
+      </div>
+      <div class="stats">
+        <div class="stat green"><div class="num" id="stat-realizadas">0</div><div class="label">Realizadas</div></div>
+        <div class="stat amber"><div class="num" id="stat-reprog">0</div><div class="label">Reprogramadas</div></div>
+        <div class="stat"><div class="num" id="stat-total">0</div><div class="label">Total</div></div>
+      </div>
+    </div>
+    <div class="toolbar">
+      <div class="filters" id="filters"></div>
+      <div class="conn"><span class="dot" id="connDot"></span><span id="connLabel">Conectando…</span></div>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>Día</th>
+            <th>Horario</th>
+            <th>Expositor</th>
+            <th>Esquema</th>
+            <th>Estado</th>
+          </tr>
+        </thead>
+        <tbody id="tbody"></tbody>
+      </table>
+    </div>
+    <div class="footer" id="footerNote">
+      Al vencer la fecha de una sesión Pendiente, o al marcarla No realizada / Reprogramada, se reubica automáticamente 2 días hábiles después (excluye fines de semana y feriados peruanos) y corre toda la lista siguiente. Las sesiones Realizadas quedan fijas en su fecha. Modificar un estado requiere contraseña.
+    </div>
+  </div>
+</div>
+
+<!-- ============================================================ -->
+<!-- CONFIGURACIÓN DE SUPABASE                                     -->
+<!-- Tabla aislada: cronograma_exposicion_riesgo_fiscal            -->
+<!-- Sin relación con las tablas del sistema de inventario         -->
+<!-- ============================================================ -->
+<script type="module">
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+
+const SUPABASE_URL = "https://ozyefhongybussdaxtex.supabase.co";
+const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im96eWVmaG9uZ3lidXNzZGF4dGV4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODU4NjExODMsImV4cCI6MjEwMTQzNzE4M30.ZJja_q8YR-DST5JfP7VPIPsR--3X8ohrLU2-6XZy-48";
+const TABLE = "cronograma_exposicion_riesgo_fiscal";
+
+const RAW = [
+["2026-08-03","Elmer","E.2 Enajenación de compañía peruana a través de un patrimonio autónomo"],
+["2026-08-03","Macie","E.3 Redomicilio de una empresa y uso de CDI"],
+["2026-08-05","Yaneth","E.4 Cesión de marcas y capitalización de créditos"],
+["2026-08-05","Alexandra","E.5 Contrato de gerenciamiento"],
+["2026-08-10","Joel","E.6 Contrato de cesión de concesión de una industria extractiva"],
+["2026-08-10","Rosario","E.7 Venta y posterior recompra de vehículo"],
+["2026-08-12","Elmer","E.8 Enajenación directa de acciones de sociedad peruana"],
+["2026-08-12","Macie","E.9 Transferencia de beneficios a régimen fiscal preferencial"],
+["2026-08-14","Henry","E.10 Préstamo con apariencia de arrendamiento financiero"],
+["2026-08-14","Yaneth","E.11 Intermediación en la venta de minerales"],
+["2026-08-18","Alexandra","E.12 Distribución indirecta de rentas de una entidad sin fines de lucro"],
+["2026-08-18","Joel","E.13 Transferencias de inmuebles al accionista"],
+["2026-08-20","Mauricio","E.14 Transferencia de inmueble bajo un esquema de escisión"],
+["2026-08-20","Rosario","E.15 Préstamo encubierto y generación de intereses"],
+["2026-08-24","Elmer","E.16 Arrendamiento internacional a través de una sociedad"],
+["2026-08-24","Macie","E.17 Enajenación de acciones con apariencia de ser realizada mediante rueda de bolsa"],
+["2026-08-26","Henry","E.18 Exoneración del IGV por venta de libros"],
+["2026-08-26","Yaneth","E.19 Traslado de dividendos a través de jurisdicción miembro de la UE"],
+["2026-08-28","Alexandra","E.20 Transferencia indirecta de activo intangible"],
+["2026-08-28","Joel","E.21 Operación de crédito externo entre partes vinculadas"],
+["2026-09-01","Mauricio","E.22 Transferencia de funciones de I+D a filial extranjera"],
+["2026-09-01","Rosario","E.23 Análisis funcional de comisionista versus distribuidor"],
+["2026-09-03","Elmer","E.24 Operaciones de importación y distribución de bienes"],
+["2026-09-03","Macie","E.25 Construcción de campus universitario"],
+["2026-09-07","Henry","E.26 Línea de crédito comercial"],
+["2026-09-07","Yaneth","E.27 Compra apalancada de acciones (LBO)"],
+["2026-09-09","Alexandra","E.28 Enajenación directa de acciones mediante capitalización de prima"],
+["2026-09-09","Joel","E.29 Préstamo encubierto por contribución a contrato de asociación"],
+["2026-09-11","Mauricio","E.30 Distribución de dividendos mediante capitalización de utilidades"],
+["2026-09-11","Rosario","E.31 Transferencia de inmuebles bajo un esquema de escisión y extinción"],
+["2026-09-15","Elmer","E.32 Transferencias de inmueble al accionista para posterior enajenación"],
+["2026-09-15","Mauricio","E.33 Préstamo dinerario bajo apariencia de aporte de capital en sociedad interpuesta"],
+["2026-09-17","Henry","E.34 Uso de arrendamiento financiero para depreciación acelerada"],
+["2026-09-17","Yaneth","E.35 Préstamo dinerario bajo la apariencia de aporte de capital en trámite"],
+["2026-09-21","Alexandra","NIIF S1: Información a Revelar Relacionada con la Sostenibilidad / NIIF S2: Información a Revelar Relacionada con el Clima"],
+["2026-09-21","Joel","NIIF 9: Instrumentos Financieros"],
+["2026-09-23","Macie","NIIF 15: Ingresos de Actividades Ordinarias Procedentes de Contratos con Clientes"],
+["2026-09-23","Rosario","NIIF 18: Presentación e Información a Revelar en los Estados Financieros"],
+["2026-09-25","Henry","NIC 2: Inventarios"],
+["2026-09-25","Mauricio","NIIF 16: Arrendamientos"]
+];
+const SLOTS_ORIGINAL = ["14:30 - 14:45","14:45 - 15:00"];
+const SLOTS_REPROG = ["15:30 - 15:45","15:45 - 16:00"];
+const DIAS = ["Domingo","Lunes","Martes","Miércoles","Jueves","Viernes","Sábado"];
+
+const FERIADOS = new Set([
+"2026-01-01","2026-02-16","2026-02-17","2026-04-02","2026-04-03","2026-05-01",
+"2026-06-07","2026-06-29","2026-07-23","2026-07-28","2026-07-29","2026-08-06",
+"2026-08-30","2026-10-08","2026-11-01","2026-12-08","2026-12-09","2026-12-25",
+"2027-01-01","2027-03-25","2027-03-26","2027-05-01",
+"2027-06-07","2027-06-29","2027-07-23","2027-07-28","2027-07-29","2027-08-06",
+"2027-08-30","2027-10-08","2027-11-01","2027-12-08","2027-12-09","2027-12-25"
+]);
+
+function toDate(s){ const [y,m,d]=s.split("-").map(Number); return new Date(y,m-1,d); }
+function toStr(d){ const y=d.getFullYear(); const m=String(d.getMonth()+1).padStart(2,"0"); const dd=String(d.getDate()).padStart(2,"0"); return y+"-"+m+"-"+dd; }
+function esHabil(d){ const dow=d.getDay(); if(dow===0||dow===6) return false; if(FERIADOS.has(toStr(d))) return false; return true; }
+function siguienteHabil(d){ let n=new Date(d); n.setDate(n.getDate()+1); while(!esHabil(n)){ n.setDate(n.getDate()+1); } return n; }
+function avanzarDosHabiles(desde){ let d=new Date(desde); d=siguienteHabil(d); d=siguienteHabil(d); return d; }
+function fmtFecha(f){ const [y,m,d]=f.split("-"); return d+"/"+m+"/"+y; }
+
+const DATA = RAW.map((r,i)=>({id:"s"+i,fecha:r[0],expositor:r[1],tema:r[2],horario:SLOTS_ORIGINAL[i%2]}));
+
+const STATUS = {
+  pendiente:{label:"Pendiente",cls:"st-pendiente"},
+  realizada:{label:"Realizada",cls:"st-realizada"},
+  no_realizada:{label:"No realizada",cls:"st-no_realizada"},
+  reprogramada:{label:"Reprogramada",cls:"st-reprogramada"}
+};
+
+let state = {};
+let filter = "todos";
+let supabase = null;
+let canal = null;
+const hoy = new Date(); hoy.setHours(0,0,0,0);
+
+function ordenHorario(h){
+  const idx = SLOTS_ORIGINAL.indexOf(h);
+  if(idx !== -1) return idx;
+  return SLOTS_REPROG.indexOf(h);
+}
+function ordenBase(a,b){
+  if(a.fecha!==b.fecha) return a.fecha<b.fecha?-1:1;
+  return ordenHorario(a.horario)-ordenHorario(b.horario);
+}
+
+function calcularCronograma(){
+  const items = DATA.map(d=>({...d, estado: state[d.id]||"pendiente", fechaEfectiva: d.fecha, reprogramadaDesde: null}));
+  items.sort(ordenBase);
+
+  // Las sesiones Realizadas quedan siempre fijas en su fecha y horario original:
+  // nunca se mueven y nunca "arrastran" corrimiento a las demás.
+  let corrimiento = false;
+  let fechaOcupadaMax = null;
+  // Cuántos cupos del horario dinámico (15:30-16:00) ya se usaron por fecha,
+  // para no pasar de 2 personas por día en la cola de reprogramación.
+  const cuposUsados = {};
+
+  items.forEach(it=>{
+    if(it.estado==="realizada"){
+      // Fija: no se toca ni fecha ni horario, no participa del corrimiento.
+      return;
+    }
+
+    const fechaItem = toDate(it.fechaEfectiva);
+    const vencida = fechaItem < hoy;
+    let necesitaReprog = false;
+
+    if(!corrimiento){
+      if(vencida && (it.estado==="pendiente" || it.estado==="no_realizada")) necesitaReprog = true;
+      if(it.estado==="reprogramada") necesitaReprog = true;
+    } else {
+      necesitaReprog = true;
+    }
+
+    if(necesitaReprog){
+      corrimiento = true;
+      const base = fechaOcupadaMax || hoy;
+      let candidata = base > toDate(it.fechaEfectiva) ? base : toDate(it.fechaEfectiva);
+      candidata = avanzarDosHabiles(candidata);
+
+      // Buscar el primer día hábil desde la candidata con un cupo libre
+      // (máx 2 por día) en el horario dinámico 15:30-16:00.
+      let fechaStr = toStr(candidata);
+      while((cuposUsados[fechaStr]||0) >= SLOTS_REPROG.length){
+        candidata = siguienteHabil(candidata);
+        fechaStr = toStr(candidata);
+      }
+      const cupo = cuposUsados[fechaStr] || 0;
+      cuposUsados[fechaStr] = cupo + 1;
+
+      it.reprogramadaDesde = it.fechaEfectiva;
+      it.fechaEfectiva = fechaStr;
+      it.horario = SLOTS_REPROG[cupo];
+      it.estadoCalculado = "reprogramada";
+      fechaOcupadaMax = candidata;
+    } else {
+      fechaOcupadaMax = toDate(it.fechaEfectiva);
+    }
+  });
+
+  items.sort((a,b)=> a.fechaEfectiva!==b.fechaEfectiva ? (a.fechaEfectiva<b.fechaEfectiva?-1:1) : ordenHorario(a.horario)-ordenHorario(b.horario));
+  return items;
+}
+
+function renderStats(items){
+  document.getElementById("stat-realizadas").textContent = items.filter(d=>d.estado==="realizada").length;
+  document.getElementById("stat-reprog").textContent = items.filter(d=> d.estadoCalculado==="reprogramada" || d.estado==="reprogramada").length;
+  document.getElementById("stat-total").textContent = items.length;
+}
+
+function renderFilters(items){
+  const counts = {todos: items.length};
+  Object.keys(STATUS).forEach(k=>counts[k]=0);
+  items.forEach(d=>{ const s = d.estadoCalculado || d.estado; counts[s]=(counts[s]||0)+1; });
+  const opts = [["todos","Todos"], ...Object.entries(STATUS).map(([k,v])=>[k,v.label])];
+  document.getElementById("filters").innerHTML = opts.map(([k,label])=>{
+    const active = filter===k ? "active" : "";
+    return '<button class="'+active+'" data-f="'+k+'">'+label+' ('+(counts[k]||0)+')</button>';
+  }).join("");
+  document.querySelectorAll("#filters button").forEach(b=>{ b.onclick = ()=>{ filter = b.dataset.f; render(); }; });
+}
+
+function render(){
+  const items = calcularCronograma();
+  renderStats(items);
+  renderFilters(items);
+
+  const visibles = items.filter(d=>{
+    const s = d.estadoCalculado || d.estado;
+    return filter==="todos" || filter===s;
+  });
+
+  document.getElementById("tbody").innerHTML = visibles.map(d=>{
+    const s = d.estado;
+    const displayEstado = d.estadoCalculado==="reprogramada" ? "reprogramada" : s;
+    const info = STATUS[displayEstado];
+    const fechaLabel = d.reprogramadaDesde
+      ? '<div class="fecha-new">'+fmtFecha(d.fechaEfectiva)+'</div><div class="fecha-old">'+fmtFecha(d.reprogramadaDesde)+'</div>'
+      : fmtFecha(d.fechaEfectiva);
+    const diaLabel = DIAS[toDate(d.fechaEfectiva).getDay()];
+    return '<tr>'+
+      '<td>'+fechaLabel+'</td>'+
+      '<td>'+diaLabel+'</td>'+
+      '<td>'+d.horario+'</td>'+
+      '<td class="expositor">'+d.expositor+'</td>'+
+      '<td class="tema">'+d.tema+'</td>'+
+      '<td><select class="estado '+info.cls+'" data-id="'+d.id+'">'+
+        Object.entries(STATUS).map(([k,v])=>'<option value="'+k+'" '+(k===s?'selected':'')+'>'+v.label+'</option>').join('')+
+      '</select></td>'+
+    '</tr>';
+  }).join("");
+
+  document.querySelectorAll("#tbody select").forEach(sel=>{
+    sel.onchange = ()=> intentarCambio(sel);
+  });
+}
+
+const CLAVE_EDICION = "20091846";
+let sesionDesbloqueada = false;
+
+function intentarCambio(sel){
+  const nuevoValor = sel.value;
+  const idAnterior = sel.dataset.id;
+  const valorAnterior = state[idAnterior] || "pendiente";
+
+  if(sesionDesbloqueada){
+    save(idAnterior, nuevoValor);
+    return;
+  }
+
+  const clave = window.prompt("Ingresa la contraseña para modificar el estado:");
+  if(clave === null){
+    sel.value = valorAnterior;
+    return;
+  }
+  if(clave !== CLAVE_EDICION){
+    alert("Contraseña incorrecta.");
+    sel.value = valorAnterior;
+    return;
+  }
+  sesionDesbloqueada = true;
+  save(idAnterior, nuevoValor);
+}
+
+async function save(id, status){
+  state[id] = status;
+  render();
+  if(supabase){
+    try{
+      const { error } = await supabase
+        .from(TABLE)
+        .upsert({ sesion_id: id, estado: status, updated_at: new Date().toISOString() }, { onConflict: "sesion_id" });
+      if(error) console.error("Error guardando en Supabase:", error);
+    }catch(e){ console.error("Error guardando en Supabase:", e); }
+  }
+}
+
+function setConn(ok){
+  const dot = document.getElementById("connDot");
+  const label = document.getElementById("connLabel");
+  if(ok===null){ dot.className="dot"; label.textContent="Conectando…"; }
+  else if(ok){ dot.className="dot ok"; label.textContent="Guardado en la nube · en vivo"; }
+  else { dot.className="dot off"; label.textContent="Sin conexión con la base de datos"; }
+}
+
+async function cargarEstadoInicial(){
+  const { data, error } = await supabase.from(TABLE).select("sesion_id, estado");
+  if(error){ console.error(error); setConn(false); return; }
+  const nuevo = {};
+  (data||[]).forEach(row=>{ nuevo[row.sesion_id] = row.estado; });
+  state = nuevo;
+  setConn(true);
+  render();
+}
+
+function iniciar(){
+  try{
+    supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+    cargarEstadoInicial();
+
+    canal = supabase
+      .channel("cronograma_exposicion_riesgo_fiscal_cambios")
+      .on("postgres_changes", { event: "*", schema: "public", table: TABLE }, (payload)=>{
+        const row = payload.new && payload.new.sesion_id ? payload.new : payload.old;
+        if(!row) return;
+        if(payload.eventType === "DELETE"){ delete state[row.sesion_id]; }
+        else { state[row.sesion_id] = row.estado; }
+        render();
+      })
+      .subscribe();
+  }catch(e){
+    console.error(e);
+    setConn(false);
+    render();
+  }
+}
+
+iniciar();
+</script>
+</body>
+</html>
