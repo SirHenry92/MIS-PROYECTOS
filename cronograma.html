@@ -179,7 +179,7 @@
       </table>
     </div>
     <div class="footer" id="footerNote">
-      Al vencer la fecha de una sesión Pendiente, o al marcarla Reprogramada, se reubica automáticamente 2 días hábiles después en horario 15:30-16:00 (excluye fines de semana y feriados peruanos) y corre toda la lista siguiente, máximo 2 personas por día. Las sesiones Realizadas y No realizadas quedan fijas en su fecha y horario original. Modificar un estado requiere contraseña.
+      Una sesión Pendiente cuya fecha ya venció se reubica automáticamente 2 días hábiles después en horario 15:30-16:00 (excluye fines de semana y feriados peruanos), máximo 2 personas por día. Al marcar Reprogramada se pide una fecha manual; si esa fecha vence sin marcarse Realizada, la sesión pasa sola a No realizada. Las sesiones Realizadas quedan fijas en la fecha real de exposición. Modificar un estado requiere contraseña.
     </div>
   </div>
 </div>
@@ -286,36 +286,69 @@ function ordenBase(a,b){
 function calcularCronograma(){
   const items = DATA.map(d=>{
     const s = state[d.id] || {};
-    return {...d, estado: s.estado||"pendiente", fechaRealizada: s.fecha_realizada||null, fechaEfectiva: d.fecha, reprogramadaDesde: null};
+    return {
+      ...d,
+      estado: s.estado||"pendiente",
+      fechaRealizada: s.fecha_realizada||null,
+      fechaReprogramadaManual: s.fecha_reprogramada_manual||null,
+      horarioManual: s.horario_manual||null,
+      fechaEfectiva: d.fecha,
+      reprogramadaDesde: null,
+      venceAutomaticamente: false
+    };
   });
   items.sort(ordenBase);
 
-  // Las sesiones Realizadas quedan fijas en la fecha en que realmente se marcaron
-  // (no la original ni la reprogramada); las No realizadas quedan fijas en su fecha original.
+  // Realizada: fija en la fecha real de marcado.
+  // No realizada: fija en su fecha (original, o la manual si venía de una reprogramada vencida).
+  // Reprogramada: fija en la fecha manual elegida; si esa fecha ya pasó sin marcarse
+  //   Realizada, se muestra como No realizada automáticamente (sin tocar la base de datos
+  //   hasta que alguien interactúe, pero visualmente ya aparece vencida).
+  // Pendiente cuya fecha original ya venció: sigue moviéndose sola al horario dinámico.
   let corrimiento = false;
   let fechaOcupadaMax = null;
   // Cuántos cupos del horario dinámico (15:30-16:00) ya se usaron por fecha,
-  // para no pasar de 2 personas por día en la cola de reprogramación.
+  // para no pasar de 2 personas por día (aplica tanto a fechas manuales como automáticas).
   const cuposUsados = {};
 
   items.forEach(it=>{
     if(it.estado==="realizada"){
-      // Fija en la fecha que tenía asignada al momento de marcarse (fallback a la original si falta el dato).
       it.fechaEfectiva = it.fechaRealizada || it.fecha;
       return;
     }
+
     if(it.estado==="no_realizada"){
-      // Fija: no se toca ni fecha ni horario, no participa del corrimiento.
+      // Fija: si viene de una reprogramación manual vencida, se muestra en esa fecha.
+      it.fechaEfectiva = it.fechaReprogramadaManual || it.fecha;
+      if(it.fechaReprogramadaManual){
+        it.horario = it.horarioManual || it.horario;
+        cuposUsados[it.fechaEfectiva] = (cuposUsados[it.fechaEfectiva]||0) + 1;
+      }
       return;
     }
 
+    if(it.estado==="reprogramada" && it.fechaReprogramadaManual){
+      const fechaManual = toDate(it.fechaReprogramadaManual);
+      it.reprogramadaDesde = it.fecha;
+      it.fechaEfectiva = it.fechaReprogramadaManual;
+      it.horario = it.horarioManual || it.horario;
+      cuposUsados[it.fechaEfectiva] = (cuposUsados[it.fechaEfectiva]||0) + 1;
+      if(fechaManual < hoy){
+        // La fecha elegida manualmente ya pasó y nadie la marcó Realizada:
+        // se muestra como No realizada, sin mover nada más.
+        it.estadoCalculado = "no_realizada";
+        it.venceAutomaticamente = true;
+      }
+      return;
+    }
+
+    // Solo entra aquí: Pendiente (con o sin fecha vencida).
     const fechaItem = toDate(it.fechaEfectiva);
     const vencida = fechaItem < hoy;
     let necesitaReprog = false;
 
     if(!corrimiento){
-      if(vencida && it.estado==="pendiente") necesitaReprog = true;
-      if(it.estado==="reprogramada") necesitaReprog = true;
+      if(vencida) necesitaReprog = true;
     } else {
       necesitaReprog = true;
     }
@@ -325,7 +358,7 @@ function calcularCronograma(){
       const base = fechaOcupadaMax || hoy;
       let candidata;
       if(fechaOcupadaMax && (cuposUsados[toStr(fechaOcupadaMax)]||0) < SLOTS_REPROG.length){
-        // El día donde quedó la última reprogramada todavía tiene cupo libre: se intenta ahí primero.
+        // El día donde quedó la última reubicada todavía tiene cupo libre: se intenta ahí primero.
         candidata = fechaOcupadaMax;
       } else {
         const desde = base > toDate(it.fechaEfectiva) ? base : toDate(it.fechaEfectiva);
@@ -345,7 +378,6 @@ function calcularCronograma(){
       it.reprogramadaDesde = it.fechaEfectiva;
       it.fechaEfectiva = fechaStr;
       it.horario = SLOTS_REPROG[cupo];
-      it.estadoCalculado = "reprogramada";
       fechaOcupadaMax = candidata;
     } else {
       fechaOcupadaMax = toDate(it.fechaEfectiva);
@@ -358,14 +390,14 @@ function calcularCronograma(){
 
 function renderStats(items){
   document.getElementById("stat-realizadas").textContent = items.filter(d=>d.estado==="realizada").length;
-  document.getElementById("stat-reprog").textContent = items.filter(d=> d.estadoCalculado==="reprogramada" || d.estado==="reprogramada").length;
+  document.getElementById("stat-reprog").textContent = items.filter(d=> d.estado==="reprogramada" && d.estadoCalculado!=="no_realizada").length;
   document.getElementById("stat-total").textContent = items.length;
 }
 
 function renderFilters(items){
   const counts = {todos: items.length};
   Object.keys(STATUS).forEach(k=>counts[k]=0);
-  items.forEach(d=>{ const s = d.estadoCalculado || d.estado; counts[s]=(counts[s]||0)+1; });
+  items.forEach(d=>{ const s = d.estadoCalculado==="no_realizada" ? "no_realizada" : d.estado; counts[s]=(counts[s]||0)+1; });
   const opts = [["todos","Todos"], ...Object.entries(STATUS).map(([k,v])=>[k,v.label])];
   document.getElementById("filters").innerHTML = opts.map(([k,label])=>{
     const active = filter===k ? "active" : "";
@@ -380,13 +412,13 @@ function render(){
   renderFilters(items);
 
   const visibles = items.filter(d=>{
-    const s = d.estadoCalculado || d.estado;
+    const s = d.estadoCalculado==="no_realizada" ? "no_realizada" : d.estado;
     return filter==="todos" || filter===s;
   });
 
   document.getElementById("tbody").innerHTML = visibles.map(d=>{
     const s = d.estado;
-    const displayEstado = d.estadoCalculado==="reprogramada" ? "reprogramada" : s;
+    const displayEstado = d.estadoCalculado==="no_realizada" ? "no_realizada" : s;
     const info = STATUS[displayEstado];
     const fechaLabel = d.reprogramadaDesde
       ? '<div class="fecha-new">'+fmtFecha(d.fechaEfectiva)+'</div><div class="fecha-old">'+fmtFecha(d.reprogramadaDesde)+'</div>'
@@ -412,14 +444,71 @@ function render(){
 const CLAVE_EDICION = "20091846";
 let sesionDesbloqueada = false;
 
+function calcularCuposActuales(excluirId){
+  // Recalcula cuántos cupos del horario dinámico están ocupados por fecha,
+  // sin contar la sesión que se está por reprogramar (para no bloquearse a sí misma).
+  const items = calcularCronograma();
+  const cupos = {};
+  items.forEach(it=>{
+    if(it.id===excluirId) return;
+    const usaHorarioDinamico = SLOTS_REPROG.includes(it.horario);
+    if(usaHorarioDinamico){
+      cupos[it.fechaEfectiva] = (cupos[it.fechaEfectiva]||0) + 1;
+    }
+  });
+  return cupos;
+}
+
+function pedirFechaManual(id){
+  while(true){
+    const input = window.prompt("Ingresa la nueva fecha de exposición (formato AAAA-MM-DD), día hábil, no feriado:");
+    if(input === null) return null;
+    const val = input.trim();
+    if(!/^\d{4}-\d{2}-\d{2}$/.test(val)){
+      alert("Formato inválido. Usa AAAA-MM-DD, por ejemplo 2026-09-10.");
+      continue;
+    }
+    const fecha = toDate(val);
+    if(isNaN(fecha.getTime())){
+      alert("Esa fecha no es válida.");
+      continue;
+    }
+    if(!esHabil(fecha)){
+      alert("Esa fecha es fin de semana o feriado. Elige un día hábil.");
+      continue;
+    }
+    if(fecha < hoy){
+      alert("Esa fecha ya pasó. Elige una fecha futura.");
+      continue;
+    }
+    const cupos = calcularCuposActuales(id);
+    const usados = cupos[val] || 0;
+    if(usados >= SLOTS_REPROG.length){
+      alert("Ese día ya tiene las 2 exposiciones del horario 15:30-16:00 completas. Elige otra fecha.");
+      continue;
+    }
+    return { fecha: val, horario: SLOTS_REPROG[usados] };
+  }
+}
+
 function intentarCambio(sel){
   const nuevoValor = sel.value;
   const idAnterior = sel.dataset.id;
   const fechaActual = sel.dataset.fecha;
   const valorAnterior = (state[idAnterior] && state[idAnterior].estado) || "pendiente";
 
+  const proceder = ()=>{
+    if(nuevoValor === "reprogramada"){
+      const elegido = pedirFechaManual(idAnterior);
+      if(!elegido){ sel.value = valorAnterior; return; }
+      save(idAnterior, nuevoValor, fechaActual, elegido.fecha, elegido.horario);
+    } else {
+      save(idAnterior, nuevoValor, fechaActual, null, null);
+    }
+  };
+
   if(sesionDesbloqueada){
-    save(idAnterior, nuevoValor, fechaActual);
+    proceder();
     return;
   }
 
@@ -434,21 +523,42 @@ function intentarCambio(sel){
     return;
   }
   sesionDesbloqueada = true;
-  save(idAnterior, nuevoValor, fechaActual);
+  proceder();
 }
 
-async function save(id, status, fechaAlMomento){
-  // Al marcar Realizada, se fija la fecha que la sesión tenía asignada
-  // en ese momento (la que estaba en pantalla: original o ya reprogramada).
-  // Si se cambia a cualquier otro estado, se limpia esa fecha guardada.
-  const fechaRealizada = status === "realizada" ? fechaAlMomento : null;
-  state[id] = { estado: status, fecha_realizada: fechaRealizada };
+async function save(id, status, fechaAlMomento, fechaManual, horarioManual){
+  // Al marcar Realizada:
+  // - Si la fecha asignada en pantalla ya llegó o pasó, se guarda esa fecha (la que le tocaba).
+  // - Si la fecha asignada todavía es futura, significa que se ADELANTÓ la exposición:
+  //   se guarda la fecha de HOY, que es cuando realmente se hizo.
+  // Al marcar Reprogramada, se guarda la fecha manual elegida (y su horario asignado).
+  // Cualquier otro cambio de estado limpia ambas fechas guardadas.
+  let fechaRealizada = null;
+  if(status === "realizada"){
+    const fechaAsignada = toDate(fechaAlMomento);
+    fechaRealizada = fechaAsignada > hoy ? toStr(hoy) : fechaAlMomento;
+  }
+  const fechaReprogramadaManual = status === "reprogramada" ? fechaManual : null;
+
+  state[id] = {
+    estado: status,
+    fecha_realizada: fechaRealizada,
+    fecha_reprogramada_manual: fechaReprogramadaManual,
+    horario_manual: status === "reprogramada" ? horarioManual : null
+  };
   render();
   if(supabase){
     try{
       const { error } = await supabase
         .from(TABLE)
-        .upsert({ sesion_id: id, estado: status, fecha_realizada: fechaRealizada, updated_at: new Date().toISOString() }, { onConflict: "sesion_id" });
+        .upsert({
+          sesion_id: id,
+          estado: status,
+          fecha_realizada: fechaRealizada,
+          fecha_reprogramada_manual: fechaReprogramadaManual,
+          horario_manual: status === "reprogramada" ? horarioManual : null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "sesion_id" });
       if(error) console.error("Error guardando en Supabase:", error);
     }catch(e){ console.error("Error guardando en Supabase:", e); }
   }
@@ -463,10 +573,17 @@ function setConn(ok){
 }
 
 async function cargarEstadoInicial(){
-  const { data, error } = await supabase.from(TABLE).select("sesion_id, estado, fecha_realizada");
+  const { data, error } = await supabase.from(TABLE).select("sesion_id, estado, fecha_realizada, fecha_reprogramada_manual, horario_manual");
   if(error){ console.error(error); setConn(false); return; }
   const nuevo = {};
-  (data||[]).forEach(row=>{ nuevo[row.sesion_id] = { estado: row.estado, fecha_realizada: row.fecha_realizada }; });
+  (data||[]).forEach(row=>{
+    nuevo[row.sesion_id] = {
+      estado: row.estado,
+      fecha_realizada: row.fecha_realizada,
+      fecha_reprogramada_manual: row.fecha_reprogramada_manual,
+      horario_manual: row.horario_manual
+    };
+  });
   state = nuevo;
   setConn(true);
   render();
@@ -483,7 +600,14 @@ function iniciar(){
         const row = payload.new && payload.new.sesion_id ? payload.new : payload.old;
         if(!row) return;
         if(payload.eventType === "DELETE"){ delete state[row.sesion_id]; }
-        else { state[row.sesion_id] = { estado: row.estado, fecha_realizada: row.fecha_realizada }; }
+        else {
+          state[row.sesion_id] = {
+            estado: row.estado,
+            fecha_realizada: row.fecha_realizada,
+            fecha_reprogramada_manual: row.fecha_reprogramada_manual,
+            horario_manual: row.horario_manual
+          };
+        }
         render();
       })
       .subscribe();
