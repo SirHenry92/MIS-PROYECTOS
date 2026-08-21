@@ -284,11 +284,14 @@ function ordenBase(a,b){
 }
 
 function calcularCronograma(){
-  const items = DATA.map(d=>({...d, estado: state[d.id]||"pendiente", fechaEfectiva: d.fecha, reprogramadaDesde: null}));
+  const items = DATA.map(d=>{
+    const s = state[d.id] || {};
+    return {...d, estado: s.estado||"pendiente", fechaRealizada: s.fecha_realizada||null, fechaEfectiva: d.fecha, reprogramadaDesde: null};
+  });
   items.sort(ordenBase);
 
-  // Las sesiones Realizadas quedan siempre fijas en su fecha y horario original:
-  // nunca se mueven y nunca "arrastran" corrimiento a las demás.
+  // Las sesiones Realizadas quedan fijas en la fecha en que realmente se marcaron
+  // (no la original ni la reprogramada); las No realizadas quedan fijas en su fecha original.
   let corrimiento = false;
   let fechaOcupadaMax = null;
   // Cuántos cupos del horario dinámico (15:30-16:00) ya se usaron por fecha,
@@ -296,8 +299,13 @@ function calcularCronograma(){
   const cuposUsados = {};
 
   items.forEach(it=>{
-    if(it.estado==="realizada" || it.estado==="no_realizada"){
-      // Fijas: no se tocan ni fecha ni horario, no participan del corrimiento.
+    if(it.estado==="realizada"){
+      // Fija en la fecha que tenía asignada al momento de marcarse (fallback a la original si falta el dato).
+      it.fechaEfectiva = it.fechaRealizada || it.fecha;
+      return;
+    }
+    if(it.estado==="no_realizada"){
+      // Fija: no se toca ni fecha ni horario, no participa del corrimiento.
       return;
     }
 
@@ -315,8 +323,14 @@ function calcularCronograma(){
     if(necesitaReprog){
       corrimiento = true;
       const base = fechaOcupadaMax || hoy;
-      let candidata = base > toDate(it.fechaEfectiva) ? base : toDate(it.fechaEfectiva);
-      candidata = avanzarDosHabiles(candidata);
+      let candidata;
+      if(fechaOcupadaMax && (cuposUsados[toStr(fechaOcupadaMax)]||0) < SLOTS_REPROG.length){
+        // El día donde quedó la última reprogramada todavía tiene cupo libre: se intenta ahí primero.
+        candidata = fechaOcupadaMax;
+      } else {
+        const desde = base > toDate(it.fechaEfectiva) ? base : toDate(it.fechaEfectiva);
+        candidata = avanzarDosHabiles(desde);
+      }
 
       // Buscar el primer día hábil desde la candidata con un cupo libre
       // (máx 2 por día) en el horario dinámico 15:30-16:00.
@@ -384,7 +398,7 @@ function render(){
       '<td>'+d.horario+'</td>'+
       '<td class="expositor">'+d.expositor+'</td>'+
       '<td class="tema">'+d.tema+'</td>'+
-      '<td><select class="estado '+info.cls+'" data-id="'+d.id+'">'+
+      '<td><select class="estado '+info.cls+'" data-id="'+d.id+'" data-fecha="'+d.fechaEfectiva+'">'+
         Object.entries(STATUS).map(([k,v])=>'<option value="'+k+'" '+(k===s?'selected':'')+'>'+v.label+'</option>').join('')+
       '</select></td>'+
     '</tr>';
@@ -401,10 +415,11 @@ let sesionDesbloqueada = false;
 function intentarCambio(sel){
   const nuevoValor = sel.value;
   const idAnterior = sel.dataset.id;
-  const valorAnterior = state[idAnterior] || "pendiente";
+  const fechaActual = sel.dataset.fecha;
+  const valorAnterior = (state[idAnterior] && state[idAnterior].estado) || "pendiente";
 
   if(sesionDesbloqueada){
-    save(idAnterior, nuevoValor);
+    save(idAnterior, nuevoValor, fechaActual);
     return;
   }
 
@@ -419,17 +434,21 @@ function intentarCambio(sel){
     return;
   }
   sesionDesbloqueada = true;
-  save(idAnterior, nuevoValor);
+  save(idAnterior, nuevoValor, fechaActual);
 }
 
-async function save(id, status){
-  state[id] = status;
+async function save(id, status, fechaAlMomento){
+  // Al marcar Realizada, se fija la fecha que la sesión tenía asignada
+  // en ese momento (la que estaba en pantalla: original o ya reprogramada).
+  // Si se cambia a cualquier otro estado, se limpia esa fecha guardada.
+  const fechaRealizada = status === "realizada" ? fechaAlMomento : null;
+  state[id] = { estado: status, fecha_realizada: fechaRealizada };
   render();
   if(supabase){
     try{
       const { error } = await supabase
         .from(TABLE)
-        .upsert({ sesion_id: id, estado: status, updated_at: new Date().toISOString() }, { onConflict: "sesion_id" });
+        .upsert({ sesion_id: id, estado: status, fecha_realizada: fechaRealizada, updated_at: new Date().toISOString() }, { onConflict: "sesion_id" });
       if(error) console.error("Error guardando en Supabase:", error);
     }catch(e){ console.error("Error guardando en Supabase:", e); }
   }
@@ -444,10 +463,10 @@ function setConn(ok){
 }
 
 async function cargarEstadoInicial(){
-  const { data, error } = await supabase.from(TABLE).select("sesion_id, estado");
+  const { data, error } = await supabase.from(TABLE).select("sesion_id, estado, fecha_realizada");
   if(error){ console.error(error); setConn(false); return; }
   const nuevo = {};
-  (data||[]).forEach(row=>{ nuevo[row.sesion_id] = row.estado; });
+  (data||[]).forEach(row=>{ nuevo[row.sesion_id] = { estado: row.estado, fecha_realizada: row.fecha_realizada }; });
   state = nuevo;
   setConn(true);
   render();
@@ -464,7 +483,7 @@ function iniciar(){
         const row = payload.new && payload.new.sesion_id ? payload.new : payload.old;
         if(!row) return;
         if(payload.eventType === "DELETE"){ delete state[row.sesion_id]; }
-        else { state[row.sesion_id] = row.estado; }
+        else { state[row.sesion_id] = { estado: row.estado, fecha_realizada: row.fecha_realizada }; }
         render();
       })
       .subscribe();
